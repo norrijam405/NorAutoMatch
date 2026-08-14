@@ -55,7 +55,7 @@ In production, the form intentionally returns a clear fallback message until `CR
 3. Replace demonstration inventory in `src/lib/inventory.ts` with a GM-approved live feed.
 4. Replace representative AI vehicle imagery with approved unit photos.
 5. Add analytics and ad conversion IDs only after the consent/attribution plan is approved.
-6. Confirm employer, brand, advertising, and dealership-compliance approval in writing.
+6. Approval received (reported August 14, 2026). Preserve the written approval and keep deployment, advertising, inventory use, and lead ownership within its documented scope.
 7. Ensure all vehicle sales, financing, and registration are handled by the licensed dealership.
 
 ## Important
