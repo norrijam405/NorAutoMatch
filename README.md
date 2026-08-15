@@ -21,6 +21,7 @@ Payment-first vehicle matching and personal car sourcing for the Oklahoma City m
 - `MASTER_GROWTH_SYSTEM_BUILD_PROMPT.md` — source-of-truth website and CRM specification
 - `COMPETITIVE_GROWTH_PLAN.md` — Oklahoma competitor research and 90-day growth plan
 - `DEVELOPER_HANDOFF.md` — current implementation and production checklist
+- `SEO_ADVERTISING_HANDOFF.md` — consolidated SEO, paid media, measurement, and launch handoff
 
 ## Local setup
 
