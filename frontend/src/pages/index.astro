@@ -1,0 +1,151 @@
+---
+import InteractiveCart from '../components/InteractiveCart';
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NorAutoMatch — Elite Full-Stack Template</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b1120;
+        --panel: #131c31;
+        --border: #24314f;
+        --accent: #4f8cff;
+        --accent-2: #34d399;
+        --text: #e6ecf7;
+        --muted: #8b9bbd;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+      }
+      header {
+        min-height: 92vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        padding: 3rem 1.5rem;
+        background:
+          radial-gradient(60rem 30rem at 80% -10%, rgba(79, 140, 255, 0.18), transparent),
+          radial-gradient(50rem 25rem at 10% 110%, rgba(52, 211, 153, 0.12), transparent);
+      }
+      header h1 { font-size: clamp(2.2rem, 5vw, 3.6rem); margin: 0 0 1rem; }
+      header h1 span { color: var(--accent); }
+      header p { max-width: 42rem; color: var(--muted); font-size: 1.1rem; }
+      .chips { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; margin-top: 1.5rem; }
+      .chip {
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 999px;
+        padding: 0.35rem 0.9rem;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .scroll-hint { margin-top: 3rem; color: var(--muted); font-size: 0.9rem; animation: bob 2s ease-in-out infinite; }
+      @keyframes bob { 50% { transform: translateY(6px); } }
+
+      main { max-width: 60rem; margin: 0 auto; padding: 2rem 1.5rem 6rem; }
+      section { margin-bottom: 4rem; }
+      h2 { font-size: 1.6rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+      }
+      .card h3 { margin-top: 0; font-size: 1.05rem; color: var(--accent-2); }
+      .card p { color: var(--muted); font-size: 0.92rem; margin-bottom: 0; }
+      .spacer { height: 40vh; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <!-- Above-the-fold: pure static HTML, zero client-side JavaScript shipped -->
+    <header>
+      <h1>NorAutoMatch <span>Elite Architecture</span></h1>
+      <p>
+        A production-grade full-stack template: Astro static islands, an atomic
+        transactional-outbox Express engine, a Postgres-locked relay daemon, and an
+        idempotent BullMQ worker pool behind Redis.
+      </p>
+      <div class="chips">
+        <span class="chip">0B client JS above the fold</span>
+        <span class="chip">Transactional Outbox</span>
+        <span class="chip">FOR UPDATE SKIP LOCKED</span>
+        <span class="chip">SET NX EX Idempotency</span>
+        <span class="chip">Exponential Backoff</span>
+      </div>
+      <div class="scroll-hint">▼ Scroll down — the interactive cart hydrates only when it enters the viewport</div>
+    </header>
+
+    <main>
+      <section>
+        <h2>Delivery Guarantees</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Atomic Commit</h3>
+            <p>Product rows and outbox tasks are written in one Postgres transaction — either both persist or neither does.</p>
+          </div>
+          <div class="card">
+            <h3>Partition Resistance</h3>
+            <p>If Redis is unreachable, tasks remain safely pending in Postgres; the relay daemon retries with attempt tracking.</p>
+          </div>
+          <div class="card">
+            <h3>Duplicate Prevention</h3>
+            <p>Workers claim exclusive event ownership via a single atomic <code>SET NX EX</code> before running side effects.</p>
+          </div>
+          <div class="card">
+            <h3>Horizontal Scale</h3>
+            <p><code>FOR UPDATE SKIP LOCKED</code> lets multiple relay daemons sweep concurrently without contention or double-sends.</p>
+          </div>
+        </div>
+      </section>
+
+      <div class="spacer">— keep scrolling —</div>
+
+      <section id="cart">
+        <h2>Interactive Cart (React Island)</h2>
+        <!--
+          client:visible = Astro ships zero JS for this component until it scrolls
+          into the viewport, then hydrates the React island on demand.
+        -->
+        <InteractiveCart client:visible />
+      </section>
+    </main>
+
+    <style is:global>
+      .cart { background: var(--panel); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; }
+      .cart__badge { color: var(--accent-2); font-size: 0.85rem; margin-top: 0; }
+      .cart__catalog { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+      .cart__add {
+        background: #1a2540; color: var(--text); border: 1px solid var(--border);
+        border-radius: 0.5rem; padding: 0.5rem 0.9rem; cursor: pointer; font-size: 0.9rem;
+      }
+      .cart__add:hover { border-color: var(--accent); }
+      .cart__add span { color: var(--muted); margin-left: 0.4rem; }
+      .cart__empty { color: var(--muted); }
+      .cart__list { list-style: none; padding: 0; margin: 0 0 1rem; }
+      .cart__list li {
+        display: flex; justify-content: space-between; gap: 0.75rem; align-items: center;
+        padding: 0.5rem 0; border-bottom: 1px dashed var(--border);
+      }
+      .cart__list button { background: none; border: none; color: #f87171; cursor: pointer; }
+      .cart__footer { display: flex; justify-content: space-between; align-items: center; }
+      .cart__checkout {
+        background: var(--accent); color: #fff; border: none; border-radius: 0.5rem;
+        padding: 0.6rem 1.4rem; font-size: 1rem; cursor: pointer;
+      }
+      .cart__checkout:disabled { opacity: 0.5; cursor: not-allowed; }
+      .cart__status { margin-bottom: 0; color: var(--accent-2); font-size: 0.9rem; }
+    </style>
+  </body>
+</html>

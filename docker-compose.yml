@@ -1,0 +1,97 @@
+version: "3.9"
+
+# Single-click deployment: `docker compose up --build`
+# Provisions Postgres (auto-migrated), Redis, the API engine,
+# the outbox relay daemon, the BullMQ worker pool, and the Astro frontend.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app_secret
+      POSTGRES_DB: norautomatch
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Schema auto-applied on first boot
+      - ./infrastructure/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d norautomatch"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "6379:6379"
+
+  api:
+    build: ./backend
+    command: ["node", "dist/server.js"]
+    environment:
+      DATABASE_URL: postgres://app:app_secret@postgres:5432/norautomatch
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      PORT: "4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+
+  relay:
+    build: ./backend
+    command: ["node", "dist/relay.js"]
+    environment:
+      DATABASE_URL: postgres://app:app_secret@postgres:5432/norautomatch
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      OUTBOX_POLL_INTERVAL_MS: "1000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build: ./backend
+    command: ["node", "dist/worker.js"]
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      WORKER_CONCURRENCY: "5"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      replicas: 2 # Worker pool — safe to scale horizontally thanks to SET NX EX locks
+
+  frontend:
+    build: ./frontend
+    environment:
+      API_PROXY_TARGET: http://api:4000
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:

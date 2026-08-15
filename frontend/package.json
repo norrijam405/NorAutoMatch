@@ -1,0 +1,22 @@
+{
+  "name": "norautomatch-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Astro islands frontend — pure static HTML with a scroll-hydrated React cart",
+  "scripts": {
+    "dev": "astro dev --host 0.0.0.0",
+    "build": "astro build",
+    "preview": "astro preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "@astrojs/react": "^4.1.0",
+    "astro": "^5.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0"
+  }
+}
