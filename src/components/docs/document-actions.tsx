@@ -3,7 +3,7 @@
 import { Check, Copy, Printer } from "lucide-react";
 import { useState } from "react";
 
-export function PromptActions() {
+export function DocumentActions() {
   const [copied, setCopied] = useState(false);
 
   async function copyLink() {
