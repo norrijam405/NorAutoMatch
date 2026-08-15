@@ -4,6 +4,8 @@
 **Approval:** Owner reports employer/GM approval received on August 14, 2026. Retain the written approval with project records and keep implementation within its documented scope.  
 **Source:** Pull request #1 from `arena/01a00129-norautomatch` into `main`
 
+**Master specification:** `MASTER_GROWTH_SYSTEM_BUILD_PROMPT.md`
+
 ## Positioning that must survive finalization
 
 **Brand:** NorAuto Match  

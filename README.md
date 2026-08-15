@@ -16,6 +16,12 @@ Payment-first vehicle matching and personal car sourcing for the Oklahoma City m
 - Oklahoma City metro service-area pages, including Mustang and Piedmont
 - Metadata, JSON-LD, robots, sitemap, privacy/consent, and finance disclaimers
 
+## Planning documents
+
+- `MASTER_GROWTH_SYSTEM_BUILD_PROMPT.md` — source-of-truth website and CRM specification
+- `COMPETITIVE_GROWTH_PLAN.md` — Oklahoma competitor research and 90-day growth plan
+- `DEVELOPER_HANDOFF.md` — current implementation and production checklist
+
 ## Local setup
 
 ```bash
