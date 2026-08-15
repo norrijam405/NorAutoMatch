@@ -11,7 +11,7 @@ export const leadSchema = z.object({
   notes: z.string().trim().max(1000).optional().default(""),
   source: z.string().trim().max(100).default("Website"),
   trigger: z.enum(["retail", "trapdoor"]),
-  pipeline: z.enum(["Standard Retail", "Auto Brokerage"]),
+  pipeline: z.enum(["Standard Retail", "Vehicle Sourcing"]),
   shortlistedVehicleIds: z.array(z.string()).max(20).default([]),
   monthlyTarget: z.number().min(0).max(5000).optional(),
   downPayment: z.number().min(0).max(100000).optional(),

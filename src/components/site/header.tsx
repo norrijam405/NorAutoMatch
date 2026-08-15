@@ -13,8 +13,8 @@ export function Logo() {
         <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399]" />
       </span>
       <span className="leading-none">
-        <span className="block text-base font-black tracking-tight text-white">NorAuto</span>
-        <span className="mt-1 block text-[10px] font-bold uppercase tracking-[.28em] text-amber-300">Match</span>
+        <span className="block text-base font-black tracking-tight text-white">NorAuto Match</span>
+        <span className="mt-1 block text-[9px] font-bold uppercase tracking-[.14em] text-amber-300">at Orr Nissan West</span>
       </span>
     </Link>
   );

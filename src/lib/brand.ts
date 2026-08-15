@@ -4,6 +4,13 @@ export const brand = {
   phoneDisplay: "(405) 861-0061",
   phoneRaw: "+14058610061",
   textHref: "sms:+14058610061",
+  dealer: {
+    name: "Orr Nissan West",
+    phoneDisplay: "(405) 495-4700",
+    phoneRaw: "+14054954700",
+    address: "8800 NW Expressway, Oklahoma City, OK 73162",
+    url: "https://orrnissanwest.com/",
+  },
   cities: [
     "Oklahoma City",
     "Yukon",

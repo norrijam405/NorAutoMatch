@@ -26,7 +26,7 @@ Do not turn this into a generic dealership template. The matcher and no-match co
 | Persistent dimmed inventory feed | Yes | Shows budget, filter, and pass exclusions; shortlist receives green state |
 | No-match concierge trapdoor | Yes | Exact sourcing copy and “Let Me Work For You” CTA |
 | Traditional shopping path | Yes | Traditional Browse tab with permanent sourcing banner |
-| Dual lead routing | Yes | `Standard Retail` vs `Auto Brokerage` in `/api/leads` |
+| Dual lead routing | Yes | `Standard Retail` vs `Vehicle Sourcing` in `/api/leads` |
 | Contact consent | Yes | Explicit unchecked checkbox, STOP language, privacy page |
 | Service-area SEO | Yes | OKC, Yukon, Edmond, Mustang, Piedmont, Moore, Norman, Midwest City |
 | Technical SEO | Yes | Per-page metadata, canonical area URLs, JSON-LD, sitemap, robots |
@@ -36,7 +36,7 @@ Do not turn this into a generic dealership template. The matcher and no-match co
 | Analytics events | Not yet | Add after IDs/platforms are selected; see event plan below |
 | Live inventory integration | Not yet | Current six-vehicle dataset and AI images are representative demo content |
 | Production CRM destination | Not yet | Set `CRM_WEBHOOK_URL` and test both pipelines |
-| Production domain | Not yet | Set `NEXT_PUBLIC_SITE_URL`, redeploy, and update GBP |
+| Production domain | Not yet | Set `NEXT_PUBLIC_SITE_URL`, redeploy, and connect it through the approved Orr Nissan West web/advertising structure |
 
 ## Required analytics event plan
 
@@ -64,7 +64,7 @@ Set `CRM_WEBHOOK_URL` to the approved Zapier, Make, n8n, HubSpot, or equivalent 
 ```json
 {
   "trigger": "trapdoor",
-  "pipeline": "Auto Brokerage"
+  "pipeline": "Vehicle Sourcing"
 }
 ```
 
@@ -94,20 +94,21 @@ Replace `src/lib/inventory.ts` with the approved inventory feed. Required normal
 
 Do not publish stale units as live. If the feed fails, show sourcing/concierge rather than fabricated availability.
 
-### Domain and GBP
+### Domain and Google presence
 
 1. Connect the approved NorAuto Match domain.
 2. Set `NEXT_PUBLIC_SITE_URL` to the canonical HTTPS origin.
 3. Redeploy and verify canonical tags, sitemap, robots, and structured data.
-4. Add the live URL to Google Business Profile.
-5. Verify the domain in Google Search Console and submit `/sitemap.xml`.
+4. Do not create a separate salesperson Google Business Profile. Google excludes corporate sales associates and lead-generation agents from individual-practitioner eligibility.
+5. Connect the experience through the approved Orr Nissan West website, advertising accounts, and business presence.
+6. Verify the domain in Google Search Console and submit `/sitemap.xml`.
 
 ## Final acceptance checklist
 
 - [ ] Homepage and matcher reviewed at 390px, 768px, 1440px widths
 - [ ] Swipe gestures and pass/shortlist buttons work on iOS and Android
 - [ ] Empty deck and zero-filter state both show the concierge trapdoor
-- [ ] Traditional Browse banner opens the Auto Brokerage form
+- [ ] Traditional Browse banner opens the Vehicle Sourcing form
 - [ ] Retail inquiry opens the Standard Retail form
 - [ ] Both CRM pipelines receive complete submissions
 - [ ] Call and text CTAs dial/message `(405) 861-0061`
@@ -130,7 +131,7 @@ The review build has passed:
 
 1. Keep the payment-first offer above the fold.
 2. Keep the trapdoor in both Interactive Matcher and Traditional Browse.
-3. Keep Retail and Auto Brokerage routing separate.
+3. Keep Retail and Vehicle Sourcing routing separate.
 4. Keep the direct phone/text path visible on mobile.
 5. Keep financial-estimate and licensed-dealership disclosures.
 6. Do not replace the experience with an iframe of the dealership inventory site.

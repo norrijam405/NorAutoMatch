@@ -174,7 +174,7 @@ export function AutoMatcher() {
             <div className="relative overflow-hidden rounded-3xl border border-amber-400/25 bg-gradient-to-br from-amber-400/15 via-slate-900 to-emerald-400/10 p-6 shadow-glow sm:p-9">
               <div className="absolute right-0 top-0 size-56 rounded-full bg-amber-400/10 blur-3xl" />
               <div className="relative flex flex-col items-start justify-between gap-7 lg:flex-row lg:items-center">
-                <div className="max-w-3xl"><p className="eyebrow">There is a better exit</p><h3 className="mt-3 text-2xl font-black leading-tight text-white sm:text-3xl">Don&apos;t see your exact vehicle or price? Escape the traditional showroom grind entirely.</h3><p className="mt-3 leading-7 text-slate-300">Click here to let me source, negotiate, and deliver your perfect car directly to your garage.</p></div>
+                <div className="max-w-3xl"><p className="eyebrow">There is a better exit</p><h3 className="mt-3 text-2xl font-black leading-tight text-white sm:text-3xl">Don&apos;t see your exact vehicle or price? Escape the traditional showroom grind entirely.</h3><p className="mt-3 leading-7 text-slate-300">Click here to let me source the right vehicle through Orr Nissan West, explain the deal structure, and coordinate the path to your garage.</p></div>
                 <button onClick={() => openLead("trapdoor", "Concierge request from Traditional Browse banner.")} className="btn-primary shrink-0">Let me source it <ArrowRight size={17} /></button>
               </div>
             </div>
@@ -225,9 +225,9 @@ function ConciergeCard({ onOpen }: { onOpen: () => void }) {
   return (
     <div className="mx-auto flex min-h-[555px] max-w-xl flex-col items-center justify-center overflow-hidden rounded-[26px] border border-amber-400/25 bg-gradient-to-b from-amber-400/10 via-slate-950 to-emerald-400/10 px-6 py-10 text-center shadow-glow">
       <span className="grid size-16 place-items-center rounded-2xl border border-amber-400/25 bg-amber-400/10 text-amber-300"><Sparkles size={30} /></span>
-      <p className="eyebrow mt-7">The broker trapdoor</p>
+      <p className="eyebrow mt-7">The sourcing route</p>
       <h3 className="mt-3 text-3xl font-black leading-tight text-white sm:text-4xl">No active matches.<br />Good. Now I go to work.</h3>
-      <p className="mt-5 max-w-lg text-base leading-7 text-slate-300">Out of stock on our lot, but not out of luck. Let me do the hard work for you. I will leverage our entire regional network to source your perfect vehicle, negotiate the best terms, and deliver it straight to your driveway.</p>
+      <p className="mt-5 max-w-lg text-base leading-7 text-slate-300">Out of stock on our lot, but not out of luck. Let me do the hard work for you. I will use Orr Nissan West and its approved inventory channels to source the right vehicle, explain the available deal structure, and coordinate the path to your driveway.</p>
       <button onClick={onOpen} className="btn-primary mt-8">Let Me Work For You <ArrowRight size={18} /></button>
       <p className="mt-4 text-xs text-slate-500">No pressure. Just the spec, the number, and a direct line.</p>
     </div>

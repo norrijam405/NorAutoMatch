@@ -9,9 +9,9 @@ Payment-first vehicle matching and personal car sourcing for the Oklahoma City m
 - Brand and body-style filters
 - Swipe/pass/shortlist interaction
 - Persistent inventory feed with dimmed exclusion states
-- Broker trapdoor when no active matches remain
+- Vehicle-sourcing route when no active matches remain
 - Traditional inventory browse with permanent sourcing CTA
-- Shared lead capture with `Standard Retail` vs `Auto Brokerage` routing
+- Shared lead capture with `Standard Retail` vs `Vehicle Sourcing` routing
 - CRM webhook integration
 - Oklahoma City metro service-area pages, including Mustang and Piedmont
 - Metadata, JSON-LD, robots, sitemap, privacy/consent, and finance disclaimers
@@ -33,7 +33,7 @@ Set `CRM_WEBHOOK_URL` to a Zapier, Make, n8n, HubSpot, or other HTTPS webhook. E
 ```json
 {
   "trigger": "trapdoor",
-  "pipeline": "Auto Brokerage"
+  "pipeline": "Vehicle Sourcing"
 }
 ```
 
@@ -56,7 +56,7 @@ In production, the form intentionally returns a clear fallback message until `CR
 4. Replace representative AI vehicle imagery with approved unit photos.
 5. Add analytics and ad conversion IDs only after the consent/attribution plan is approved.
 6. Approval received (reported August 14, 2026). Preserve the written approval and keep deployment, advertising, inventory use, and lead ownership within its documented scope.
-7. Ensure all vehicle sales, financing, and registration are handled by the licensed dealership.
+7. Ensure all vehicle sales, financing, registration, and delivery are handled by Orr Nissan West or the approved licensed selling dealership.
 
 ## Important
 

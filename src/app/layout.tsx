@@ -11,10 +11,10 @@ export const metadata: Metadata = {
     template: "%s | NorAuto Match",
   },
   description:
-    "Tell me the monthly payment. NorAuto Match helps Oklahoma City drivers find the right car, source it across the metro, and simplify the buying process.",
+    "Tell me the monthly payment. NorAuto Match is a personal vehicle-shopping experience at Orr Nissan West for drivers across the Oklahoma City metro.",
   openGraph: {
     title: "NorAuto Match | Tell me the number. I’ll find the car.",
-    description: "Payment-first vehicle matching and personal car sourcing across the Oklahoma City metro.",
+    description: "Payment-first vehicle matching with a direct salesperson at Orr Nissan West in Oklahoma City.",
     type: "website",
     locale: "en_US",
     images: [{ url: "/images/hero-okc.jpg", width: 1536, height: 1024, alt: "NorAuto Match in Oklahoma City" }],
@@ -26,13 +26,25 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const schema = {
     "@context": "https://schema.org",
-    "@type": "ProfessionalService",
+    "@type": "WebSite",
     name: brand.name,
     url: brand.baseUrl,
-    telephone: brand.phoneRaw,
-    description: "Payment-first vehicle matching and personal car sourcing across the Oklahoma City metro.",
-    areaServed: brand.cities.map((name) => ({ "@type": "City", name })),
-    priceRange: "$$",
+    description: "Payment-first vehicle matching with a direct salesperson at Orr Nissan West in Oklahoma City.",
+    about: { "@type": "Service", name: "Personal vehicle matching" },
+    publisher: {
+      "@type": "AutoDealer",
+      name: brand.dealer.name,
+      url: brand.dealer.url,
+      telephone: brand.dealer.phoneRaw,
+      address: {
+        "@type": "PostalAddress",
+        streetAddress: "8800 NW Expressway",
+        addressLocality: "Oklahoma City",
+        addressRegion: "OK",
+        postalCode: "73162",
+        addressCountry: "US",
+      },
+    },
   };
 
   return (

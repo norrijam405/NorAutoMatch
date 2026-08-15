@@ -34,7 +34,7 @@ function LeadModalContent({
 }: LeadModalProps) {
   const [submitted, setSubmitted] = useState(false);
   const [serverError, setServerError] = useState("");
-  const pipeline = trigger === "trapdoor" ? "Auto Brokerage" : "Standard Retail";
+  const pipeline = trigger === "trapdoor" ? "Vehicle Sourcing" : "Standard Retail";
 
   const {
     register,

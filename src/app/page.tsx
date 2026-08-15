@@ -14,7 +14,7 @@ export default function HomePage() {
         <div className="absolute inset-0 grid-noise opacity-30" />
         <div className="shell relative flex min-h-[760px] items-center py-20 sm:min-h-[820px]">
           <div className="max-w-3xl pt-4">
-            <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-xs font-bold text-amber-200 backdrop-blur"><span className="size-2 animate-pulse-soft rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399]" /> Serving the Oklahoma City metro</div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-xs font-bold text-amber-200 backdrop-blur"><span className="size-2 animate-pulse-soft rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399]" /> Your direct shopping line at Orr Nissan West</div>
             <h1 className="mt-7 text-[clamp(3.4rem,8.5vw,7.4rem)] font-black leading-[.86] tracking-[-.065em] text-white">Tell me<br />the <span className="text-amber-300">number.</span></h1>
             <p className="mt-7 max-w-xl text-xl font-medium leading-8 text-slate-200 sm:text-2xl">I’ll find the car. Payment-first matching, direct communication, and a cleaner path from search to driveway.</p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -33,7 +33,22 @@ export default function HomePage() {
 
       <AutoMatcher />
 
-      <section className="border-y border-white/5 bg-slate-950/45 py-20 sm:py-28">
+      <section className="border-y border-white/5 bg-slate-950/45 py-16 sm:py-20">
+        <div className="shell">
+          <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+            <div className="max-w-3xl"><p className="eyebrow">The NorAuto Standard</p><h2 className="mt-4 text-4xl font-black tracking-[-.04em] text-white sm:text-5xl">Country-store humanity.<br />Luxury-level follow-through.</h2></div>
+            <p className="max-w-md text-sm leading-6 text-slate-400">Big stores win on inventory. NorAuto Match wins by making one person accountable from the first text through delivery—and after it.</p>
+          </div>
+          <div className="mt-9 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Standard number="01" title="A real match brief" text="Budget, use case, and must-haves become a short list—not a blast of random links." />
+            <Standard number="02" title="Video before the drive" text="See the actual unit and the details that matter before you cross the metro." />
+            <Standard number="03" title="Numbers with context" text="Get the vehicle price, assumptions, and next steps explained before the paperwork conversation." />
+            <Standard number="04" title="Follow-through after delivery" text="Questions do not get orphaned when the keys change hands. You keep the same direct line." />
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b border-white/5 bg-slate-950/20 py-20 sm:py-28">
         <div className="shell">
           <div className="grid gap-12 lg:grid-cols-[.8fr_1.2fr] lg:items-start">
             <div className="lg:sticky lg:top-28">
@@ -45,8 +60,8 @@ export default function HomePage() {
             <div className="grid gap-4">
               <Step number="01" icon={<Gauge />} title="Set the lane" text="Give me the target payment, down payment or trade equity, and the term you are comfortable with." />
               <Step number="02" icon={<CarFront />} title="Match—or pass" text="See which vehicles fit the math. Shortlist the right ones and kill the noise without a sales desk hovering." />
-              <Step number="03" icon={<Sparkles />} title="Open the network" text="If the lot is wrong, the search does not end. Your request routes to the sourcing pipeline and I hunt the regional network." />
-              <Step number="04" icon={<ShieldCheck />} title="Verify and desk it" text="We confirm the actual unit, final price, taxes, fees, financing, and delivery through the licensed selling dealership." />
+              <Step number="03" icon={<Sparkles />} title="Open the approved network" text="If the current row is wrong, the search does not end. Your request routes to vehicle sourcing through Orr Nissan West and its approved inventory channels." />
+              <Step number="04" icon={<ShieldCheck />} title="Verify and desk it" text="We confirm the actual unit, selling price, taxes, fees, financing, and delivery through Orr Nissan West or the approved licensed selling dealership." />
             </div>
           </div>
         </div>
@@ -68,6 +83,10 @@ export default function HomePage() {
       </section>
     </>
   );
+}
+
+function Standard({ number, title, text }: { number: string; title: string; text: string }) {
+  return <article className="rounded-2xl border border-white/10 bg-slate-900/60 p-5"><span className="text-[10px] font-black tracking-[.2em] text-amber-300/60">{number}</span><h3 className="mt-4 text-lg font-black text-white">{title}</h3><p className="mt-2 text-sm leading-6 text-slate-400">{text}</p></article>;
 }
 
 function Proof({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
