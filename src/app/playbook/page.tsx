@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Growth Handoff Playbook",
@@ -40,6 +42,7 @@ export default function PlaybookPage() {
           <p className="eyebrow">Internal handoff · do not index</p>
           <h1 className="mt-4 text-5xl font-black tracking-[-.05em] text-white sm:text-7xl">NorAuto Match growth playbook</h1>
           <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-400">One offer: tell me the monthly, I match the car or source the right option through Orr Nissan West. Do not rewrite this into a generic used-car dealer campaign.</p>
+          <Link href="/master-build-prompt" className="btn-primary mt-7">Open the master Website + CRM prompt <ArrowRight size={17} /></Link>
 
           <div className="mt-12 grid gap-6 lg:grid-cols-2">
             <Block title="Search Ads: first 21 days">

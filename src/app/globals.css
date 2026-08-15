@@ -50,3 +50,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   background-size: 34px 34px;
   mask-image: linear-gradient(to bottom, black, transparent);
 }
+
+@media print {
+  header, footer, .prompt-actions, .prompt-toc { display: none !important; }
+  body { background: #fff !important; color: #111827 !important; }
+  .prompt-document { max-width: none !important; border: 0 !important; background: #fff !important; box-shadow: none !important; padding: 0 !important; }
+  .prompt-document h1, .prompt-document h2, .prompt-document h3, .prompt-document h4,
+  .prompt-document strong { color: #111827 !important; }
+  .prompt-document p, .prompt-document li, .prompt-document td { color: #374151 !important; }
+  .prompt-document pre { border: 1px solid #d1d5db !important; background: #f9fafb !important; white-space: pre-wrap !important; }
+  .prompt-document code { color: #065f46 !important; }
+  .prompt-document a { color: #92400e !important; }
+  .prompt-document table { break-inside: avoid; }
+}
