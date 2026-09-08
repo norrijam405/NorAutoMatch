@@ -3,7 +3,7 @@ import type { LiveInventoryRecord } from "./live-inventory";
 import type { OrrAlgoliaDiscovery, OrrAlgoliaHit } from "./orr-public-algolia";
 
 const SOURCE_NAME = "orrnissanwest_public_algolia";
-const PARSER_VERSION = "orr-algolia-v2";
+const PARSER_VERSION = "orr-algolia-v3";
 const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/i;
 const DEALER_ID = 2175;
 
@@ -83,24 +83,27 @@ export function normalizeOrrAlgoliaHit(
   const model = stringValue(hit.model);
   const trim = stringValue(hit.car_trim);
   const stockNumber = stringValue(hit.stock_number);
-  const price = positiveMoney(hit.price ?? hit.functional_price);
+  // Zero/non-positive primary price is not usable evidence. Fall through to
+  // the site's positive functional price rather than treating zero as a sale.
+  const price = positiveMoney(hit.price) ?? positiveMoney(hit.functional_price);
 
-  // VIN is the canonical vehicle identity. Stock number is useful supporting
-  // evidence, but the live source legitimately omits it for some active and
-  // in-transit units, so absence must not erase a VIN-identified vehicle.
   if (!year || !make || !model || !trim) {
     return { issue: { objectID, vin, severity: "ERROR", code: "IDENTITY_INCOMPLETE", message: "Year/make/model/trim identity is incomplete." } };
   }
   if (!price) {
-    return { issue: { objectID, vin, severity: "ERROR", code: "PRICE_INVALID", message: "Advertised price is missing, zero, negative, or non-numeric." } };
+    return { issue: { objectID, vin, severity: "ERROR", code: "PRICE_INVALID", message: "No positive advertised/functional price is available." } };
   }
 
+  const sourceStockStatus = stringValue(hit.stock_status);
+  const inTransit = hit.in_transit === true || sourceStockStatus?.toLowerCase() === "in_transit";
   const record: LiveInventoryRecord = {
     source: SOURCE_NAME,
     sourceUrl: "https://orrnissanwest.com/inventory",
     sourceVehicleId: objectID,
     vin,
     stockNumber,
+    sourceStockStatus,
+    inTransit,
     year,
     make,
     model,
@@ -152,16 +155,9 @@ export function normalizeOrrAlgoliaDiscovery(discovery: OrrAlgoliaDiscovery): Or
     const normalized = normalizeOrrAlgoliaHit(hit, discovery.fetchedAt);
     if (normalized.issue) issues.push(normalized.issue);
     if (!normalized.record) continue;
-
     const record = normalized.record;
     if (vins.has(record.vin)) {
-      issues.push({
-        objectID: stringValue(hit.objectID),
-        vin: record.vin,
-        severity: "ERROR",
-        code: "DUPLICATE_VIN",
-        message: "Duplicate VIN found in one dealer snapshot.",
-      });
+      issues.push({ objectID: stringValue(hit.objectID), vin: record.vin, severity: "ERROR", code: "DUPLICATE_VIN", message: "Duplicate VIN found in one dealer snapshot." });
       continue;
     }
     vins.add(record.vin);
