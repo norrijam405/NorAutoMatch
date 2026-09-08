@@ -1,6 +1,7 @@
 import {
   applyHealthyAbsence,
   applyHealthyObservation,
+  applySourceError,
   diffInventoryRecord,
   qualifyFreshness,
   DEFAULT_REFRESH_POLICY,
@@ -46,9 +47,18 @@ export function reconcileOrrAlgoliaSnapshot(input: {
     nextByVin.set(key, applyHealthyObservation(previous, observation));
   }
 
-  // Only a complete, successfully normalized dealer snapshot is allowed to
-  // count absence. A malformed hit itself is not proof that the unit sold.
+  // A malformed hit whose VIN is still recognizable proves presence but does
+  // not prove trustworthy current fields. Preserve the prior record and mark
+  // it SOURCE_ERROR rather than dropping it or incrementing a removal miss.
   const invalidVins = new Set(normalized.issues.map((issue) => issue.vin?.toUpperCase()).filter((vin): vin is string => Boolean(vin)));
+  for (const vin of invalidVins) {
+    if (nextByVin.has(vin)) continue;
+    const previous = previousByVin.get(vin);
+    if (previous) nextByVin.set(vin, applySourceError(previous, input.discovery.fetchedAt));
+  }
+
+  // Only VINs not observed at all in a complete snapshot count as healthy
+  // absence. Parser/normalization defects are never sale/removal evidence.
   for (const [vin, previous] of previousByVin) {
     if (nextByVin.has(vin) || invalidVins.has(vin)) continue;
     nextByVin.set(vin, applyHealthyAbsence(previous, input.discovery.fetchedAt, policy));
