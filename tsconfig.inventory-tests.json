@@ -11,6 +11,11 @@
   },
   "include": [
     "scripts/live-inventory.behavior.ts",
-    "src/lib/live-inventory.ts"
+    "scripts/orr-parser.behavior.ts",
+    "scripts/inventory-bridge.behavior.ts",
+    "src/lib/live-inventory.ts",
+    "src/lib/orr-public-inventory.ts",
+    "src/lib/inventory-bridge.ts",
+    "src/lib/inventory.ts"
   ]
 }
