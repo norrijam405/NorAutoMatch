@@ -102,8 +102,10 @@ function run() {
     discovery: discovery([hit({ price: 0 })]),
     nowMs: Date.parse(fetchedAt),
   });
-  assert(malformedSameVin.records[0].availabilityState === "ACTIVE_CURRENT", "Malformed hit with same VIN must not be counted as sold/absent.");
+  assert(malformedSameVin.records.length === 1, "Malformed observed VIN must preserve the prior record instead of disappearing.");
+  assert(malformedSameVin.records[0].availabilityState === "SOURCE_ERROR", "Malformed observed VIN must be blocked as SOURCE_ERROR.");
   assert(malformedSameVin.records[0].consecutiveHealthyMisses === 0, "Malformed hit must not increment healthy misses.");
+  assert(malformedSameVin.records[0].price === base.price, "Malformed hit must not overwrite the last trusted price.");
 
   let incompleteBlocked = false;
   try {
