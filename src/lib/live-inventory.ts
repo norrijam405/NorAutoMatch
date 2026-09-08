@@ -12,6 +12,8 @@ export type InventoryEventType =
   | "MILEAGE_CHANGED"
   | "INCENTIVE_CHANGED"
   | "AVAILABILITY_CHANGED"
+  | "SOURCE_STOCK_STATUS_CHANGED"
+  | "IN_TRANSIT_CHANGED"
   | "VEHICLE_MISSING"
   | "VEHICLE_REMOVED_CONFIRMED"
   | "VEHICLE_REAPPEARED"
@@ -24,6 +26,8 @@ export type LiveInventoryRecord = {
   sourceVehicleId?: string;
   vin: string;
   stockNumber?: string;
+  sourceStockStatus?: string;
+  inTransit?: boolean;
   year?: number;
   make?: string;
   model?: string;
@@ -82,8 +86,8 @@ export const DEFAULT_REFRESH_POLICY: RefreshPolicy = {
 
 const trackedFields: Array<keyof Pick<
   LiveInventoryRecord,
-  "price" | "msrp" | "mileage" | "incentives" | "availabilityState"
->> = ["price", "msrp", "mileage", "incentives", "availabilityState"];
+  "price" | "msrp" | "mileage" | "incentives" | "availabilityState" | "sourceStockStatus" | "inTransit"
+>> = ["price", "msrp", "mileage", "incentives", "availabilityState", "sourceStockStatus", "inTransit"];
 
 const eventForField: Record<(typeof trackedFields)[number], InventoryEventType> = {
   price: "PRICE_CHANGED",
@@ -91,6 +95,8 @@ const eventForField: Record<(typeof trackedFields)[number], InventoryEventType> 
   mileage: "MILEAGE_CHANGED",
   incentives: "INCENTIVE_CHANGED",
   availabilityState: "AVAILABILITY_CHANGED",
+  sourceStockStatus: "SOURCE_STOCK_STATUS_CHANGED",
+  inTransit: "IN_TRANSIT_CHANGED",
 };
 
 function stableJson(value: unknown) {
@@ -110,12 +116,9 @@ export function diffInventoryRecord(
     parserVersion: next.parserVersion,
   };
 
-  if (!previous) {
-    return [{ type: "VEHICLE_FIRST_SEEN", ...base }];
-  }
+  if (!previous) return [{ type: "VEHICLE_FIRST_SEEN", ...base }];
 
   const events: InventoryEvent[] = [];
-
   for (const field of trackedFields) {
     if (stableJson(previous[field]) !== stableJson(next[field])) {
       events.push({
@@ -128,20 +131,12 @@ export function diffInventoryRecord(
     }
   }
 
-  if (
-    previous.availabilityState === "MISSING_PENDING" &&
-    next.availabilityState === "ACTIVE_CURRENT"
-  ) {
+  if (previous.availabilityState === "MISSING_PENDING" && next.availabilityState === "ACTIVE_CURRENT") {
     events.push({ type: "VEHICLE_REAPPEARED", ...base });
   }
-
-  if (
-    previous.availabilityState !== "REMOVED_CONFIRMED" &&
-    next.availabilityState === "REMOVED_CONFIRMED"
-  ) {
+  if (previous.availabilityState !== "REMOVED_CONFIRMED" && next.availabilityState === "REMOVED_CONFIRMED") {
     events.push({ type: "VEHICLE_REMOVED_CONFIRMED", ...base });
   }
-
   return events;
 }
 
@@ -168,23 +163,12 @@ export function applyHealthyAbsence(
     ...previous,
     fetchedAt: observedAt,
     consecutiveHealthyMisses: misses,
-    availabilityState:
-      misses >= policy.removalConfirmationMisses
-        ? "REMOVED_CONFIRMED"
-        : "MISSING_PENDING",
+    availabilityState: misses >= policy.removalConfirmationMisses ? "REMOVED_CONFIRMED" : "MISSING_PENDING",
   };
 }
 
-export function applySourceError(
-  previous: LiveInventoryRecord,
-  observedAt: string,
-): LiveInventoryRecord {
-  // A timeout/parser/source failure is not evidence of sale or removal.
-  return {
-    ...previous,
-    fetchedAt: observedAt,
-    availabilityState: "SOURCE_ERROR",
-  };
+export function applySourceError(previous: LiveInventoryRecord, observedAt: string): LiveInventoryRecord {
+  return { ...previous, fetchedAt: observedAt, availabilityState: "SOURCE_ERROR" };
 }
 
 export function qualifyFreshness(
@@ -194,12 +178,8 @@ export function qualifyFreshness(
 ): LiveInventoryRecord {
   if (record.availabilityState !== "ACTIVE_CURRENT") return record;
   const fetchedMs = Date.parse(record.fetchedAt);
-  if (!Number.isFinite(fetchedMs)) {
-    return { ...record, availabilityState: "SOURCE_ERROR" };
-  }
-  if (nowMs - fetchedMs > policy.staleAfterMs) {
-    return { ...record, availabilityState: "ACTIVE_STALE" };
-  }
+  if (!Number.isFinite(fetchedMs)) return { ...record, availabilityState: "SOURCE_ERROR" };
+  if (nowMs - fetchedMs > policy.staleAfterMs) return { ...record, availabilityState: "ACTIVE_STALE" };
   return record;
 }
 
@@ -218,9 +198,6 @@ export function shouldAccelerateRefresh(input: {
   return Object.values(input).some(Boolean);
 }
 
-export function nextRefreshDelayMs(
-  accelerated: boolean,
-  policy: RefreshPolicy = DEFAULT_REFRESH_POLICY,
-) {
+export function nextRefreshDelayMs(accelerated: boolean, policy: RefreshPolicy = DEFAULT_REFRESH_POLICY) {
   return accelerated ? policy.acceleratedRefreshMs : policy.normalRefreshMs;
 }
