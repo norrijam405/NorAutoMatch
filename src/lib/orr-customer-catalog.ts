@@ -1,4 +1,5 @@
 import { inventory as demoInventory } from "./inventory";
+import { assertInventoryCatalogIntegrity } from "./inventory-catalog-integrity";
 import { buildDemoCatalog, type InventoryCatalog } from "./inventory-catalog";
 import { selectCustomerInventory, resolveInventoryRuntime } from "./inventory-runtime";
 import { normalizeOrrAlgoliaDiscovery } from "./orr-algolia-normalizer";
@@ -15,11 +16,11 @@ export async function loadOrrCustomerCatalog(options: OrrCustomerCatalogOptions 
   const runtime = resolveInventoryRuntime({ mode: options.mode, liveActivation: options.liveActivation });
 
   if (runtime.effectiveMode !== "live-enabled") {
-    return buildDemoCatalog({
+    return assertInventoryCatalogIntegrity(buildDemoCatalog({
       runtime,
       demoInventory,
       generatedAt: new Date(options.nowMs ?? Date.now()).toISOString(),
-    });
+    }));
   }
 
   const discover = options.discover ?? (() => discoverOrrAlgoliaInventory({ hitsPerPage: 100, maxPages: 10 }));
@@ -40,7 +41,7 @@ export async function loadOrrCustomerCatalog(options: OrrCustomerCatalogOptions 
   const errorCount = normalized.issues.filter((issue) => issue.severity === "ERROR").length;
   const inTransitCount = normalized.records.filter((record) => record.inTransit === true).length;
 
-  return {
+  return assertInventoryCatalogIntegrity({
     requestedMode: runtime.requestedMode,
     effectiveMode: runtime.effectiveMode,
     customerVisibleLiveInventory: true,
@@ -61,5 +62,5 @@ export async function loadOrrCustomerCatalog(options: OrrCustomerCatalogOptions 
       warningCount,
       errorCount,
     },
-  };
+  });
 }
