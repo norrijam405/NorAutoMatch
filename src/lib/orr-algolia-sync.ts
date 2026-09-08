@@ -47,10 +47,19 @@ export function reconcileOrrAlgoliaSnapshot(input: {
     nextByVin.set(key, applyHealthyObservation(previous, observation));
   }
 
+  // Only ERROR-severity normalization findings can block a current observation.
+  // Warnings (for example a missing source stock number when VIN is valid) stay
+  // auditable without downgrading an otherwise trustworthy live record.
+  const invalidVins = new Set(
+    normalized.issues
+      .filter((issue) => issue.severity === "ERROR")
+      .map((issue) => issue.vin?.toUpperCase())
+      .filter((vin): vin is string => Boolean(vin)),
+  );
+
   // A malformed hit whose VIN is still recognizable proves presence but does
   // not prove trustworthy current fields. Preserve the prior record and mark
   // it SOURCE_ERROR rather than dropping it or incrementing a removal miss.
-  const invalidVins = new Set(normalized.issues.map((issue) => issue.vin?.toUpperCase()).filter((vin): vin is string => Boolean(vin)));
   for (const vin of invalidVins) {
     if (nextByVin.has(vin)) continue;
     const previous = previousByVin.get(vin);
