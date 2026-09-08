@@ -6,7 +6,9 @@ on:
       - "reactivation/**"
     paths:
       - "src/lib/orr-public-algolia.ts"
+      - "src/lib/orr-algolia-normalizer.ts"
       - "scripts/orr-algolia-shadow.ts"
+      - "scripts/orr-normalized-shadow.ts"
       - ".github/workflows/norautomatch-live-shadow.yml"
 
 permissions:
@@ -29,17 +31,22 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
-      - name: Compile shadow runner
+      - name: Compile shadow runners
         run: |
           rm -rf .tmp-shadow
-          npx tsc scripts/orr-algolia-shadow.ts src/lib/orr-public-algolia.ts --target ES2022 --module commonjs --moduleResolution node --esModuleInterop --strict --skipLibCheck --outDir .tmp-shadow
+          npx tsc scripts/orr-algolia-shadow.ts scripts/orr-normalized-shadow.ts src/lib/orr-public-algolia.ts src/lib/orr-algolia-normalizer.ts src/lib/live-inventory.ts --target ES2022 --module commonjs --moduleResolution node --esModuleInterop --strict --skipLibCheck --outDir .tmp-shadow
 
-      - name: Run bounded read-only shadow probe
+      - name: Run bounded raw shadow probe
         run: node .tmp-shadow/scripts/orr-algolia-shadow.js | tee /tmp/orr-shadow-receipt.json
 
-      - name: Upload shadow receipt
+      - name: Run bounded normalized shadow probe
+        run: node .tmp-shadow/scripts/orr-normalized-shadow.js | tee /tmp/orr-normalized-shadow-receipt.json
+
+      - name: Upload shadow receipts
         uses: actions/upload-artifact@v4
         with:
-          name: orr-live-shadow-receipt
-          path: /tmp/orr-shadow-receipt.json
+          name: orr-live-shadow-receipts
+          path: |
+            /tmp/orr-shadow-receipt.json
+            /tmp/orr-normalized-shadow-receipt.json
           if-no-files-found: error
