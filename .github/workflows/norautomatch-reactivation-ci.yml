@@ -38,6 +38,7 @@ jobs:
           rm -rf .tmp-inventory-tests
           npx tsc -p tsconfig.inventory-tests.json
           node .tmp-inventory-tests/scripts/live-inventory.behavior.js
+          rm -rf .tmp-inventory-tests
 
       - name: Typecheck
         run: npm run typecheck
