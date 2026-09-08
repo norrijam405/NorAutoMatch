@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { LiveInventoryRecord } from "@/lib/live-inventory";
+import type { LiveInventoryRecord } from "./live-inventory";
 
 const ORR_ORIGIN = "https://orrnissanwest.com";
 const SOURCE_NAME = "orrnissanwest_public";
@@ -304,9 +304,5 @@ export async function fetchOrrPublicVehicle(
   options: OrrPublicFetchOptions = {},
 ) {
   const page = await fetchBoundedPublicHtml(sourceUrl, options);
-  return parseOrrVehicleDetailHtml({
-    html: page.html,
-    sourceUrl: page.url,
-    fetchedAt: page.fetchedAt,
-  });
+  return parseOrrVehicleDetailHtml({ html: page.html, sourceUrl: page.url, fetchedAt: page.fetchedAt });
 }
