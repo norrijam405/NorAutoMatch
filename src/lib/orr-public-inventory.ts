@@ -304,5 +304,9 @@ export async function fetchOrrPublicVehicle(
   options: OrrPublicFetchOptions = {},
 ) {
   const page = await fetchBoundedPublicHtml(sourceUrl, options);
-  return parseOrrVehicleDetailHtml(page);
+  return parseOrrVehicleDetailHtml({
+    html: page.html,
+    sourceUrl: page.url,
+    fetchedAt: page.fetchedAt,
+  });
 }
