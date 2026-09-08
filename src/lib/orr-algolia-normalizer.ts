@@ -3,17 +3,19 @@ import type { LiveInventoryRecord } from "./live-inventory";
 import type { OrrAlgoliaDiscovery, OrrAlgoliaHit } from "./orr-public-algolia";
 
 const SOURCE_NAME = "orrnissanwest_public_algolia";
-const PARSER_VERSION = "orr-algolia-v1";
+const PARSER_VERSION = "orr-algolia-v2";
 const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/i;
 const DEALER_ID = 2175;
 
 export type OrrAlgoliaNormalizationIssue = {
   objectID?: string;
   vin?: string;
+  severity: "WARNING" | "ERROR";
   code:
     | "DEALER_MISMATCH"
     | "VIN_INVALID"
     | "IDENTITY_INCOMPLETE"
+    | "STOCK_NUMBER_MISSING"
     | "PRICE_INVALID"
     | "DUPLICATE_VIN"
     | "INACTIVE_HIT";
@@ -55,7 +57,7 @@ function hashCanonicalHit(hit: OrrAlgoliaHit) {
 function normalizeIncentives(hit: OrrAlgoliaHit) {
   const values: string[] = [];
   const rebate = positiveMoney(hit.rebate_price);
-  if (rebate) values.push(`Advertised rebate: $${rebate.toLocaleString("en-US")}`);
+  if (rebate) values.push(`Advertised rebate amount (eligibility not inferred): $${rebate.toLocaleString("en-US")}`);
   return values;
 }
 
@@ -67,13 +69,13 @@ export function normalizeOrrAlgoliaHit(
   const vin = stringValue(hit.vin)?.toUpperCase();
 
   if (Number(hit.dealer_id) !== DEALER_ID) {
-    return { issue: { objectID, vin, code: "DEALER_MISMATCH", message: "Hit is outside dealer_id 2175." } };
+    return { issue: { objectID, vin, severity: "ERROR", code: "DEALER_MISMATCH", message: "Hit is outside dealer_id 2175." } };
   }
   if (!vin || !VIN_RE.test(vin)) {
-    return { issue: { objectID, vin, code: "VIN_INVALID", message: "Hit does not contain a valid 17-character VIN." } };
+    return { issue: { objectID, vin, severity: "ERROR", code: "VIN_INVALID", message: "Hit does not contain a valid 17-character VIN." } };
   }
   if (hit.is_active === false || hit.archived === true || hit.on_hold === true) {
-    return { issue: { objectID, vin, code: "INACTIVE_HIT", message: "Hit is not active inventory." } };
+    return { issue: { objectID, vin, severity: "ERROR", code: "INACTIVE_HIT", message: "Hit is not active inventory." } };
   }
 
   const year = numberValue(hit.make_year);
@@ -83,11 +85,14 @@ export function normalizeOrrAlgoliaHit(
   const stockNumber = stringValue(hit.stock_number);
   const price = positiveMoney(hit.price ?? hit.functional_price);
 
-  if (!year || !make || !model || !trim || !stockNumber) {
-    return { issue: { objectID, vin, code: "IDENTITY_INCOMPLETE", message: "Year/make/model/trim/stock identity is incomplete." } };
+  // VIN is the canonical vehicle identity. Stock number is useful supporting
+  // evidence, but the live source legitimately omits it for some active and
+  // in-transit units, so absence must not erase a VIN-identified vehicle.
+  if (!year || !make || !model || !trim) {
+    return { issue: { objectID, vin, severity: "ERROR", code: "IDENTITY_INCOMPLETE", message: "Year/make/model/trim identity is incomplete." } };
   }
   if (!price) {
-    return { issue: { objectID, vin, code: "PRICE_INVALID", message: "Advertised price is missing, zero, negative, or non-numeric." } };
+    return { issue: { objectID, vin, severity: "ERROR", code: "PRICE_INVALID", message: "Advertised price is missing, zero, negative, or non-numeric." } };
   }
 
   const record: LiveInventoryRecord = {
@@ -124,7 +129,18 @@ export function normalizeOrrAlgoliaHit(
     consecutiveHealthyMisses: 0,
   };
 
-  return { record };
+  return stockNumber
+    ? { record }
+    : {
+        record,
+        issue: {
+          objectID,
+          vin,
+          severity: "WARNING",
+          code: "STOCK_NUMBER_MISSING",
+          message: "Public source omitted stock number; VIN identity retained without inventing a stock number.",
+        },
+      };
 }
 
 export function normalizeOrrAlgoliaDiscovery(discovery: OrrAlgoliaDiscovery): OrrAlgoliaNormalizationResult {
@@ -134,13 +150,18 @@ export function normalizeOrrAlgoliaDiscovery(discovery: OrrAlgoliaDiscovery): Or
 
   for (const hit of discovery.hits) {
     const normalized = normalizeOrrAlgoliaHit(hit, discovery.fetchedAt);
-    if (normalized.issue) {
-      issues.push(normalized.issue);
-      continue;
-    }
-    const record = normalized.record!;
+    if (normalized.issue) issues.push(normalized.issue);
+    if (!normalized.record) continue;
+
+    const record = normalized.record;
     if (vins.has(record.vin)) {
-      issues.push({ objectID: stringValue(hit.objectID), vin: record.vin, code: "DUPLICATE_VIN", message: "Duplicate VIN found in one dealer snapshot." });
+      issues.push({
+        objectID: stringValue(hit.objectID),
+        vin: record.vin,
+        severity: "ERROR",
+        code: "DUPLICATE_VIN",
+        message: "Duplicate VIN found in one dealer snapshot.",
+      });
       continue;
     }
     vins.add(record.vin);
