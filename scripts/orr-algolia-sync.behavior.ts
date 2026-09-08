@@ -80,6 +80,11 @@ function run() {
   assert(normalizeOrrAlgoliaHit(hit({ price: 0 }), fetchedAt).issue?.code === "PRICE_INVALID", "Zero price must fail closed.");
   assert(normalizeOrrAlgoliaHit(hit({ is_active: false }), fetchedAt).issue?.code === "INACTIVE_HIT", "Inactive hit must not normalize as active inventory.");
 
+  const noStock = normalizeOrrAlgoliaHit(hit({ stock_number: undefined }), fetchedAt);
+  assert(noStock.record?.vin === "JN8AY3CC1T9230283", "Valid VIN unit must survive missing source stock number.");
+  assert(noStock.record?.stockNumber === undefined, "Missing stock number must remain absent, not fabricated.");
+  assert(noStock.issue?.code === "STOCK_NUMBER_MISSING" && noStock.issue.severity === "WARNING", "Missing stock number must remain auditable as a warning.");
+
   const duplicate = normalizeOrrAlgoliaDiscovery(discovery([hit(), hit({ objectID: "other" })]));
   assert(duplicate.records.length === 1, "Duplicate VIN must not create duplicate inventory records.");
   assert(duplicate.issues.some((issue) => issue.code === "DUPLICATE_VIN"), "Duplicate VIN must emit an issue.");
@@ -93,6 +98,16 @@ function run() {
   assert(changed.records[0].price === 79999, "Price change must update current observation.");
   assert(changed.events.some((event) => event.type === "PRICE_CHANGED"), "Price change must emit append-only event.");
   assert(changed.records[0].firstSeenAt === base.firstSeenAt, "Re-observation must preserve firstSeenAt.");
+
+  const missingStockSync = reconcileOrrAlgoliaSnapshot({
+    previousRecords: [base],
+    discovery: discovery([hit({ stock_number: undefined })]),
+    nowMs: Date.parse(fetchedAt),
+  });
+  assert(missingStockSync.records.length === 1, "Missing stock number warning must not remove the VIN record.");
+  assert(missingStockSync.records[0].availabilityState === "ACTIVE_CURRENT", "Warning-only observation must remain current.");
+  assert(missingStockSync.records[0].stockNumber === undefined, "Current observation must reflect absent stock number without fabrication.");
+  assert(missingStockSync.records[0].consecutiveHealthyMisses === 0, "Warning-only observation must reset healthy misses.");
 
   const missing = reconcileOrrAlgoliaSnapshot({ previousRecords: [base], discovery: discovery([]), nowMs: Date.parse(fetchedAt) });
   assert(missing.records[0].availabilityState === "MISSING_PENDING", "First complete-snapshot absence must remain pending.");
