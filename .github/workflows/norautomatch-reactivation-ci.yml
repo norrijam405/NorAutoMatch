@@ -42,6 +42,7 @@ jobs:
           node .tmp-inventory-tests/scripts/inventory-bridge.behavior.js
           node .tmp-inventory-tests/scripts/inventory-runtime.behavior.js
           node .tmp-inventory-tests/scripts/orr-algolia-sync.behavior.js
+          node .tmp-inventory-tests/scripts/orr-customer-catalog.behavior.js
           rm -rf .tmp-inventory-tests
 
       - name: Typecheck
