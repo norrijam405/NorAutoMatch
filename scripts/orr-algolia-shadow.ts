@@ -15,9 +15,9 @@ function safeShape(value: unknown, depth = 0): unknown {
 }
 
 async function main() {
-  const result = await discoverOrrAlgoliaInventory({ hitsPerPage: 10 });
-  if (result.hits.length === 0) {
-    throw new Error("Live shadow query returned zero dealer_id 2175 hits; refusing to claim discovery success.");
+  const result = await discoverOrrAlgoliaInventory({ hitsPerPage: 100, maxPages: 10 });
+  if (result.hits.length === 0 || !result.completeSnapshot || result.hits.length !== result.reportedHitCount) {
+    throw new Error("Live shadow query did not produce one complete dealer_id 2175 snapshot.");
   }
 
   const firstHit = result.hits[0];
@@ -29,21 +29,27 @@ async function main() {
     indexName: result.indexName,
     dealerId: result.dealerId,
     hitCount: result.hits.length,
+    reportedHitCount: result.reportedHitCount,
+    pagesFetched: result.pagesFetched,
+    completeSnapshot: result.completeSnapshot,
     firstHitKeys: Object.keys(firstHit).filter((key) => !SENSITIVE_KEY_RE.test(key)).sort(),
     firstHitSafeShape: safeShape(firstHit),
-    sample: result.hits.map((hit) => ({
+    sample: result.hits.slice(0, 10).map((hit) => ({
       objectID: hit.objectID,
       dealer_id: hit.dealer_id,
       vin: hit.vin,
-      stock: hit.stock ?? hit.stock_number,
-      year: hit.year,
+      stock: hit.stock_number,
+      year: hit.make_year,
       make: hit.make,
       model: hit.model,
-      trim: hit.trim,
+      trim: hit.car_trim,
       price: hit.price,
       msrp: hit.msrp,
-      mileage: hit.mileage,
+      mileage: hit.odometer,
+      category: hit.category,
       condition: hit.car_condition,
+      stock_status: hit.stock_status,
+      is_active: hit.is_active,
     })),
   };
 
