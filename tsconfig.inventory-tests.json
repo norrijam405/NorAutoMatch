@@ -15,6 +15,7 @@
     "scripts/inventory-bridge.behavior.ts",
     "scripts/inventory-runtime.behavior.ts",
     "scripts/orr-algolia-sync.behavior.ts",
+    "scripts/orr-customer-catalog.behavior.ts",
     "src/lib/live-inventory.ts",
     "src/lib/orr-public-inventory.ts",
     "src/lib/orr-public-algolia.ts",
@@ -22,6 +23,8 @@
     "src/lib/orr-algolia-sync.ts",
     "src/lib/inventory-bridge.ts",
     "src/lib/inventory-runtime.ts",
+    "src/lib/inventory-catalog.ts",
+    "src/lib/orr-customer-catalog.ts",
     "src/lib/inventory.ts"
   ]
 }
