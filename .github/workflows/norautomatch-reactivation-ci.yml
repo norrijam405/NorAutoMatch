@@ -13,6 +13,11 @@ permissions:
 
 jobs:
   verify:
+    name: verify-repeat-${{ matrix.repeat }}
+    strategy:
+      fail-fast: false
+      matrix:
+        repeat: [1, 2, 3, 4]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -27,6 +32,12 @@ jobs:
 
       - name: Install locked dependencies
         run: npm ci
+
+      - name: Inventory behavioral invariants
+        run: |
+          rm -rf .tmp-inventory-tests
+          npx tsc -p tsconfig.inventory-tests.json
+          node .tmp-inventory-tests/scripts/live-inventory.behavior.js
 
       - name: Typecheck
         run: npm run typecheck
