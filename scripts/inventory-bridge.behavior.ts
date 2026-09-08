@@ -25,6 +25,8 @@ function live(overrides: Partial<LiveInventoryRecord> = {}): LiveInventoryRecord
     source: "orrnissanwest_public",
     sourceUrl: "https://orrnissanwest.com/inventory/New-2026-Nissan-Rogue-SV-5N1BT3BA8TC882931",
     vin: "5N1BT3BA8TC882931",
+    sourceStockStatus: "in_stock",
+    inTransit: false,
     year: 2026,
     make: "Nissan",
     model: "Rogue",
@@ -51,7 +53,25 @@ function run() {
   assert(shadow.vehicles[0].id === "demo-1", "Shadow mode must never replace customer-visible demo inventory.");
 
   const enabled = selectInventoryForMatcher({ mode: "live-enabled", demoInventory: demo, liveRecords: [live()], nowMs: Date.parse("2026-09-08T17:05:00.000Z") });
-  assert(enabled.vehicles.length === 1 && enabled.vehicles[0].id === "5N1BT3BA8TC882931", "Fresh live unit should map into matcher inventory.");
+  assert(enabled.vehicles.length === 1 && enabled.vehicles[0].id === "5N1BT3BA8TC882931", "Fresh in-stock live unit should map into matcher inventory.");
+
+  const transit = selectInventoryForMatcher({
+    mode: "live-enabled",
+    demoInventory: demo,
+    liveRecords: [live({ sourceStockStatus: "in_transit", inTransit: true })],
+    nowMs: Date.parse("2026-09-08T17:05:00.000Z"),
+  });
+  assert(transit.vehicles.length === 0, "In-transit unit must not masquerade as an on-lot matcher result.");
+  assert(transit.rejected.length === 1 && transit.rejected[0].reason === "source_status:in_transit", "In-transit rejection must be explicit and auditable.");
+
+  const staleTransit = selectInventoryForMatcher({
+    mode: "live-enabled",
+    demoInventory: demo,
+    liveRecords: [live({ sourceStockStatus: "in_transit", inTransit: true })],
+    nowMs: Date.parse("2026-09-08T17:31:00.000Z"),
+  });
+  assert(staleTransit.vehicles.length === 0, "Stale in-transit unit must remain blocked.");
+  assert(staleTransit.rejected[0].reason === "source_status:in_transit", "Source transit truth must remain visible even when freshness also fails.");
 
   const stale = selectInventoryForMatcher({ mode: "live-enabled", demoInventory: demo, liveRecords: [live()], nowMs: Date.parse("2026-09-08T17:31:00.000Z") });
   assert(stale.vehicles.length === 0, "Stale live unit must fail closed.");
@@ -60,7 +80,7 @@ function run() {
   const incomplete = selectInventoryForMatcher({ mode: "live-enabled", demoInventory: demo, liveRecords: [live({ price: undefined })], nowMs: Date.parse("2026-09-08T17:05:00.000Z") });
   assert(incomplete.vehicles.length === 0, "Incomplete live unit must not enter matcher inventory.");
 
-  console.log("PASS inventory bridge fail-closed invariants");
+  console.log("PASS inventory bridge fail-closed and in-transit invariants");
 }
 
 run();
