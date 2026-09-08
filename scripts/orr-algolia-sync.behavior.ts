@@ -42,6 +42,7 @@ function hit(overrides: Partial<OrrAlgoliaHit> = {}): OrrAlgoliaHit {
     archived: false,
     on_hold: false,
     stock_status: "in_stock",
+    in_transit: false,
     ...overrides,
   };
 }
@@ -74,11 +75,21 @@ function run() {
   assert(good.record.mileage === 0, "odometer should normalize to mileage.");
   assert(good.record.bodyType === "SUV", "category should normalize to body type.");
   assert(good.record.features?.includes("Tow Hitch"), "parsed features should normalize.");
+  assert(good.record.sourceStockStatus === "in_stock" && good.record.inTransit === false, "In-stock source truth should be preserved.");
 
   assert(normalizeOrrAlgoliaHit(hit({ dealer_id: 999 }), fetchedAt).issue?.code === "DEALER_MISMATCH", "Wrong dealer must fail closed.");
   assert(normalizeOrrAlgoliaHit(hit({ vin: "BADVIN" }), fetchedAt).issue?.code === "VIN_INVALID", "Invalid VIN must fail closed.");
-  assert(normalizeOrrAlgoliaHit(hit({ price: 0 }), fetchedAt).issue?.code === "PRICE_INVALID", "Zero price must fail closed.");
+  assert(normalizeOrrAlgoliaHit(hit({ price: 0, functional_price: 0 }), fetchedAt).issue?.code === "PRICE_INVALID", "Zero advertised and functional price must fail closed.");
   assert(normalizeOrrAlgoliaHit(hit({ is_active: false }), fetchedAt).issue?.code === "INACTIVE_HIT", "Inactive hit must not normalize as active inventory.");
+
+  const fallback = normalizeOrrAlgoliaHit(hit({ price: 0, functional_price: 79950 }), fetchedAt);
+  assert(fallback.record?.price === 79950, "Positive functional price must be accepted when primary price is non-positive.");
+
+  const transitByStatus = normalizeOrrAlgoliaHit(hit({ stock_status: "in_transit", in_transit: false }), fetchedAt);
+  assert(transitByStatus.record?.sourceStockStatus === "in_transit" && transitByStatus.record.inTransit === true, "Source stock_status=in_transit must preserve transit truth even when boolean flag disagrees.");
+
+  const transitByFlag = normalizeOrrAlgoliaHit(hit({ stock_status: "in_stock", in_transit: true }), fetchedAt);
+  assert(transitByFlag.record?.inTransit === true, "Explicit in_transit=true must preserve transit truth even when stock_status disagrees.");
 
   const noStock = normalizeOrrAlgoliaHit(hit({ stock_number: undefined }), fetchedAt);
   assert(noStock.record?.vin === "JN8AY3CC1T9230283", "Valid VIN unit must survive missing source stock number.");
@@ -99,6 +110,15 @@ function run() {
   assert(changed.events.some((event) => event.type === "PRICE_CHANGED"), "Price change must emit append-only event.");
   assert(changed.records[0].firstSeenAt === base.firstSeenAt, "Re-observation must preserve firstSeenAt.");
 
+  const transitChange = reconcileOrrAlgoliaSnapshot({
+    previousRecords: [base],
+    discovery: discovery([hit({ stock_status: "in_transit", in_transit: true })]),
+    nowMs: Date.parse(fetchedAt),
+  });
+  assert(transitChange.records[0].inTransit === true, "Reconciliation must retain new transit state.");
+  assert(transitChange.events.some((event) => event.type === "SOURCE_STOCK_STATUS_CHANGED"), "Stock status transition must emit evidence event.");
+  assert(transitChange.events.some((event) => event.type === "IN_TRANSIT_CHANGED"), "Transit transition must emit evidence event.");
+
   const missingStockSync = reconcileOrrAlgoliaSnapshot({
     previousRecords: [base],
     discovery: discovery([hit({ stock_number: undefined })]),
@@ -114,7 +134,7 @@ function run() {
 
   const malformedSameVin = reconcileOrrAlgoliaSnapshot({
     previousRecords: [base],
-    discovery: discovery([hit({ price: 0 })]),
+    discovery: discovery([hit({ price: 0, functional_price: 0 })]),
     nowMs: Date.parse(fetchedAt),
   });
   assert(malformedSameVin.records.length === 1, "Malformed observed VIN must preserve the prior record instead of disappearing.");
@@ -130,7 +150,7 @@ function run() {
   }
   assert(incompleteBlocked, "Partial dealer snapshot must not advance inventory state.");
 
-  console.log("PASS Orr Algolia normalization and reconciliation invariants");
+  console.log("PASS Orr Algolia normalization, price fallback, transit, and reconciliation invariants");
 }
 
 run();
