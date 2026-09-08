@@ -22,6 +22,7 @@ export function liveRecordToVehicle(record: LiveInventoryRecord): Vehicle | unde
   const type = normalizeBodyType(record.bodyType);
   if (
     !isMatchEligible(record) ||
+    record.inTransit === true ||
     !record.year ||
     !record.make ||
     !record.model ||
@@ -62,6 +63,10 @@ export function selectInventoryForMatcher(input: {
 
   for (const raw of input.liveRecords) {
     const record = qualifyFreshness(raw, input.nowMs);
+    if (record.inTransit === true) {
+      rejected.push({ vin: raw.vin, reason: "source_status:in_transit" });
+      continue;
+    }
     const vehicle = liveRecordToVehicle(record);
     if (!vehicle) {
       rejected.push({ vin: raw.vin, reason: `not_match_eligible:${record.availabilityState}` });
