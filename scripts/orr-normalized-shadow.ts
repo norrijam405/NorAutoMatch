@@ -12,6 +12,10 @@ async function main() {
     counts[issue.code] = (counts[issue.code] ?? 0) + 1;
     return counts;
   }, {});
+  const severityCounts = normalized.issues.reduce<Record<string, number>>((counts, issue) => {
+    counts[issue.severity] = (counts[issue.severity] ?? 0) + 1;
+    return counts;
+  }, {});
 
   if (!discovery.completeSnapshot || discovery.hits.length !== discovery.reportedHitCount) {
     throw new Error("Normalized shadow requires one complete dealer snapshot.");
@@ -23,17 +27,30 @@ async function main() {
     throw new Error("Dealer boundary violation detected during normalization.");
   }
 
+  const sourceStockStatusCounts = normalized.records.reduce<Record<string, number>>((counts, record) => {
+    const key = record.sourceStockStatus?.trim() || "UNSPECIFIED";
+    counts[key] = (counts[key] ?? 0) + 1;
+    return counts;
+  }, {});
+  const inTransitCount = normalized.records.filter((record) => record.inTransit === true).length;
+  const currentNonTransitCount = normalized.records.filter(
+    (record) => record.availabilityState === "ACTIVE_CURRENT" && record.inTransit !== true,
+  ).length;
+  const stockNumberMissingCount = normalized.records.filter((record) => !record.stockNumber).length;
+
   const issueSamples = normalized.issues.slice(0, 20).map((issue) => {
     const hit = discovery.hits.find((candidate) =>
       (issue.objectID && String(candidate.objectID ?? candidate.id) === issue.objectID) ||
       (issue.vin && candidate.vin === issue.vin),
     );
     return {
+      severity: issue.severity,
       code: issue.code,
       objectID: issue.objectID,
       vin: issue.vin,
       stockNumber: hit?.stock_number,
       stockStatus: hit?.stock_status,
+      inTransit: hit?.in_transit,
       isActive: hit?.is_active,
       archived: hit?.archived,
       onHold: hit?.on_hold,
@@ -65,7 +82,6 @@ async function main() {
         ["make", hit.make],
         ["model", hit.model],
         ["trim", hit.car_trim],
-        ["stockNumber", hit.stock_number],
       ].filter(([, value]) => !present(value)).map(([name]) => name as string);
       const pattern = missing.join("+") || "UNKNOWN";
       counts[pattern] = (counts[pattern] ?? 0) + 1;
@@ -84,13 +100,20 @@ async function main() {
     pagesFetched: discovery.pagesFetched,
     completeSnapshot: discovery.completeSnapshot,
     normalizedCount: normalized.records.length,
+    currentNonTransitCount,
+    inTransitCount,
+    stockNumberMissingCount,
+    sourceStockStatusCounts,
     issueCount: normalized.issues.length,
+    severityCounts,
     issueCounts,
     identityGapPatterns,
     issueSamples,
     sample: normalized.records.slice(0, 10).map((record) => ({
       vin: record.vin,
       stockNumber: record.stockNumber,
+      sourceStockStatus: record.sourceStockStatus,
+      inTransit: record.inTransit,
       year: record.year,
       make: record.make,
       model: record.model,
