@@ -11,10 +11,10 @@ export const metadata: Metadata = {
     template: "%s | NorAuto Match",
   },
   description:
-    "Tell me the monthly payment. NorAuto Match is a personal vehicle-shopping experience at Orr Nissan West for drivers across the Oklahoma City metro.",
+    "Independent, salesperson-operated vehicle matching for Oklahoma City drivers, with final vehicle sales completed through Orr Nissan West or another approved licensed selling dealership.",
   openGraph: {
     title: "NorAuto Match | Tell me the number. I’ll find the car.",
-    description: "Payment-first vehicle matching with a direct salesperson at Orr Nissan West in Oklahoma City.",
+    description: "Payment-first vehicle matching with a direct salesperson in the Oklahoma City metro.",
     type: "website",
     locale: "en_US",
     images: [{ url: "/images/hero-okc.jpg", width: 1536, height: 1024, alt: "NorAuto Match in Oklahoma City" }],
@@ -29,20 +29,20 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     "@type": "WebSite",
     name: brand.name,
     url: brand.baseUrl,
-    description: "Payment-first vehicle matching with a direct salesperson at Orr Nissan West in Oklahoma City.",
+    description: "Independent payment-first vehicle matching for drivers in the Oklahoma City metro.",
     about: { "@type": "Service", name: "Personal vehicle matching" },
     publisher: {
-      "@type": "AutoDealer",
-      name: brand.dealer.name,
-      url: brand.dealer.url,
-      telephone: brand.dealer.phoneRaw,
-      address: {
-        "@type": "PostalAddress",
-        streetAddress: "8800 NW Expressway",
-        addressLocality: "Oklahoma City",
-        addressRegion: "OK",
-        postalCode: "73162",
-        addressCountry: "US",
+      "@type": "Organization",
+      name: brand.name,
+      url: brand.baseUrl,
+    },
+    provider: {
+      "@type": "Person",
+      name: "NorAuto Match salesperson",
+      affiliation: {
+        "@type": "AutoDealer",
+        name: brand.dealer.name,
+        url: brand.dealer.url,
       },
     },
   };
