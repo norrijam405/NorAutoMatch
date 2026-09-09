@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowDown, ArrowRight, BadgeCheck, CarFront, Gauge, MapPin, MessageSquareText, SearchCheck, ShieldCheck, Sparkles } from "lucide-react";
-import { AutoMatcher } from "@/components/matcher/auto-matcher";
+import { RuntimeAutoMatcher } from "@/components/matcher/runtime-auto-matcher";
 import { brand } from "@/lib/brand";
 
 export default function HomePage() {
@@ -31,7 +31,7 @@ export default function HomePage() {
         <div className="absolute bottom-6 right-6 hidden items-center gap-2 text-[10px] font-bold uppercase tracking-[.18em] text-white/35 lg:flex"><MapPin size={14} /> Oklahoma City, OK</div>
       </section>
 
-      <AutoMatcher />
+      <RuntimeAutoMatcher />
 
       <section className="border-y border-white/5 bg-slate-950/45 py-16 sm:py-20">
         <div className="shell">
