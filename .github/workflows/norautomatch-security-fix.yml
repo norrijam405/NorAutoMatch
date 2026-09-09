@@ -35,7 +35,7 @@ jobs:
 
       - name: Prove installed versions and overrides
         run: |
-          node -e 'for (const p of ["next","react","react-dom","js-yaml","sharp"]) console.log(`${p}=${require(`${p}/package.json`).version}`)'
+          node -e 'for (const p of ["next","react","react-dom","js-yaml"]) console.log(`${p}=${require(`${p}/package.json`).version}`)'
           npm ls eslint-config-next --depth=0
           npm ls js-yaml sharp
 
