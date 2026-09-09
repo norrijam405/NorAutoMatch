@@ -148,13 +148,13 @@ export function createCrmOpportunity(input: {
 
 const systemTransitions = new Set([
   "NEW->CONTACT_PENDING",
-  "CONTACT_PENDING->LOST",
 ]);
 
 const evidencedTransitions = new Map<string, CrmEvidenceRef["kind"]>([
   ["CONTACT_PENDING->CONTACTED", "CONTACT_CONFIRMED"],
   ["CONTACTED->APPOINTMENT_SET", "APPOINTMENT_CONFIRMED"],
   ["APPOINTMENT_SET->SOLD", "DEALERSHIP_SOLD_OUTCOME"],
+  ["CONTACT_PENDING->LOST", "LOST_OUTCOME"],
   ["CONTACTED->LOST", "LOST_OUTCOME"],
   ["APPOINTMENT_SET->LOST", "LOST_OUTCOME"],
 ]);
@@ -177,6 +177,9 @@ export function advanceCrmOpportunity(input: {
     if (input.to === "SOLD" && input.evidence.authority !== "DEALERSHIP_SYSTEM" && input.evidence.authority !== "MANAGER") {
       throw new Error("Sold outcome requires manager or dealership-system authority.");
     }
+    if (input.to === "LOST" && input.evidence.authority !== "DEALERSHIP_SYSTEM" && input.evidence.authority !== "MANAGER") {
+      throw new Error("Lost outcome requires manager or dealership-system authority.");
+    }
     if (input.to === "CONTACTED" && input.evidence.authority === "NORAUTO_SYSTEM") {
       throw new Error("NorAutoMatch cannot manufacture confirmed customer contact.");
     }
@@ -184,8 +187,8 @@ export function advanceCrmOpportunity(input: {
     throw new Error(`Unauthorized CRM transition: ${input.actor} ${transition}`);
   }
 
-  if (input.to === "SOLD" && input.actor === "NORAUTO_SYSTEM") {
-    throw new Error("NorAutoMatch cannot self-mark an opportunity sold.");
+  if ((input.to === "SOLD" || input.to === "LOST") && input.actor === "NORAUTO_SYSTEM") {
+    throw new Error(`NorAutoMatch cannot self-mark an opportunity ${input.to.toLowerCase()}.`);
   }
 
   const observedAt = input.observedAt ?? input.evidence?.observedAt ?? new Date().toISOString();
@@ -201,12 +204,7 @@ export function advanceCrmOpportunity(input: {
     outcome: input.to === "SOLD" || input.to === "LOST"
       ? {
           type: input.to,
-          evidenceRef: input.evidence ?? {
-            kind: "LOST_OUTCOME",
-            ref: `system-loss-${input.opportunity.opportunityId}`,
-            observedAt,
-            authority: "NORAUTO_SYSTEM",
-          },
+          evidenceRef: input.evidence as CrmEvidenceRef,
         }
       : input.opportunity.outcome,
   };
