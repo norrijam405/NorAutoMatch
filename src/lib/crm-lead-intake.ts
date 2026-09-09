@@ -41,6 +41,7 @@ export async function persistLeadAsCrmOpportunity(input: {
   const plan = buildCrmPersistencePlan({
     atomicWrite,
     workspaceId: input.workspaceId,
+    managerHandoff: input.managerHandoff,
   });
 
   const result = await executeCrmPersistencePlan({
