@@ -85,6 +85,11 @@ jobs:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
         run: node .tmp-inventory-tests/scripts/crm-outbox-relay.integration.js
 
+      - name: Execute manager queue read model roundtrip
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/crm-manager-queue.integration.js
+
       - name: Full NorAutoMatch domain and persistence verification suite
         run: |
           node .tmp-inventory-tests/scripts/live-inventory.behavior.js
