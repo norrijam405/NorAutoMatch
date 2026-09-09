@@ -28,6 +28,7 @@
     "scripts/crm-manager-handoff-persistence.integration.ts",
     "scripts/crm-outbox-relay.integration.ts",
     "scripts/relay-trigger-auth.behavior.ts",
+    "scripts/crm-manager-queue.integration.ts",
     "src/lib/live-inventory.ts",
     "src/lib/orr-public-inventory.ts",
     "src/lib/orr-public-algolia.ts",
@@ -51,6 +52,7 @@
     "src/lib/crm-lead-intake.ts",
     "src/lib/crm-outbox-relay.ts",
     "src/lib/relay-trigger-auth.ts",
+    "src/lib/crm-manager-queue.ts",
     "src/lib/inventory.ts"
   ]
 }
