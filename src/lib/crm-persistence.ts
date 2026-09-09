@@ -154,7 +154,7 @@ export function buildCrmPersistencePlan(input: {
 
 export interface CrmPersistenceTransaction {
   insertOpportunity(row: PersistedOpportunityRow): Promise<"INSERTED" | "ALREADY_EXISTS_SAME_IDEMPOTENCY_KEY">;
-  insertManagerHandoffs(rows: PersistedManagerHandoffRow[]): Promise<void>;
+  insertManagerHandoffs?: (rows: PersistedManagerHandoffRow[]) => Promise<void>;
   insertEvidence(rows: PersistedEvidenceRow[]): Promise<void>;
   insertManagerReceipts(rows: PersistedManagerReceiptRow[]): Promise<void>;
   insertOutbox(rows: PersistedOutboxRow[]): Promise<void>;
@@ -179,7 +179,12 @@ export async function executeCrmPersistencePlan(input: {
       };
     }
 
-    await transaction.insertManagerHandoffs(input.plan.managerHandoffs);
+    if (input.plan.managerHandoffs.length > 0) {
+      if (!transaction.insertManagerHandoffs) {
+        throw new Error("CRM adapter lacks required manager-handoff persistence capability.");
+      }
+      await transaction.insertManagerHandoffs(input.plan.managerHandoffs);
+    }
     await transaction.insertEvidence(input.plan.evidence);
     await transaction.insertManagerReceipts(input.plan.managerReceipts);
     await transaction.insertOutbox(input.plan.outbox);
