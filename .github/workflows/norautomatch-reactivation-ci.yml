@@ -33,7 +33,7 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
-      - name: Inventory verification suite
+      - name: Inventory and desk-prep verification suite
         run: |
           rm -rf .tmp-inventory-tests
           npx tsc -p tsconfig.inventory-tests.json
@@ -45,6 +45,7 @@ jobs:
           node .tmp-inventory-tests/scripts/orr-customer-catalog.behavior.js
           node .tmp-inventory-tests/scripts/inventory-catalog-integrity.behavior.js
           node .tmp-inventory-tests/scripts/lead-inventory-evidence.behavior.js
+          node .tmp-inventory-tests/scripts/desk-prep.behavior.js
           rm -rf .tmp-inventory-tests
 
       - name: Typecheck
