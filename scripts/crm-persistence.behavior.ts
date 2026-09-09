@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { buildDeskPrepPacket } from "../src/lib/desk-prep";
+import type { PersistedFollowUpObligationRow } from "../src/lib/crm-follow-up";
 import type { LeadInventoryEvidence } from "../src/lib/lead-inventory-evidence";
 import type { LeadPayload } from "../src/lib/lead-schema";
 import { createManagerHandoff } from "../src/lib/manager-handoff";
@@ -70,11 +71,12 @@ type State = {
   opportunities: PersistedOpportunityRow[];
   evidence: PersistedEvidenceRow[];
   receipts: PersistedManagerReceiptRow[];
+  followUps: PersistedFollowUpObligationRow[];
   outbox: PersistedOutboxRow[];
 };
 
 class FakeAtomicAdapter implements CrmPersistenceAdapter {
-  state: State = { opportunities: [], evidence: [], receipts: [], outbox: [] };
+  state: State = { opportunities: [], evidence: [], receipts: [], followUps: [], outbox: [] };
   failOutbox = false;
 
   async runAtomic<T>(operation: (transaction: CrmPersistenceTransaction) => Promise<T>): Promise<T> {
@@ -91,6 +93,9 @@ class FakeAtomicAdapter implements CrmPersistenceAdapter {
       },
       insertManagerReceipts: async (rows) => {
         this.state.receipts.push(...rows);
+      },
+      insertFollowUpObligations: async (rows) => {
+        this.state.followUps.push(...rows);
       },
       insertOutbox: async (rows) => {
         if (this.failOutbox) throw new Error("synthetic outbox failure");
@@ -127,10 +132,17 @@ async function run() {
   assert(plan.opportunity.pipeline === "Standard Retail", "Persistence mapping must preserve pipeline exactly.");
   assert(plan.evidence.length === opportunity.evidence.length, "Persistence plan must preserve all opportunity evidence rows.");
   assert(plan.outbox.length === 1, "Creation persistence plan must preserve the creation outbox event.");
+  assert(plan.followUpObligations.length === 1, "New opportunity must create exactly one first-contact obligation.");
+  assert(plan.followUpObligations[0].obligationType === "FIRST_CONTACT", "Initial obligation must be first contact only.");
+  assert(plan.followUpObligations[0].dueAt === "2026-09-09T03:15:00.000Z", "Default first-contact target must be deterministic from intake time.");
 
   expectThrow(
     () => buildCrmPersistencePlan({ atomicWrite, workspaceId: "   " }),
     "Persistence must fail closed without a workspace identity.",
+  );
+  expectThrow(
+    () => buildCrmPersistencePlan({ atomicWrite, firstContactSlaMinutes: 0 }),
+    "Persistence must reject an invalid first-contact SLA.",
   );
 
   const adapter = new FakeAtomicAdapter();
@@ -138,12 +150,14 @@ async function run() {
   assert(committed.status === "COMMITTED", "First opportunity intake must commit.");
   assert(adapter.state.opportunities.length === 1, "Committed intake must persist one opportunity.");
   assert(adapter.state.evidence.length === plan.evidence.length, "Committed intake must persist evidence atomically.");
+  assert(adapter.state.followUps.length === 1, "Committed intake must persist first-contact obligation atomically.");
   assert(adapter.state.outbox.length === 1, "Committed intake must persist outbox atomically.");
 
   const deduplicated = await executeCrmPersistencePlan({ adapter, plan });
   assert(deduplicated.status === "DEDUPLICATED", "Same intake idempotency key must deduplicate.");
   assert(adapter.state.opportunities.length === 1, "Deduplicated retry must not create another opportunity.");
   assert(adapter.state.evidence.length === plan.evidence.length, "Deduplicated retry must not duplicate evidence.");
+  assert(adapter.state.followUps.length === 1, "Deduplicated retry must not duplicate follow-up obligations.");
   assert(adapter.state.outbox.length === 1, "Deduplicated retry must not duplicate outbox events.");
 
   const rollbackAdapter = new FakeAtomicAdapter();
@@ -154,6 +168,7 @@ async function run() {
   );
   assert(rollbackAdapter.state.opportunities.length === 0, "Outbox failure must roll back opportunity persistence.");
   assert(rollbackAdapter.state.evidence.length === 0, "Outbox failure must roll back evidence persistence.");
+  assert(rollbackAdapter.state.followUps.length === 0, "Outbox failure must roll back follow-up obligation persistence.");
   assert(rollbackAdapter.state.outbox.length === 0, "Outbox failure must leave no partial outbox state.");
 
   const contactPending = advanceCrmOpportunity({ opportunity, to: "CONTACT_PENDING", actor: "NORAUTO_SYSTEM", observedAt: "2026-09-09T03:01:00.000Z" });
@@ -178,6 +193,7 @@ async function run() {
   const soldPlan = buildCrmPersistencePlan({ atomicWrite: createOpportunityAtomicWrite({ opportunity: sold }) });
   assert(soldPlan.opportunity.outcomeType === "SOLD", "Terminal sold persistence must preserve outcome type.");
   assert(soldPlan.opportunity.outcomeEvidenceRef === "sold-proof-1", "Terminal sold persistence must preserve exact evidence reference.");
+  assert(soldPlan.followUpObligations.length === 0, "Terminal snapshots must never create new follow-up obligations.");
 
   const schema = fs.readFileSync("infrastructure/norautomatch-crm-v1.sql", "utf8");
   const requiredSchemaFragments = [
@@ -189,6 +205,8 @@ async function run() {
     "crm_manager_receipt_immutable_update",
     "event_idempotency_key CHAR(64) NOT NULL UNIQUE",
     "delivery_state IN ('PENDING', 'PROCESSING', 'DELIVERED', 'FAILED')",
+    "crm_follow_up_obligations",
+    "crm_follow_up_satisfaction_consistency",
     "OPPORTUNITY_AND_OUTBOX",
   ];
   for (const fragment of requiredSchemaFragments) {
@@ -197,7 +215,7 @@ async function run() {
 
   assert(!schema.includes("ON DELETE CASCADE"), "CRM evidence lineage must not disappear through cascading deletes.");
 
-  console.log("PASS CRM persistence mapping, dedupe, rollback, workspace, evidence, and schema invariants");
+  console.log("PASS CRM persistence mapping, dedupe, rollback, workspace, evidence, follow-up, and schema invariants");
 }
 
 run();
