@@ -51,12 +51,19 @@ jobs:
           if [ -z "$receipt" ]; then
             echo "status=FAIL" >> "$GITHUB_OUTPUT"
             echo "reason=SOURCE_OBSERVATION_EXCEPTION" >> "$GITHUB_OUTPUT"
+            echo "details=NO_RECEIPT" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           status="$(node -e 'const fs=require("fs");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(r.gate.status)' "$receipt")"
           reason="$(node -e 'const fs=require("fs");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write((r.gate.reasons||[]).join("+")||"NONE")' "$receipt")"
+          details="$(node -e 'const fs=require("fs");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const c=r.normalization.issueCounts||{};const issues=Object.keys(c).sort().map(k=>`${k}=${c[k]}`).join("+")||"NO_ISSUES";process.stdout.write(`raw=${r.source.rawHitCount}+normalized=${r.normalization.normalizedCount}+eligible=${r.normalization.eligibleCount}+${issues}`)' "$receipt")"
           echo "status=$status" >> "$GITHUB_OUTPUT"
           echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          echo "details=$details" >> "$GITHUB_OUTPUT"
+
+      - name: "Shadow evidence — ${{ steps.gate.outputs.details }}"
+        if: always()
+        run: echo "Inventory shadow evidence surfaced in step name."
 
       - name: "Shadow gate — ${{ steps.gate.outputs.status }} — ${{ steps.gate.outputs.reason }}"
         if: always()
