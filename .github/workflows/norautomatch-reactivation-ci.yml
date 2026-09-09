@@ -33,6 +33,9 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+
       - name: Inventory and desk-prep verification suite
         run: |
           rm -rf .tmp-inventory-tests
