@@ -72,6 +72,16 @@ jobs:
           grep -F "Know what this site is" /tmp/norauto-terms.html
           grep -F "not presented as the official website" /tmp/norauto-terms.html
 
+      - name: Verify unconfigured production lead intake fails closed
+        run: |
+          status="$(curl --silent --output /tmp/norauto-lead-response.json --write-out '%{http_code}' \
+            -H 'content-type: application/json' \
+            --data '{"firstName":"Test","lastName":"Buyer","email":"test@example.com","phone":"4055550123","budgetRange":"$500-$700/month","paymentMethod":"Financing","tradeIn":"","notes":"synthetic launch smoke","source":"PUBLIC_LAUNCH_SMOKE","trigger":"trapdoor","pipeline":"Vehicle Sourcing","shortlistedVehicleIds":[],"monthlyTarget":600,"downPayment":5000,"termMonths":60,"consent":true}' \
+            http://127.0.0.1:3311/api/leads)"
+          cat /tmp/norauto-lead-response.json
+          test "$status" = "503"
+          grep -F "Call or text" /tmp/norauto-lead-response.json
+
       - name: Verify baseline response security headers
         run: |
           curl --fail --silent --head http://127.0.0.1:3311/ > /tmp/norauto-headers.txt
