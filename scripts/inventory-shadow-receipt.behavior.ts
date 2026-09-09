@@ -57,9 +57,28 @@ assert.deepEqual(healthy.gate.reasons, []);
 assert.equal(healthy.source.dealerId, 2175);
 assert.equal(healthy.source.rawHitCount, 1);
 assert.equal(healthy.normalization.eligibleCount, 1);
+assert.equal(healthy.normalization.blockingErrorCount, 0);
+assert.equal(healthy.normalization.inactiveExcludedCount, 0);
 assert.deepEqual(healthy.normalization.issueCounts, {});
 assert(healthy.doesNotProve.includes("CUSTOMER_VISIBLE_LIVE_INVENTORY"));
 assert(healthy.doesNotProve.includes("VENDOR_API_AUTHORIZATION"));
+
+const inactivePlusHealthy = buildInventoryShadowReceipt(discovery([
+  hit({ objectID: "active" }),
+  hit({ objectID: "inactive", vin: "1N4BL4DV9SN320880", is_active: false }),
+]));
+assert.equal(inactivePlusHealthy.gate.status, "PASS");
+assert.equal(inactivePlusHealthy.normalization.errorCount, 1);
+assert.equal(inactivePlusHealthy.normalization.blockingErrorCount, 0);
+assert.equal(inactivePlusHealthy.normalization.inactiveExcludedCount, 1);
+assert.equal(inactivePlusHealthy.normalization.issueCounts.INACTIVE_HIT, 1);
+assert.equal(inactivePlusHealthy.normalization.eligibleCount, 1);
+
+const inactiveOnly = buildInventoryShadowReceipt(discovery([hit({ is_active: false })]));
+assert.equal(inactiveOnly.gate.status, "FAIL");
+assert(inactiveOnly.gate.reasons.includes("ZERO_NORMALIZED_INVENTORY"));
+assert(inactiveOnly.gate.reasons.includes("ZERO_MATCH_ELIGIBLE_INVENTORY"));
+assert(!inactiveOnly.gate.reasons.includes("NORMALIZATION_ERROR_INACTIVE_HIT"));
 
 const incomplete = buildInventoryShadowReceipt(discovery([hit()], { completeSnapshot: false, reportedHitCount: 2 }));
 assert.equal(incomplete.gate.status, "FAIL");
@@ -76,6 +95,7 @@ const parserDefect = buildInventoryShadowReceipt(discovery([hit({ vin: undefined
 assert.equal(parserDefect.gate.status, "FAIL");
 assert(parserDefect.gate.reasons.includes("NORMALIZATION_ERROR_VIN_INVALID"));
 assert.equal(parserDefect.normalization.issueCounts.VIN_INVALID, 1);
+assert.equal(parserDefect.normalization.blockingErrorCount, 1);
 
 const twoErrorClasses = buildInventoryShadowReceipt(discovery([
   hit({ objectID: "1", vin: undefined }),
@@ -86,6 +106,7 @@ assert(twoErrorClasses.gate.reasons.includes("NORMALIZATION_ERROR_VIN_INVALID"))
 assert(twoErrorClasses.gate.reasons.includes("NORMALIZATION_ERROR_PRICE_INVALID"));
 assert.equal(twoErrorClasses.normalization.issueCounts.VIN_INVALID, 1);
 assert.equal(twoErrorClasses.normalization.issueCounts.PRICE_INVALID, 1);
+assert.equal(twoErrorClasses.normalization.blockingErrorCount, 2);
 
 const warningOnly = buildInventoryShadowReceipt(discovery([hit({ stock_number: undefined })]));
 assert.equal(warningOnly.normalization.warningCount, 1);
