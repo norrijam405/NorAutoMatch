@@ -1,0 +1,46 @@
+name: NorAutoMatch Inventory Shadow Canary
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "reactivation/2026-09-09-inventory-shadow-receipt"
+    paths:
+      - ".github/workflows/norautomatch-inventory-shadow-canary.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  observe-public-orr-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Compile shadow runner
+        run: |
+          rm -rf .tmp-inventory-tests validation_receipts
+          npx tsc -p tsconfig.inventory-tests.json
+
+      - name: Observe Orr public inventory in shadow mode
+        run: node .tmp-inventory-tests/scripts/run-orr-inventory-shadow.js
+
+      - name: Upload observation receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: norautomatch-inventory-shadow-${{ github.sha }}
+          path: validation_receipts/*.json
+          if-no-files-found: ignore
+          retention-days: 14
