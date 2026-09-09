@@ -14,7 +14,7 @@ export function Logo() {
       </span>
       <span className="leading-none">
         <span className="block text-base font-black tracking-tight text-white">NorAuto Match</span>
-        <span className="mt-1 block text-[9px] font-bold uppercase tracking-[.14em] text-amber-300">at Orr Nissan West</span>
+        <span className="mt-1 block text-[9px] font-bold uppercase tracking-[.12em] text-amber-300">Independent shopping line · Orr Nissan West salesperson</span>
       </span>
     </Link>
   );
@@ -24,6 +24,7 @@ const links = [
   { href: "/#matcher", label: "Find my match" },
   { href: "/how-it-works", label: "How it works" },
   { href: "/areas/mustang", label: "Service areas" },
+  { href: "/terms", label: "Disclosures" },
 ];
 
 export function Header() {
