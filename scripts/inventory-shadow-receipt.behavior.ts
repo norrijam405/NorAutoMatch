@@ -57,6 +57,7 @@ assert.deepEqual(healthy.gate.reasons, []);
 assert.equal(healthy.source.dealerId, 2175);
 assert.equal(healthy.source.rawHitCount, 1);
 assert.equal(healthy.normalization.eligibleCount, 1);
+assert.deepEqual(healthy.normalization.issueCounts, {});
 assert(healthy.doesNotProve.includes("CUSTOMER_VISIBLE_LIVE_INVENTORY"));
 assert(healthy.doesNotProve.includes("VENDOR_API_AUTHORIZATION"));
 
@@ -73,11 +74,23 @@ assert(empty.gate.reasons.includes("ZERO_MATCH_ELIGIBLE_INVENTORY"));
 
 const parserDefect = buildInventoryShadowReceipt(discovery([hit({ vin: undefined })]));
 assert.equal(parserDefect.gate.status, "FAIL");
-assert(parserDefect.gate.reasons.includes("NORMALIZATION_ERRORS_PRESENT"));
+assert(parserDefect.gate.reasons.includes("NORMALIZATION_ERROR_VIN_INVALID"));
+assert.equal(parserDefect.normalization.issueCounts.VIN_INVALID, 1);
+
+const twoErrorClasses = buildInventoryShadowReceipt(discovery([
+  hit({ objectID: "1", vin: undefined }),
+  hit({ objectID: "2", vin: "1N4BL4DV9SN320880", price: 0, functional_price: 0 }),
+]));
+assert.equal(twoErrorClasses.gate.status, "FAIL");
+assert(twoErrorClasses.gate.reasons.includes("NORMALIZATION_ERROR_VIN_INVALID"));
+assert(twoErrorClasses.gate.reasons.includes("NORMALIZATION_ERROR_PRICE_INVALID"));
+assert.equal(twoErrorClasses.normalization.issueCounts.VIN_INVALID, 1);
+assert.equal(twoErrorClasses.normalization.issueCounts.PRICE_INVALID, 1);
 
 const warningOnly = buildInventoryShadowReceipt(discovery([hit({ stock_number: undefined })]));
 assert.equal(warningOnly.normalization.warningCount, 1);
 assert.equal(warningOnly.normalization.errorCount, 0);
+assert.equal(warningOnly.normalization.issueCounts.STOCK_NUMBER_MISSING, 1);
 assert.equal(warningOnly.gate.status, "PASS");
 
 const serialized = JSON.stringify(healthy);
