@@ -36,7 +36,7 @@ jobs:
       - name: Dependency security gate
         run: npm audit --audit-level=high
 
-      - name: Inventory and desk-prep verification suite
+      - name: Inventory, desk-prep, and manager-handoff verification suite
         run: |
           rm -rf .tmp-inventory-tests
           npx tsc -p tsconfig.inventory-tests.json
@@ -49,6 +49,7 @@ jobs:
           node .tmp-inventory-tests/scripts/inventory-catalog-integrity.behavior.js
           node .tmp-inventory-tests/scripts/lead-inventory-evidence.behavior.js
           node .tmp-inventory-tests/scripts/desk-prep.behavior.js
+          node .tmp-inventory-tests/scripts/manager-handoff.behavior.js
           rm -rf .tmp-inventory-tests
 
       - name: Typecheck
