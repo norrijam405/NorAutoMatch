@@ -101,6 +101,44 @@ jobs:
       - name: Verify reusable public deployment checker
         run: node scripts/verify-public-deployment.mjs http://127.0.0.1:3311
 
+      - name: Emit exact launch candidate receipt
+        run: |
+          mkdir -p validation_receipts
+          image_id="$(docker inspect --format='{{.Id}}' norautomatch-public:${{ github.sha }})"
+          export IMAGE_ID="$image_id"
+          node - <<'NODE'
+          const fs = require('fs');
+          const receipt = {
+            protocol: 'NORAUTO_PUBLIC_LAUNCH_CANDIDATE_RECEIPT_V1',
+            truthState: 'CI_CONTAINER_PUBLIC_LAUNCH_CANDIDATE',
+            gitHead: process.env.GITHUB_SHA,
+            imageId: process.env.IMAGE_ID,
+            inventoryMode: 'demo',
+            customerVisibleLiveInventory: false,
+            publicServingHealthVerified: true,
+            independentProductDisclosureVerified: true,
+            internalDocumentationPubliclyUnavailable: true,
+            unconfiguredLeadIntakeFailsClosed: true,
+            baselineSecurityHeadersVerified: true,
+            reusableDeploymentVerifierPassed: true,
+            authorityEffect: 'NONE',
+            proves: ['EXACT_SOURCE_CONTAINER_BUILDS', 'LOCAL_CONTAINER_PUBLIC_SURFACE_SERVES', 'REPRESENTATIVE_INVENTORY_FAIL_CLOSED_POSTURE'],
+            doesNotProve: ['PRODUCTION_DEPLOYMENT', 'PUBLIC_DNS_OR_TLS', 'PRODUCTION_DATABASE_CONNECTIVITY', 'REAL_CUSTOMER_LEAD_PERSISTENCE', 'LIVE_INVENTORY_ACTIVATION', 'EXTERNAL_CRM_DELIVERY', 'DEALERSHIP_AUTHORITY'],
+          };
+          fs.writeFileSync(`validation_receipts/public_launch_candidate_${process.env.GITHUB_SHA}.json`, JSON.stringify(receipt, null, 2) + '\n');
+          NODE
+          sha256sum validation_receipts/public_launch_candidate_${GITHUB_SHA}.json | tee validation_receipts/public_launch_candidate_${GITHUB_SHA}.sha256
+
+      - name: Upload launch candidate receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: norautomatch-public-launch-candidate-${{ github.sha }}
+          path: |
+            validation_receipts/public_launch_candidate_${{ github.sha }}.json
+            validation_receipts/public_launch_candidate_${{ github.sha }}.sha256
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Preserve failure evidence
         if: failure()
         run: docker logs norautomatch-public-smoke || true
