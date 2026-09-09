@@ -55,11 +55,11 @@ jobs:
           node - <<'NODE'
           const fs = require('fs');
           const health = JSON.parse(fs.readFileSync('/tmp/norauto-health.json', 'utf8'));
-          if (health.service !== 'norauto-match') throw new Error('Unexpected service identity');
-          if (health.status !== 'SERVING') throw new Error('Public server is not reporting SERVING');
+          if (health.service !== 'norauto-match') throw new Error('Unexpected public service identity');
+          if (health.status !== 'SERVING') throw new Error('Public service is not reporting SERVING');
           if (health.inventory?.effectiveMode !== 'demo') throw new Error('Smoke launch must remain in demo inventory mode');
           if (health.inventory?.customerVisibleLiveInventory !== false) throw new Error('Smoke launch must not expose live inventory');
-          if (health.truthScope !== 'PUBLIC_SERVING_HEALTH_ONLY') throw new Error('Health endpoint truth scope drifted');
+          if (health.truthScope !== 'PUBLIC_SERVING_HEALTH_ONLY') throw new Error('Health truth scope drifted');
           if (health.authorityEffect !== 'NONE') throw new Error('Health endpoint must not grant authority');
           NODE
 
@@ -97,6 +97,9 @@ jobs:
           grep -i '^x-frame-options: DENY' /tmp/norauto-headers.txt
           grep -i '^referrer-policy: strict-origin-when-cross-origin' /tmp/norauto-headers.txt
           grep -i '^permissions-policy:' /tmp/norauto-headers.txt
+
+      - name: Verify reusable public deployment checker
+        run: node scripts/verify-public-deployment.mjs http://127.0.0.1:3311
 
       - name: Preserve failure evidence
         if: failure()
