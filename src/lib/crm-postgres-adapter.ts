@@ -3,6 +3,7 @@ import type {
   CrmPersistenceAdapter,
   CrmPersistenceTransaction,
   PersistedEvidenceRow,
+  PersistedManagerHandoffRow,
   PersistedManagerReceiptRow,
   PersistedOpportunityRow,
   PersistedOutboxRow,
@@ -74,6 +75,32 @@ class PostgresCrmTransaction implements CrmPersistenceTransaction {
     }
 
     return "ALREADY_EXISTS_SAME_IDEMPOTENCY_KEY" as const;
+  }
+
+  async insertManagerHandoffs(rows: PersistedManagerHandoffRow[]) {
+    for (const row of rows) {
+      const handoff = row.handoff;
+      await this.client.query(
+        `INSERT INTO crm_manager_handoffs (
+          handoff_id, workspace_id, opportunity_id, handoff_idempotency_key,
+          protocol, workflow_state, desk_prep, authority, created_at
+        ) VALUES (
+          $1, $2, $3, $4,
+          $5, $6, $7::jsonb, $8::jsonb, $9::timestamptz
+        )`,
+        [
+          handoff.handoffId,
+          row.workspaceId,
+          row.opportunityId,
+          handoff.idempotencyKey,
+          handoff.protocol,
+          handoff.workflowState,
+          handoff.deskPrep,
+          handoff.authority,
+          handoff.createdAt,
+        ],
+      );
+    }
   }
 
   async insertEvidence(rows: PersistedEvidenceRow[]) {
