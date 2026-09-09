@@ -3,6 +3,7 @@ import { assertInventoryCatalogIntegrity } from "./inventory-catalog-integrity";
 import { buildDemoCatalog, type InventoryCatalog } from "./inventory-catalog";
 import { selectCustomerInventory, resolveInventoryRuntime } from "./inventory-runtime";
 import { normalizeOrrAlgoliaDiscovery } from "./orr-algolia-normalizer";
+import { buildInventoryShadowReceipt } from "./inventory-shadow-receipt";
 import { discoverOrrAlgoliaInventory, type OrrAlgoliaDiscovery } from "./orr-public-algolia";
 
 export type OrrCustomerCatalogOptions = {
@@ -25,8 +26,9 @@ export async function loadOrrCustomerCatalog(options: OrrCustomerCatalogOptions 
 
   const discover = options.discover ?? (() => discoverOrrAlgoliaInventory({ hitsPerPage: 100, maxPages: 10 }));
   const discovery = await discover();
-  if (!discovery.completeSnapshot || discovery.hits.length !== discovery.reportedHitCount || discovery.dealerId !== 2175) {
-    throw new Error("LIVE_INVENTORY_SNAPSHOT_NOT_TRUSTWORTHY");
+  const sourceGate = buildInventoryShadowReceipt(discovery);
+  if (sourceGate.gate.status !== "PASS") {
+    throw new Error(`LIVE_INVENTORY_SOURCE_GATE_FAILED:${sourceGate.gate.reasons.join(",")}`);
   }
 
   const normalized = normalizeOrrAlgoliaDiscovery(discovery);
