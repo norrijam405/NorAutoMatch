@@ -34,7 +34,7 @@ function lead(firstName: string, pipeline: LeadPayload["pipeline"]): LeadPayload
     tradeIn: "",
     notes: "manager queue integration",
     source: "CI-Manager-Queue",
-    trigger: pipeline === "Vehicle Sourcing" ? "sourcing" : "retail",
+    trigger: pipeline === "Vehicle Sourcing" ? "trapdoor" : "retail",
     pipeline,
     shortlistedVehicleIds: ["VIN-QUEUE-1"],
     monthlyTarget: 525,
