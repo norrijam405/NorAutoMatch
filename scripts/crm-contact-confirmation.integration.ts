@@ -59,13 +59,15 @@ async function run() {
       adapter,
     });
 
+    const attemptEvidenceRef = "sms-provider:message:attempt-before-confirmation";
+    const attemptObservedAt = "2026-09-09T06:03:00.000Z";
     await executeFirstContactAttemptCommand({
       pool,
       workspaceId: "norautomatch",
       opportunityId: persisted.opportunityId,
-      evidenceRef: "sms-provider:message:attempt-before-confirmation",
+      evidenceRef: attemptEvidenceRef,
       authority: "NORAUTO_SYSTEM",
-      observedAt: "2026-09-09T06:03:00.000Z",
+      observedAt: attemptObservedAt,
     });
 
     const evidenceRef = "sms-provider:conversation:customer-replied-001";
@@ -98,6 +100,17 @@ async function run() {
     assert(durable.rows[0]?.evidence_count === "1", "Confirmed-contact evidence must be appended exactly once.");
     assert(durable.rows[0]?.outbox_count === "1", "Confirmed-contact stage event must be emitted exactly once.");
 
+    const delayedAttemptReplay = await executeFirstContactAttemptCommand({
+      pool,
+      workspaceId: "norautomatch",
+      opportunityId: persisted.opportunityId,
+      evidenceRef: attemptEvidenceRef,
+      authority: "NORAUTO_SYSTEM",
+      observedAt: attemptObservedAt,
+    });
+    assert(delayedAttemptReplay.status === "DEDUPLICATED", "Delayed first-contact replay must remain idempotent after later valid progression.");
+    assert(delayedAttemptReplay.stage === "CONTACTED", "Delayed first-contact replay must preserve the later CONTACTED stage.");
+
     const replay = await executeContactConfirmationCommand({
       pool,
       workspaceId: "norautomatch",
@@ -109,20 +122,20 @@ async function run() {
     assert(replay.status === "DEDUPLICATED", "Exact confirmed-contact replay must deduplicate after stage advancement.");
     assert(replay.stage === "CONTACTED", "Deduplicated confirmation must report durable CONTACTED stage.");
 
-    let systemRejected = false;
+    let secondConfirmationRejected = false;
     try {
       await executeContactConfirmationCommand({
         pool,
         workspaceId: "norautomatch",
         opportunityId: persisted.opportunityId,
-        evidenceRef: "sms-provider:conversation:system-cannot-confirm",
+        evidenceRef: "sms-provider:conversation:different-confirmation",
         authority: "MANAGER",
         observedAt: "2026-09-09T06:06:00.000Z",
       });
     } catch {
-      systemRejected = true;
+      secondConfirmationRejected = true;
     }
-    assert(systemRejected, "A second unrelated confirmation must not rewrite contact history.");
+    assert(secondConfirmationRejected, "A second unrelated confirmation must not rewrite contact history.");
 
     console.log("PASS_NODE_POSTGRES_EVIDENCE_GATED_CONTACT_CONFIRMATION");
   } finally {
