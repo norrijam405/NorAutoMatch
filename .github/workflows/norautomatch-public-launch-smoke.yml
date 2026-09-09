@@ -20,7 +20,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build standalone public image
-        run: docker build --build-arg NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3311 -t norautomatch-public:${{ github.sha }} .
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3311 \
+            --build-arg NORAUTO_RELEASE_SHA=${{ github.sha }} \
+            -t norautomatch-public:${{ github.sha }} .
 
       - name: Verify container is non-root
         run: |
@@ -51,12 +55,15 @@ jobs:
           cat /tmp/norauto-health.json
 
       - name: Verify public health truth boundary
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
           node - <<'NODE'
           const fs = require('fs');
           const health = JSON.parse(fs.readFileSync('/tmp/norauto-health.json', 'utf8'));
           if (health.service !== 'norauto-match') throw new Error('Unexpected public service identity');
           if (health.status !== 'SERVING') throw new Error('Public service is not reporting SERVING');
+          if (health.releaseSha !== process.env.EXPECTED_SHA) throw new Error(`Release identity drifted: ${health.releaseSha}`);
           if (health.inventory?.effectiveMode !== 'demo') throw new Error('Smoke launch must remain in demo inventory mode');
           if (health.inventory?.customerVisibleLiveInventory !== false) throw new Error('Smoke launch must not expose live inventory');
           if (health.truthScope !== 'PUBLIC_SERVING_HEALTH_ONLY') throw new Error('Health truth scope drifted');
@@ -99,7 +106,7 @@ jobs:
           grep -i '^permissions-policy:' /tmp/norauto-headers.txt
 
       - name: Verify reusable public deployment checker
-        run: node scripts/verify-public-deployment.mjs http://127.0.0.1:3311
+        run: node scripts/verify-public-deployment.mjs http://127.0.0.1:3311 ${{ github.sha }}
 
       - name: Emit exact launch candidate receipt
         run: |
@@ -113,16 +120,18 @@ jobs:
             truthState: 'CI_CONTAINER_PUBLIC_LAUNCH_CANDIDATE',
             gitHead: process.env.GITHUB_SHA,
             imageId: process.env.IMAGE_ID,
+            servingReleaseSha: process.env.GITHUB_SHA,
             inventoryMode: 'demo',
             customerVisibleLiveInventory: false,
             publicServingHealthVerified: true,
+            exactReleaseIdentityVerified: true,
             independentProductDisclosureVerified: true,
             internalDocumentationPubliclyUnavailable: true,
             unconfiguredLeadIntakeFailsClosed: true,
             baselineSecurityHeadersVerified: true,
             reusableDeploymentVerifierPassed: true,
             authorityEffect: 'NONE',
-            proves: ['EXACT_SOURCE_CONTAINER_BUILDS', 'LOCAL_CONTAINER_PUBLIC_SURFACE_SERVES', 'REPRESENTATIVE_INVENTORY_FAIL_CLOSED_POSTURE'],
+            proves: ['EXACT_SOURCE_CONTAINER_BUILDS', 'LOCAL_CONTAINER_PUBLIC_SURFACE_SERVES', 'EXACT_RELEASE_IDENTITY_SERVES', 'REPRESENTATIVE_INVENTORY_FAIL_CLOSED_POSTURE'],
             doesNotProve: ['PRODUCTION_DEPLOYMENT', 'PUBLIC_DNS_OR_TLS', 'PRODUCTION_DATABASE_CONNECTIVITY', 'REAL_CUSTOMER_LEAD_PERSISTENCE', 'LIVE_INVENTORY_ACTIVATION', 'EXTERNAL_CRM_DELIVERY', 'DEALERSHIP_AUTHORITY'],
           };
           fs.writeFileSync(`validation_receipts/public_launch_candidate_${process.env.GITHUB_SHA}.json`, JSON.stringify(receipt, null, 2) + '\n');
