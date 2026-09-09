@@ -99,6 +99,15 @@ export function buildCrmPersistencePlan(input: {
     (receipt): receipt is Extract<ManagerReviewReceipt, { status: "APPLIED" }> => receipt.status === "APPLIED",
   );
 
+  if (opportunity.outcome) {
+    const outcomeEvidencePresent = opportunity.evidence.some(
+      (evidence) => evidence.ref === opportunity.outcome?.evidenceRef.ref && evidence.kind === opportunity.outcome?.evidenceRef.kind,
+    );
+    if (!outcomeEvidencePresent) {
+      throw new Error("Terminal CRM outcome evidence must exist in the persisted evidence set.");
+    }
+  }
+
   for (const receipt of appliedReceipts) {
     if (receipt.handoffId !== opportunity.latestHandoffId) {
       throw new Error("Manager receipt cannot be persisted against an unrelated opportunity handoff.");
