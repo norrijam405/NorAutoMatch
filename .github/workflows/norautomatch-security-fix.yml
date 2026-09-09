@@ -29,11 +29,15 @@ jobs:
         run: |
           npm install --save-exact next@16.3.3 react@19.2.8 react-dom@19.2.8
           npm install --save-dev --save-exact eslint-config-next@16.3.3
+          npm pkg set overrides.js-yaml=4.3.2
+          npm pkg set overrides.sharp=0.35.4
+          npm install
 
-      - name: Prove installed versions
+      - name: Prove installed versions and overrides
         run: |
-          node -e 'for (const p of ["next","react","react-dom"]) console.log(`${p}=${require(`${p}/package.json`).version}`)'
+          node -e 'for (const p of ["next","react","react-dom","js-yaml","sharp"]) console.log(`${p}=${require(`${p}/package.json`).version}`)'
           npm ls eslint-config-next --depth=0
+          npm ls js-yaml sharp
 
       - name: Capture post-patch audit
         shell: bash
@@ -82,7 +86,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add package.json package-lock.json
-          git commit -m "security: patch Next and React runtime dependencies"
+          git commit -m "security: patch framework and transitive runtime dependencies"
           git push origin HEAD:reactivation/2026-09-08-security-fix
 
       - name: Upload post-patch audit receipt
