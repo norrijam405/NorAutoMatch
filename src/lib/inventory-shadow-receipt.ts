@@ -23,6 +23,8 @@ export type InventoryShadowReceipt = {
     rejectedCount: number;
     warningCount: number;
     errorCount: number;
+    blockingErrorCount: number;
+    inactiveExcludedCount: number;
     issueCounts: Record<string, number>;
   };
   gate: {
@@ -50,7 +52,10 @@ export function buildInventoryShadowReceipt(discovery: OrrAlgoliaDiscovery): Inv
 
   const warningCount = normalized.issues.filter((issue) => issue.severity === "WARNING").length;
   const errors = normalized.issues.filter((issue) => issue.severity === "ERROR");
+  const blockingErrors = errors.filter((issue) => issue.code !== "INACTIVE_HIT");
+  const inactiveExcludedCount = errors.length - blockingErrors.length;
   const errorCount = errors.length;
+  const blockingErrorCount = blockingErrors.length;
   const issueCounts = normalized.issues.reduce<Record<string, number>>((counts, issue) => {
     counts[issue.code] = (counts[issue.code] ?? 0) + 1;
     return counts;
@@ -62,8 +67,8 @@ export function buildInventoryShadowReceipt(discovery: OrrAlgoliaDiscovery): Inv
   if (discovery.hits.length !== discovery.reportedHitCount) reasons.push("HIT_COUNT_MISMATCH");
   if (discovery.reportedHitCount <= 0) reasons.push("ZERO_REPORTED_INVENTORY");
   if (normalized.records.length <= 0) reasons.push("ZERO_NORMALIZED_INVENTORY");
-  if (errorCount > 0) {
-    for (const code of [...new Set(errors.map((issue) => issue.code))].sort()) {
+  if (blockingErrorCount > 0) {
+    for (const code of [...new Set(blockingErrors.map((issue) => issue.code))].sort()) {
       reasons.push(`NORMALIZATION_ERROR_${code}`);
     }
   }
@@ -90,6 +95,8 @@ export function buildInventoryShadowReceipt(discovery: OrrAlgoliaDiscovery): Inv
       rejectedCount: bridge.rejected.length,
       warningCount,
       errorCount,
+      blockingErrorCount,
+      inactiveExcludedCount,
       issueCounts,
     },
     gate: {
