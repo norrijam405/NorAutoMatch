@@ -22,6 +22,7 @@
     "scripts/manager-handoff.behavior.ts",
     "scripts/manager-review-receipt.behavior.ts",
     "scripts/crm-core.behavior.ts",
+    "scripts/crm-persistence.behavior.ts",
     "src/lib/live-inventory.ts",
     "src/lib/orr-public-inventory.ts",
     "src/lib/orr-public-algolia.ts",
@@ -40,6 +41,7 @@
     "src/lib/crm-handoff-delivery.ts",
     "src/lib/crm-core.ts",
     "src/lib/crm-outbox.ts",
+    "src/lib/crm-persistence.ts",
     "src/lib/inventory.ts"
   ]
 }
