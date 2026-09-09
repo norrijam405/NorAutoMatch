@@ -12,6 +12,9 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
+const TEST_WORKSPACE = "manager-queue-ci";
+const OTHER_WORKSPACE = "manager-queue-other-ci";
+
 const inventoryEvidence: LeadInventoryEvidence = {
   state: "VERIFIED_LIVE",
   requestedVehicleIds: ["VIN-QUEUE-1"],
@@ -44,7 +47,7 @@ function lead(firstName: string, pipeline: LeadPayload["pipeline"]): LeadPayload
   };
 }
 
-function planFor(input: { lead: LeadPayload; createdAt: string; workspaceId?: string }) {
+function planFor(input: { lead: LeadPayload; createdAt: string; workspaceId: string }) {
   const deskPrep = buildDeskPrepPacket({ lead: input.lead, inventoryEvidence, createdAt: input.createdAt });
   const handoff = createManagerHandoff({ deskPrep, createdAt: input.createdAt });
   const opportunity = createCrmOpportunity({
@@ -68,15 +71,15 @@ async function run() {
   const adapter = new PostgresCrmPersistenceAdapter(pool);
 
   try {
-    const first = planFor({ lead: lead("Alpha", "Standard Retail"), createdAt: "2026-09-09T04:31:00.000Z" });
-    const second = planFor({ lead: lead("Bravo", "Vehicle Sourcing"), createdAt: "2026-09-09T04:32:00.000Z" });
-    const isolated = planFor({ lead: lead("Charlie", "Standard Retail"), createdAt: "2026-09-09T04:33:00.000Z", workspaceId: "other-workspace" });
+    const first = planFor({ lead: lead("Alpha", "Standard Retail"), createdAt: "2026-09-09T04:31:00.000Z", workspaceId: TEST_WORKSPACE });
+    const second = planFor({ lead: lead("Bravo", "Vehicle Sourcing"), createdAt: "2026-09-09T04:32:00.000Z", workspaceId: TEST_WORKSPACE });
+    const isolated = planFor({ lead: lead("Charlie", "Standard Retail"), createdAt: "2026-09-09T04:33:00.000Z", workspaceId: OTHER_WORKSPACE });
 
     await executeCrmPersistencePlan({ adapter, plan: first });
     await executeCrmPersistencePlan({ adapter, plan: second });
     await executeCrmPersistencePlan({ adapter, plan: isolated });
 
-    const queue = await readPendingManagerQueue({ pool, workspaceId: "norautomatch", limit: 25 });
+    const queue = await readPendingManagerQueue({ pool, workspaceId: TEST_WORKSPACE, limit: 25 });
     assert(queue.length === 2, "Manager queue must include only pending items from the requested workspace.");
     assert(queue[0].opportunityId === first.opportunity.opportunityId, "Manager queue must be FIFO by opportunity creation time.");
     assert(queue[1].opportunityId === second.opportunity.opportunityId, "Manager queue must preserve deterministic FIFO ordering.");
@@ -86,10 +89,10 @@ async function run() {
     assert(queue[0].managerHandoff.handoffId === first.opportunity.latestHandoffId, "Queue must reconstruct the exact latest immutable manager handoff.");
     assert(queue[0].pipeline === "Standard Retail" && queue[1].pipeline === "Vehicle Sourcing", "Queue must preserve separate retail and sourcing pipelines.");
 
-    const limited = await readPendingManagerQueue({ pool, workspaceId: "norautomatch", limit: 1 });
+    const limited = await readPendingManagerQueue({ pool, workspaceId: TEST_WORKSPACE, limit: 1 });
     assert(limited.length === 1 && limited[0].opportunityId === first.opportunity.opportunityId, "Manager queue limit must be bounded and deterministic.");
 
-    const otherQueue = await readPendingManagerQueue({ pool, workspaceId: "other-workspace" });
+    const otherQueue = await readPendingManagerQueue({ pool, workspaceId: OTHER_WORKSPACE });
     assert(otherQueue.length === 1 && otherQueue[0].opportunityId === isolated.opportunity.opportunityId, "Manager queue must enforce workspace isolation.");
 
     let blankRejected = false;
