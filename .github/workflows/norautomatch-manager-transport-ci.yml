@@ -44,6 +44,9 @@ jobs:
       - name: Verify fail-closed manager session boundary
         run: node .tmp-inventory-tests/scripts/manager-session-auth.behavior.js
 
+      - name: Clean generated verification output
+        run: rm -rf .tmp-inventory-tests
+
       - name: Typecheck authenticated manager routes
         run: npm run typecheck
 
