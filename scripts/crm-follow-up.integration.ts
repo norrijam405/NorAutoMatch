@@ -32,7 +32,7 @@ function lead(email: string): LeadPayload {
     tradeIn: "",
     notes: "follow-up queue integration",
     source: "CI-Follow-Up",
-    trigger: "sourcing",
+    trigger: "trapdoor",
     pipeline: "Vehicle Sourcing",
     shortlistedVehicleIds: [],
     monthlyTarget: 500,
