@@ -83,6 +83,9 @@ jobs:
       - name: Execute inventory shadow drift challenges
         run: node .tmp-inventory-tests/scripts/inventory-shadow-drift.behavior.js
 
+      - name: Execute inventory activation readiness challenges
+        run: node .tmp-inventory-tests/scripts/inventory-activation-readiness.behavior.js
+
       - name: Execute relay trigger authentication checks
         run: node .tmp-inventory-tests/scripts/relay-trigger-auth.behavior.js
 
