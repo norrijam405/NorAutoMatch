@@ -7,6 +7,10 @@ on:
       - "reactivation/2026-09-09-inventory-shadow-receipt"
     paths:
       - ".github/workflows/norautomatch-inventory-shadow-canary.yml"
+      - "src/lib/orr-public-algolia.ts"
+      - "src/lib/orr-algolia-normalizer.ts"
+      - "src/lib/inventory-shadow-receipt.ts"
+      - "scripts/run-orr-inventory-shadow.ts"
 
 permissions:
   contents: read
