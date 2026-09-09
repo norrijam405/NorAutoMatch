@@ -27,6 +27,8 @@ jobs:
           POSTGRES_USER: norauto
           POSTGRES_PASSWORD: norauto-ci-password
           POSTGRES_DB: norauto_ci
+        ports:
+          - 5432:5432
         options: >-
           --health-cmd="pg_isready -U norauto -d norauto_ci"
           --health-interval=5s
@@ -53,10 +55,18 @@ jobs:
           cat infrastructure/norautomatch-crm-v1.sql | docker exec -i ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U norauto -d norauto_ci
           cat infrastructure/norautomatch-crm-v1.behavior.sql | docker exec -i ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U norauto -d norauto_ci
 
-      - name: Full NorAutoMatch domain and persistence verification suite
+      - name: Compile NorAutoMatch verification surface
         run: |
           rm -rf .tmp-inventory-tests
           npx tsc -p tsconfig.inventory-tests.json
+
+      - name: Execute real Node Postgres adapter roundtrip
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/crm-postgres-adapter.integration.js
+
+      - name: Full NorAutoMatch domain and persistence verification suite
+        run: |
           node .tmp-inventory-tests/scripts/live-inventory.behavior.js
           node .tmp-inventory-tests/scripts/orr-parser.behavior.js
           node .tmp-inventory-tests/scripts/inventory-bridge.behavior.js
