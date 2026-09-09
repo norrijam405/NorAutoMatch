@@ -1,6 +1,7 @@
 -- NorAutoMatch CRM Persistence v1
 -- Domain source of truth remains the verified TypeScript CRM contracts.
 -- This schema persists those facts and must not manufacture workflow authority.
+-- INVARIANT: OPPORTUNITY_AND_OUTBOX rows are committed in one transaction or none are committed.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
