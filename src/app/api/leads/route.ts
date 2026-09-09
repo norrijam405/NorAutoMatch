@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { classifyLeadInventoryEvidence } from "@/lib/lead-inventory-evidence";
 import { leadSchema } from "@/lib/lead-schema";
+import { loadOrrCustomerCatalog } from "@/lib/orr-customer-catalog";
 
 export const runtime = "nodejs";
 
@@ -35,8 +37,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Please check the highlighted fields.", issues: parsed.error.flatten().fieldErrors }, { status: 400 });
   }
 
+  let inventoryEvidence = classifyLeadInventoryEvidence({
+    shortlistedVehicleIds: parsed.data.shortlistedVehicleIds,
+  });
+
+  if (parsed.data.shortlistedVehicleIds.length > 0) {
+    try {
+      const catalog = await loadOrrCustomerCatalog({
+        mode: process.env.NORAUTO_INVENTORY_MODE,
+        liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
+      });
+      inventoryEvidence = classifyLeadInventoryEvidence({
+        shortlistedVehicleIds: parsed.data.shortlistedVehicleIds,
+        catalog,
+      });
+    } catch {
+      inventoryEvidence = classifyLeadInventoryEvidence({
+        shortlistedVehicleIds: parsed.data.shortlistedVehicleIds,
+        sourceUnavailable: true,
+      });
+    }
+  }
+
   const lead = {
     ...parsed.data,
+    inventoryEvidence,
     submittedAt: new Date().toISOString(),
     pageUrl: request.headers.get("referer") || "unknown",
     userAgent: request.headers.get("user-agent") || "unknown",
@@ -47,7 +72,7 @@ export async function POST(request: Request) {
     if (process.env.NODE_ENV === "production") {
       return NextResponse.json({ message: "Online routing is being connected. Call or text (405) 861-0061 for a direct response." }, { status: 503 });
     }
-    return NextResponse.json({ accepted: true, pipeline: lead.pipeline, developmentMode: true }, { status: 202 });
+    return NextResponse.json({ accepted: true, pipeline: lead.pipeline, inventoryEvidence: lead.inventoryEvidence.state, developmentMode: true }, { status: 202 });
   }
 
   try {
@@ -65,7 +90,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "The CRM did not accept this request. Call or text (405) 861-0061." }, { status: 502 });
     }
 
-    return NextResponse.json({ accepted: true, pipeline: lead.pipeline });
+    return NextResponse.json({ accepted: true, pipeline: lead.pipeline, inventoryEvidence: lead.inventoryEvidence.state });
   } catch {
     return NextResponse.json({ message: "The CRM is temporarily unavailable. Call or text (405) 861-0061." }, { status: 502 });
   }
