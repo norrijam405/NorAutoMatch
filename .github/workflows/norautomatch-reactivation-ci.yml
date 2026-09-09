@@ -36,7 +36,7 @@ jobs:
       - name: Dependency security gate
         run: npm audit --audit-level=high
 
-      - name: Inventory, desk-prep, manager-handoff, and manager-receipt verification suite
+      - name: Full NorAutoMatch domain verification suite
         run: |
           rm -rf .tmp-inventory-tests
           npx tsc -p tsconfig.inventory-tests.json
@@ -51,6 +51,7 @@ jobs:
           node .tmp-inventory-tests/scripts/desk-prep.behavior.js
           node .tmp-inventory-tests/scripts/manager-handoff.behavior.js
           node .tmp-inventory-tests/scripts/manager-review-receipt.behavior.js
+          node .tmp-inventory-tests/scripts/crm-core.behavior.js
           rm -rf .tmp-inventory-tests
 
       - name: Typecheck
