@@ -25,6 +25,7 @@
     "scripts/crm-persistence.behavior.ts",
     "scripts/crm-postgres-adapter.integration.ts",
     "scripts/crm-lead-intake.integration.ts",
+    "scripts/crm-manager-handoff-persistence.integration.ts",
     "src/lib/live-inventory.ts",
     "src/lib/orr-public-inventory.ts",
     "src/lib/orr-public-algolia.ts",
