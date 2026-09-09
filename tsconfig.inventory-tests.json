@@ -26,6 +26,7 @@
     "scripts/crm-postgres-adapter.integration.ts",
     "scripts/crm-lead-intake.integration.ts",
     "scripts/crm-manager-handoff-persistence.integration.ts",
+    "scripts/crm-outbox-relay.integration.ts",
     "src/lib/live-inventory.ts",
     "src/lib/orr-public-inventory.ts",
     "src/lib/orr-public-algolia.ts",
@@ -47,6 +48,7 @@
     "src/lib/crm-persistence.ts",
     "src/lib/crm-postgres-adapter.ts",
     "src/lib/crm-lead-intake.ts",
+    "src/lib/crm-outbox-relay.ts",
     "src/lib/inventory.ts"
   ]
 }
