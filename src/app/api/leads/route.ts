@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildCrmHandoffDelivery } from "@/lib/crm-handoff-delivery";
+import { persistLeadAsCrmOpportunity } from "@/lib/crm-lead-intake";
+import { createPostgresCrmPool, PostgresCrmPersistenceAdapter } from "@/lib/crm-postgres-adapter";
 import { buildDeskPrepPacket } from "@/lib/desk-prep";
 import { classifyLeadInventoryEvidence } from "@/lib/lead-inventory-evidence";
 import { leadSchema } from "@/lib/lead-schema";
@@ -9,6 +11,7 @@ import { loadOrrCustomerCatalog } from "@/lib/orr-customer-catalog";
 export const runtime = "nodejs";
 
 const requests = new Map<string, { count: number; expires: number }>();
+let crmPool: ReturnType<typeof createPostgresCrmPool> | undefined;
 
 function isRateLimited(ip: string) {
   const now = Date.now();
@@ -20,6 +23,13 @@ function isRateLimited(ip: string) {
   record.count += 1;
   requests.set(ip, record);
   return record.count > 5;
+}
+
+function getCrmPersistenceAdapter() {
+  const connectionString = process.env.NORAUTO_CRM_DATABASE_URL?.trim();
+  if (!connectionString) return null;
+  crmPool ??= createPostgresCrmPool(connectionString);
+  return new PostgresCrmPersistenceAdapter(crmPool);
 }
 
 export async function POST(request: Request) {
@@ -79,8 +89,8 @@ export async function POST(request: Request) {
   const managerHandoff = createManagerHandoff({ deskPrep, createdAt: submittedAt });
   const delivery = buildCrmHandoffDelivery({ lead, managerHandoff });
 
-  const webhook = process.env.CRM_WEBHOOK_URL;
-  if (!webhook) {
+  const persistenceAdapter = getCrmPersistenceAdapter();
+  if (!persistenceAdapter) {
     if (process.env.NODE_ENV === "production") {
       return NextResponse.json({ message: "Online routing is being connected. Call or text (405) 861-0061 for a direct response." }, { status: 503 });
     }
@@ -90,7 +100,35 @@ export async function POST(request: Request) {
       inventoryEvidence: lead.inventoryEvidence.state,
       workflowState: managerHandoff.workflowState,
       handoffId: managerHandoff.handoffId,
+      persistence: "SKIPPED_DEVELOPMENT_MODE",
       developmentMode: true,
+    }, { status: 202 });
+  }
+
+  let crmIntake;
+  try {
+    crmIntake = await persistLeadAsCrmOpportunity({
+      lead: parsed.data,
+      inventoryEvidence,
+      managerHandoff,
+      submittedAt,
+      adapter: persistenceAdapter,
+    });
+  } catch {
+    return NextResponse.json({ message: "We could not safely save this request. Call or text (405) 861-0061." }, { status: 503 });
+  }
+
+  const webhook = process.env.CRM_WEBHOOK_URL;
+  if (!webhook) {
+    return NextResponse.json({
+      accepted: true,
+      pipeline: lead.pipeline,
+      inventoryEvidence: lead.inventoryEvidence.state,
+      workflowState: managerHandoff.workflowState,
+      handoffId: managerHandoff.handoffId,
+      opportunityId: crmIntake.opportunityId,
+      persistence: crmIntake.persistenceStatus,
+      delivery: "QUEUED",
     }, { status: 202 });
   }
 
@@ -106,7 +144,16 @@ export async function POST(request: Request) {
     clearTimeout(timeout);
 
     if (!response.ok) {
-      return NextResponse.json({ message: "The CRM did not accept this request. Call or text (405) 861-0061." }, { status: 502 });
+      return NextResponse.json({
+        accepted: true,
+        pipeline: lead.pipeline,
+        inventoryEvidence: lead.inventoryEvidence.state,
+        workflowState: managerHandoff.workflowState,
+        handoffId: managerHandoff.handoffId,
+        opportunityId: crmIntake.opportunityId,
+        persistence: crmIntake.persistenceStatus,
+        delivery: "QUEUED_AFTER_WEBHOOK_REJECTION",
+      }, { status: 202 });
     }
 
     return NextResponse.json({
@@ -115,8 +162,20 @@ export async function POST(request: Request) {
       inventoryEvidence: lead.inventoryEvidence.state,
       workflowState: managerHandoff.workflowState,
       handoffId: managerHandoff.handoffId,
+      opportunityId: crmIntake.opportunityId,
+      persistence: crmIntake.persistenceStatus,
+      delivery: "WEBHOOK_ACCEPTED",
     });
   } catch {
-    return NextResponse.json({ message: "The CRM is temporarily unavailable. Call or text (405) 861-0061." }, { status: 502 });
+    return NextResponse.json({
+      accepted: true,
+      pipeline: lead.pipeline,
+      inventoryEvidence: lead.inventoryEvidence.state,
+      workflowState: managerHandoff.workflowState,
+      handoffId: managerHandoff.handoffId,
+      opportunityId: crmIntake.opportunityId,
+      persistence: crmIntake.persistenceStatus,
+      delivery: "QUEUED_AFTER_WEBHOOK_FAILURE",
+    }, { status: 202 });
   }
 }
