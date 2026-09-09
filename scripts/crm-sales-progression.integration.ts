@@ -59,7 +59,6 @@ async function createContacted(input: {
     managerHandoff: handoff,
     submittedAt: input.submittedAt,
     adapter: input.adapter,
-    attribution: { source: "local-seo", campaign: "pathfinder-september", medium: "organic" },
   });
   await executeFirstContactAttemptCommand({
     pool: input.pool,
@@ -100,7 +99,7 @@ async function run() {
     });
     assert(appointment.status === "APPLIED", "Appointment must apply exactly once.");
     assert(appointment.stage === "APPOINTMENT_SET", "Confirmed appointment must advance CONTACTED to APPOINTMENT_SET.");
-    assert(appointment.attribution.source === "local-seo", "Appointment must preserve original acquisition attribution.");
+    assert(appointment.attribution.source === "CI-Sales-Progression", "Appointment must preserve original acquisition source attribution.");
 
     const appointmentReplay = await executeAppointmentConfirmationCommand({
       pool,
@@ -124,7 +123,7 @@ async function run() {
       observedAt: soldAt,
     });
     assert(soldResult.status === "APPLIED" && soldResult.stage === "SOLD", "Dealership sold evidence must terminally mark APPOINTMENT_SET as SOLD.");
-    assert(soldResult.attribution.campaign === "pathfinder-september", "Sold outcome must preserve campaign attribution.");
+    assert(soldResult.attribution.source === "CI-Sales-Progression", "Sold outcome must preserve original acquisition source attribution.");
 
     const soldReplay = await executeOutcomeCommand({
       pool,
@@ -141,7 +140,7 @@ async function run() {
       stage: string;
       outcome_type: string | null;
       outcome_evidence_ref: string | null;
-      attribution: { source?: string; campaign?: string };
+      attribution: { source?: string };
       sold_evidence: string;
       outcome_events: string;
     }>(
@@ -154,7 +153,7 @@ async function run() {
     assert(durableSold.rows[0]?.stage === "SOLD" && durableSold.rows[0]?.outcome_type === "SOLD", "Durable sold state must be terminal and internally consistent.");
     assert(durableSold.rows[0]?.outcome_evidence_ref === soldEvidence, "Durable sold outcome must bind exact evidence reference.");
     assert(durableSold.rows[0]?.sold_evidence === "1" && durableSold.rows[0]?.outcome_events === "1", "Sold evidence and outcome event must each be durable exactly once.");
-    assert(durableSold.rows[0]?.attribution.source === "local-seo", "Durable attribution must remain original after sold outcome.");
+    assert(durableSold.rows[0]?.attribution.source === "CI-Sales-Progression", "Durable attribution must remain original after sold outcome.");
 
     const lost = await createContacted({ email: "lost-progression@example.com", submittedAt: "2026-09-09T09:00:00.000Z", adapter, pool });
     const lostEvidence = "manager-disposition:lost:ci-001";
