@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
+import { buildCrmHandoffDelivery } from "@/lib/crm-handoff-delivery";
+import { buildDeskPrepPacket } from "@/lib/desk-prep";
 import { classifyLeadInventoryEvidence } from "@/lib/lead-inventory-evidence";
 import { leadSchema } from "@/lib/lead-schema";
+import { createManagerHandoff } from "@/lib/manager-handoff";
 import { loadOrrCustomerCatalog } from "@/lib/orr-customer-catalog";
 
 export const runtime = "nodejs";
@@ -59,20 +62,36 @@ export async function POST(request: Request) {
     }
   }
 
+  const submittedAt = new Date().toISOString();
   const lead = {
     ...parsed.data,
     inventoryEvidence,
-    submittedAt: new Date().toISOString(),
+    submittedAt,
     pageUrl: request.headers.get("referer") || "unknown",
     userAgent: request.headers.get("user-agent") || "unknown",
   };
+
+  const deskPrep = buildDeskPrepPacket({
+    lead: parsed.data,
+    inventoryEvidence,
+    createdAt: submittedAt,
+  });
+  const managerHandoff = createManagerHandoff({ deskPrep, createdAt: submittedAt });
+  const delivery = buildCrmHandoffDelivery({ lead, managerHandoff });
 
   const webhook = process.env.CRM_WEBHOOK_URL;
   if (!webhook) {
     if (process.env.NODE_ENV === "production") {
       return NextResponse.json({ message: "Online routing is being connected. Call or text (405) 861-0061 for a direct response." }, { status: 503 });
     }
-    return NextResponse.json({ accepted: true, pipeline: lead.pipeline, inventoryEvidence: lead.inventoryEvidence.state, developmentMode: true }, { status: 202 });
+    return NextResponse.json({
+      accepted: true,
+      pipeline: lead.pipeline,
+      inventoryEvidence: lead.inventoryEvidence.state,
+      workflowState: managerHandoff.workflowState,
+      handoffId: managerHandoff.handoffId,
+      developmentMode: true,
+    }, { status: 202 });
   }
 
   try {
@@ -80,8 +99,8 @@ export async function POST(request: Request) {
     const timeout = setTimeout(() => controller.abort(), 8000);
     const response = await fetch(webhook, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "User-Agent": "NorAutoMatch-Leads/1.0" },
-      body: JSON.stringify(lead),
+      headers: delivery.headers,
+      body: JSON.stringify(delivery.payload),
       signal: controller.signal,
     });
     clearTimeout(timeout);
@@ -90,7 +109,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "The CRM did not accept this request. Call or text (405) 861-0061." }, { status: 502 });
     }
 
-    return NextResponse.json({ accepted: true, pipeline: lead.pipeline, inventoryEvidence: lead.inventoryEvidence.state });
+    return NextResponse.json({
+      accepted: true,
+      pipeline: lead.pipeline,
+      inventoryEvidence: lead.inventoryEvidence.state,
+      workflowState: managerHandoff.workflowState,
+      handoffId: managerHandoff.handoffId,
+    });
   } catch {
     return NextResponse.json({ message: "The CRM is temporarily unavailable. Call or text (405) 861-0061." }, { status: 502 });
   }
