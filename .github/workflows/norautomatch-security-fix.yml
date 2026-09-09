@@ -1,0 +1,93 @@
+name: NorAutoMatch Bounded Security Fix
+
+on:
+  push:
+    branches:
+      - "reactivation/2026-09-08-security-fix"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout security-fix branch
+        uses: actions/checkout@v4
+        with:
+          ref: reactivation/2026-09-08-security-fix
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact security patch versions
+        run: |
+          npm install --save-exact next@16.3.3 react@19.2.8 react-dom@19.2.8
+          npm install --save-dev --save-exact eslint-config-next@16.3.3
+
+      - name: Prove installed versions
+        run: |
+          node -e 'for (const p of ["next","react","react-dom"]) console.log(`${p}=${require(`${p}/package.json`).version}`)'
+          npm ls eslint-config-next --depth=0
+
+      - name: Capture post-patch audit
+        shell: bash
+        run: |
+          set +e
+          npm audit --json > /tmp/npm-audit-after.json
+          status=$?
+          cat /tmp/npm-audit-after.json
+          echo "AUDIT_EXIT=$status" >> "$GITHUB_ENV"
+          exit 0
+
+      - name: Require zero high or critical findings
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const audit = JSON.parse(fs.readFileSync('/tmp/npm-audit-after.json','utf8'));
+          const v = audit.metadata?.vulnerabilities || {};
+          console.log(`audit-summary critical=${v.critical || 0} high=${v.high || 0} moderate=${v.moderate || 0} low=${v.low || 0}`);
+          if ((v.critical || 0) > 0 || (v.high || 0) > 0) process.exit(1);
+          NODE
+
+      - name: Full inherited verification
+        run: |
+          rm -rf .tmp-inventory-tests
+          npx tsc -p tsconfig.inventory-tests.json
+          node .tmp-inventory-tests/scripts/live-inventory.behavior.js
+          node .tmp-inventory-tests/scripts/orr-parser.behavior.js
+          node .tmp-inventory-tests/scripts/inventory-bridge.behavior.js
+          node .tmp-inventory-tests/scripts/inventory-runtime.behavior.js
+          node .tmp-inventory-tests/scripts/orr-algolia-sync.behavior.js
+          node .tmp-inventory-tests/scripts/orr-customer-catalog.behavior.js
+          node .tmp-inventory-tests/scripts/inventory-catalog-integrity.behavior.js
+          node .tmp-inventory-tests/scripts/lead-inventory-evidence.behavior.js
+          node .tmp-inventory-tests/scripts/desk-prep.behavior.js
+          rm -rf .tmp-inventory-tests
+          npm run typecheck
+          npm run lint
+          npm run build
+
+      - name: Commit exact patched manifest and lock
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "No dependency changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "security: patch Next and React runtime dependencies"
+          git push origin HEAD:reactivation/2026-09-08-security-fix
+
+      - name: Upload post-patch audit receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: norautomatch-security-fix-audit
+          path: /tmp/npm-audit-after.json
+          if-no-files-found: error
