@@ -20,7 +20,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build standalone public image
-        run: docker build -t norautomatch-public:${{ github.sha }} .
+        run: docker build --build-arg NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3311 -t norautomatch-public:${{ github.sha }} .
 
       - name: Verify container is non-root
         run: |
@@ -71,6 +71,14 @@ jobs:
           grep -F "Independent shopping line" /tmp/norauto-home.html
           grep -F "Know what this site is" /tmp/norauto-terms.html
           grep -F "not presented as the official website" /tmp/norauto-terms.html
+          grep -F "http://127.0.0.1:3311" /tmp/norauto-home.html
+
+      - name: Verify internal documentation is not public
+        run: |
+          for path in /playbook /master-build-prompt /master-build-prompt/download; do
+            status="$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:3311${path}")"
+            test "$status" = "404"
+          done
 
       - name: Verify unconfigured production lead intake fails closed
         run: |
