@@ -1,4 +1,5 @@
 import { Pool, type PoolClient } from "pg";
+import type { PersistedFollowUpObligationRow } from "./crm-follow-up";
 import type {
   CrmPersistenceAdapter,
   CrmPersistenceTransaction,
@@ -145,6 +146,17 @@ class PostgresCrmTransaction implements CrmPersistenceTransaction {
           row.receipt.truthState,
           row.receipt.recordedAt,
         ],
+      );
+    }
+  }
+
+  async insertFollowUpObligations(rows: PersistedFollowUpObligationRow[]) {
+    for (const row of rows) {
+      await this.client.query(
+        `INSERT INTO crm_follow_up_obligations (
+          workspace_id, opportunity_id, obligation_type, due_at
+        ) VALUES ($1, $2, $3, $4::timestamptz)`,
+        [row.workspaceId, row.opportunityId, row.obligationType, row.dueAt],
       );
     }
   }
