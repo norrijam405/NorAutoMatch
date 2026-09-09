@@ -1,4 +1,5 @@
 import { AlertTriangle, FlaskConical, ShieldCheck } from "lucide-react";
+import type { InventoryCatalog } from "@/lib/inventory-catalog";
 import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
 import { loadOrrCustomerCatalog } from "@/lib/orr-customer-catalog";
 import { AutoMatcher } from "./auto-matcher";
@@ -19,15 +20,17 @@ export async function RuntimeAutoMatcher() {
     );
   }
 
+  let catalog: InventoryCatalog | undefined;
   try {
-    const catalog = await loadOrrCustomerCatalog({
+    catalog = await loadOrrCustomerCatalog({
       mode: process.env.NORAUTO_INVENTORY_MODE,
       liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
     });
-    return <VerifiedLiveMatcher catalog={catalog} />;
   } catch {
-    return <LiveInventoryUnavailable />;
+    catalog = undefined;
   }
+
+  return catalog ? <VerifiedLiveMatcher catalog={catalog} /> : <LiveInventoryUnavailable />;
 }
 
 function InventoryTruthBanner({ mode, reason }: { mode: "demo" | "live-shadow" | "live-enabled"; reason: string }) {
