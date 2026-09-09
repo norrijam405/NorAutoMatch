@@ -62,6 +62,18 @@ jobs:
           rm -rf .tmp-inventory-tests
           npx tsc -p tsconfig.inventory-tests.json
 
+      - name: Compile user-live receipt verifier without executing it
+        run: |
+          rm -rf .tmp-user-live
+          npx tsc -p tsconfig.user-live.json
+          rm -rf .tmp-user-live
+
+      - name: Parse Windows user-live launcher without executing it
+        shell: pwsh
+        run: |
+          [scriptblock]::Create((Get-Content -Raw 'scripts/run-norautomatch-user-live.ps1')) | Out-Null
+          Write-Host 'PASS_POWERSHELL_USER_LIVE_LAUNCHER_PARSE'
+
       - name: Execute relay trigger authentication checks
         run: node .tmp-inventory-tests/scripts/relay-trigger-auth.behavior.js
 
