@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { emitDueFollowUpEvents } from "@/lib/crm-follow-up-due";
 import { runCrmOutboxRelayOnce } from "@/lib/crm-outbox-relay";
+import { NORAUTO_WORKSPACE_ID } from "@/lib/crm-persistence";
 import { createPostgresCrmPool } from "@/lib/crm-postgres-adapter";
 import { authorizeRelayTrigger } from "@/lib/relay-trigger-auth";
 
@@ -44,6 +46,12 @@ export async function POST(request: Request) {
   relayPool ??= createPostgresCrmPool(connectionString);
 
   try {
+    const dueEvents = await emitDueFollowUpEvents({
+      pool: relayPool,
+      workspaceId: NORAUTO_WORKSPACE_ID,
+      limit: parseBatchSize(process.env.NORAUTO_RELAY_BATCH_SIZE),
+    });
+
     const outcomes = await runCrmOutboxRelayOnce({
       pool: relayPool,
       targetUrl,
@@ -51,6 +59,12 @@ export async function POST(request: Request) {
     });
 
     return noStore({
+      dueScan: {
+        considered: dueEvents.length,
+        emitted: dueEvents.filter((event) => event.status === "EMITTED").length,
+        deduplicated: dueEvents.filter((event) => event.status === "DEDUPLICATED").length,
+        authorityEffect: "NONE",
+      },
       processed: outcomes.length,
       delivered: outcomes.filter((outcome) => outcome.status === "DELIVERED").length,
       retryScheduled: outcomes.filter((outcome) => outcome.status === "RETRY_SCHEDULED").length,
