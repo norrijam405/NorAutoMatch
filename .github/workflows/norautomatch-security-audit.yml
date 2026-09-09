@@ -1,0 +1,59 @@
+name: NorAutoMatch Dependency Security Audit
+
+on:
+  push:
+    branches:
+      - "reactivation/2026-09-08-security-audit"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact locked dependencies
+        run: npm ci
+
+      - name: Capture installed framework versions
+        run: |
+          node -e 'for (const p of ["next","react","react-dom","eslint-config-next"]) console.log(`${p}=${require(`${p}/package.json`).version}`)'
+
+      - name: Capture npm audit evidence
+        id: audit
+        shell: bash
+        run: |
+          set +e
+          npm audit --json > /tmp/npm-audit.json
+          status=$?
+          cat /tmp/npm-audit.json
+          echo "audit_exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload audit receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: norautomatch-npm-audit-receipt
+          path: /tmp/npm-audit.json
+          if-no-files-found: error
+
+      - name: Fail high or critical findings
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const audit = JSON.parse(fs.readFileSync('/tmp/npm-audit.json','utf8'));
+          const v = audit.metadata?.vulnerabilities || {};
+          console.log(`audit-summary critical=${v.critical || 0} high=${v.high || 0} moderate=${v.moderate || 0} low=${v.low || 0}`);
+          if ((v.critical || 0) > 0 || (v.high || 0) > 0) process.exit(1);
+          NODE
