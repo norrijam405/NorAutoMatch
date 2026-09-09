@@ -52,6 +52,21 @@ function discovery(hits: OrrAlgoliaHit[], overrides: Partial<OrrAlgoliaDiscovery
   };
 }
 
+async function expectSourceGateFailure(input: OrrAlgoliaDiscovery, reason: string) {
+  let blocked = false;
+  try {
+    await loadOrrCustomerCatalog({
+      mode: "live-enabled",
+      liveActivation: LIVE_INVENTORY_ACTIVATION_VALUE,
+      nowMs: Date.parse(fetchedAt),
+      discover: async () => input,
+    });
+  } catch (error) {
+    blocked = error instanceof Error && error.message.split(":").slice(1).join(":").split(",").includes(reason);
+  }
+  assert(blocked, `Activated live mode must fail closed on ${reason}.`);
+}
+
 async function run() {
   let discoveryCalls = 0;
   const shouldNotCall = async () => {
@@ -94,20 +109,22 @@ async function run() {
   assert(live.sourceEvidence?.warningCount === 1, "Missing stock number must remain a warning.");
   assert(live.sourceEvidence?.errorCount === 1, "Inactive row must remain an error/exclusion.");
 
-  let incompleteBlocked = false;
-  try {
-    await loadOrrCustomerCatalog({
-      mode: "live-enabled",
-      liveActivation: LIVE_INVENTORY_ACTIVATION_VALUE,
-      nowMs: Date.parse(fetchedAt),
-      discover: async () => discovery([hit()], { reportedHitCount: 2, completeSnapshot: false }),
-    });
-  } catch (error) {
-    incompleteBlocked = error instanceof Error && error.message === "LIVE_INVENTORY_SNAPSHOT_NOT_TRUSTWORTHY";
-  }
-  assert(incompleteBlocked, "Activated live mode must fail closed on an incomplete dealer snapshot.");
+  await expectSourceGateFailure(discovery([hit()], { reportedHitCount: 2, completeSnapshot: false }), "SNAPSHOT_INCOMPLETE");
+  await expectSourceGateFailure(discovery([hit({ vin: undefined })]), "NORMALIZATION_ERROR_VIN_INVALID");
+  await expectSourceGateFailure(discovery([hit({ price: 0, functional_price: 0 })]), "NORMALIZATION_ERROR_PRICE_INVALID");
+  await expectSourceGateFailure(discovery([hit({ make: undefined })]), "NORMALIZATION_ERROR_IDENTITY_INCOMPLETE");
+  await expectSourceGateFailure(discovery([hit({ is_active: false })]), "ZERO_NORMALIZED_INVENTORY");
 
-  console.log("PASS Orr customer catalog source-isolation and fail-closed invariants");
+  const warningAllowed = await loadOrrCustomerCatalog({
+    mode: "live-enabled",
+    liveActivation: LIVE_INVENTORY_ACTIVATION_VALUE,
+    nowMs: Date.parse(fetchedAt),
+    discover: async () => discovery([hit({ stock_number: undefined })]),
+  });
+  assert(warningAllowed.customerVisibleLiveInventory === true, "Non-blocking source warnings must not disable a healthy live catalog.");
+  assert(warningAllowed.sourceEvidence?.warningCount === 1, "Allowed warning must remain visible in source evidence.");
+
+  console.log("PASS Orr customer catalog source-isolation and source-gate invariants");
 }
 
 run().catch((error) => {
