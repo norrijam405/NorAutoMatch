@@ -9,10 +9,13 @@ export async function GET() {
     liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
   });
 
+  const releaseSha = process.env.NORAUTO_RELEASE_SHA?.trim() || "UNSET";
+
   return NextResponse.json(
     {
       service: "norauto-match",
       status: "SERVING",
+      releaseSha,
       inventory: {
         effectiveMode: runtime.effectiveMode,
         customerVisibleLiveInventory: runtime.customerVisibleLiveInventory,
