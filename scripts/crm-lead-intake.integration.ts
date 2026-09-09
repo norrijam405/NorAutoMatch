@@ -89,6 +89,23 @@ async function run() {
     );
     assert(Number(effects.rows[0].count) === 1, "Lead intake must atomically create exactly one durable outbox effect.");
 
+    const followUp = await pool.query<{
+      obligation_type: string;
+      due_at: Date;
+      satisfied_at: Date | null;
+      satisfaction_evidence_ref: string | null;
+    }>(
+      `SELECT obligation_type, due_at, satisfied_at, satisfaction_evidence_ref
+         FROM crm_follow_up_obligations
+        WHERE workspace_id = 'norautomatch' AND opportunity_id = $1`,
+      [first.opportunityId],
+    );
+    assert(followUp.rowCount === 1, "Lead intake must atomically create exactly one first-contact obligation.");
+    assert(followUp.rows[0].obligation_type === "FIRST_CONTACT", "Initial speed-to-lead obligation must be FIRST_CONTACT.");
+    assert(followUp.rows[0].due_at.toISOString() === "2026-09-09T04:16:00.000Z", "Initial first-contact due time must be 15 minutes after intake.");
+    assert(followUp.rows[0].satisfied_at === null, "New first-contact obligation must not claim contact occurred.");
+    assert(followUp.rows[0].satisfaction_evidence_ref === null, "New first-contact obligation must not manufacture satisfaction evidence.");
+
     const retry = await persistLeadAsCrmOpportunity({
       lead,
       inventoryEvidence,
@@ -99,16 +116,18 @@ async function run() {
     assert(retry.persistenceStatus === "DEDUPLICATED", "Exact lead intake retry must deduplicate.");
     assert(retry.opportunityId === first.opportunityId, "Exact lead intake retry must preserve opportunity identity.");
 
-    const postRetry = await pool.query<{ opportunities: string; effects: string }>(
+    const postRetry = await pool.query<{ opportunities: string; effects: string; follow_ups: string }>(
       `SELECT
         (SELECT count(*) FROM crm_opportunities WHERE opportunity_id = $1)::text AS opportunities,
-        (SELECT count(*) FROM crm_outbox WHERE aggregate_id = $1)::text AS effects`,
+        (SELECT count(*) FROM crm_outbox WHERE aggregate_id = $1)::text AS effects,
+        (SELECT count(*) FROM crm_follow_up_obligations WHERE opportunity_id = $1)::text AS follow_ups`,
       [first.opportunityId],
     );
     assert(Number(postRetry.rows[0].opportunities) === 1, "Retry must not duplicate the opportunity.");
     assert(Number(postRetry.rows[0].effects) === 1, "Retry must not duplicate the outbox effect.");
+    assert(Number(postRetry.rows[0].follow_ups) === 1, "Retry must not duplicate first-contact obligations.");
 
-    console.log("PASS_NODE_POSTGRES_LEAD_INTAKE_PERSISTENCE");
+    console.log("PASS_NODE_POSTGRES_LEAD_INTAKE_WITH_FIRST_CONTACT_OBLIGATION");
   } finally {
     await pool.end();
   }
