@@ -3,7 +3,7 @@ import { brand, cityDetails } from "@/lib/brand";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
-  const core = ["", "/how-it-works", "/privacy"].map((path, index) => ({
+  const core = ["", "/how-it-works", "/privacy", "/terms"].map((path, index) => ({
     url: `${brand.baseUrl}${path}`,
     lastModified: now,
     changeFrequency: index === 0 ? "weekly" as const : "monthly" as const,
