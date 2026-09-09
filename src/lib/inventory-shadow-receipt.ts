@@ -23,6 +23,7 @@ export type InventoryShadowReceipt = {
     rejectedCount: number;
     warningCount: number;
     errorCount: number;
+    issueCounts: Record<string, number>;
   };
   gate: {
     status: "PASS" | "FAIL";
@@ -48,7 +49,12 @@ export function buildInventoryShadowReceipt(discovery: OrrAlgoliaDiscovery): Inv
   });
 
   const warningCount = normalized.issues.filter((issue) => issue.severity === "WARNING").length;
-  const errorCount = normalized.issues.filter((issue) => issue.severity === "ERROR").length;
+  const errors = normalized.issues.filter((issue) => issue.severity === "ERROR");
+  const errorCount = errors.length;
+  const issueCounts = normalized.issues.reduce<Record<string, number>>((counts, issue) => {
+    counts[issue.code] = (counts[issue.code] ?? 0) + 1;
+    return counts;
+  }, {});
   const reasons: string[] = [];
 
   if (discovery.dealerId !== 2175) reasons.push("DEALER_BOUNDARY_MISMATCH");
@@ -56,7 +62,11 @@ export function buildInventoryShadowReceipt(discovery: OrrAlgoliaDiscovery): Inv
   if (discovery.hits.length !== discovery.reportedHitCount) reasons.push("HIT_COUNT_MISMATCH");
   if (discovery.reportedHitCount <= 0) reasons.push("ZERO_REPORTED_INVENTORY");
   if (normalized.records.length <= 0) reasons.push("ZERO_NORMALIZED_INVENTORY");
-  if (errorCount > 0) reasons.push("NORMALIZATION_ERRORS_PRESENT");
+  if (errorCount > 0) {
+    for (const code of [...new Set(errors.map((issue) => issue.code))].sort()) {
+      reasons.push(`NORMALIZATION_ERROR_${code}`);
+    }
+  }
   if (bridge.vehicles.length <= 0) reasons.push("ZERO_MATCH_ELIGIBLE_INVENTORY");
 
   return {
@@ -80,6 +90,7 @@ export function buildInventoryShadowReceipt(discovery: OrrAlgoliaDiscovery): Inv
       rejectedCount: bridge.rejected.length,
       warningCount,
       errorCount,
+      issueCounts,
     },
     gate: {
       status: reasons.length === 0 ? "PASS" : "FAIL",
