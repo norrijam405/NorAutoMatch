@@ -20,6 +20,7 @@
     "scripts/lead-inventory-evidence.behavior.ts",
     "scripts/desk-prep.behavior.ts",
     "scripts/manager-handoff.behavior.ts",
+    "scripts/manager-review-receipt.behavior.ts",
     "src/lib/live-inventory.ts",
     "src/lib/orr-public-inventory.ts",
     "src/lib/orr-public-algolia.ts",
@@ -34,6 +35,7 @@
     "src/lib/lead-schema.ts",
     "src/lib/desk-prep.ts",
     "src/lib/manager-handoff.ts",
+    "src/lib/manager-review-receipt.ts",
     "src/lib/crm-handoff-delivery.ts",
     "src/lib/inventory.ts"
   ]
