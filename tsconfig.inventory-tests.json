@@ -19,6 +19,7 @@
     "scripts/inventory-catalog-integrity.behavior.ts",
     "scripts/lead-inventory-evidence.behavior.ts",
     "scripts/desk-prep.behavior.ts",
+    "scripts/manager-handoff.behavior.ts",
     "src/lib/live-inventory.ts",
     "src/lib/orr-public-inventory.ts",
     "src/lib/orr-public-algolia.ts",
@@ -32,6 +33,8 @@
     "src/lib/lead-inventory-evidence.ts",
     "src/lib/lead-schema.ts",
     "src/lib/desk-prep.ts",
+    "src/lib/manager-handoff.ts",
+    "src/lib/crm-handoff-delivery.ts",
     "src/lib/inventory.ts"
   ]
 }
