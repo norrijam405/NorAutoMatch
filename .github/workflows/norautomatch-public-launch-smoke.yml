@@ -1,0 +1,89 @@
+name: NorAutoMatch Public Launch Smoke
+
+on:
+  push:
+    branches:
+      - "reactivation/**"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  public-launch-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build standalone public image
+        run: docker build -t norautomatch-public:${{ github.sha }} .
+
+      - name: Verify container is non-root
+        run: |
+          image_user="$(docker inspect --format='{{.Config.User}}' norautomatch-public:${{ github.sha }})"
+          test -n "$image_user"
+          test "$image_user" != "root"
+          test "$image_user" != "0"
+          echo "CONTAINER_USER=$image_user"
+
+      - name: Boot public image in representative-inventory mode
+        run: |
+          docker run -d --rm \
+            --name norautomatch-public-smoke \
+            -p 127.0.0.1:3311:3000 \
+            -e NORAUTO_INVENTORY_MODE=demo \
+            -e NORAUTO_LIVE_INVENTORY_ACTIVATION= \
+            -e NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3311 \
+            norautomatch-public:${{ github.sha }}
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3311/api/health > /tmp/norauto-health.json; then
+              break
+            fi
+            sleep 1
+          done
+
+          curl --fail --silent http://127.0.0.1:3311/api/health > /tmp/norauto-health.json
+          cat /tmp/norauto-health.json
+
+      - name: Verify public health truth boundary
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const health = JSON.parse(fs.readFileSync('/tmp/norauto-health.json', 'utf8'));
+          if (health.service !== 'norauto-match') throw new Error('Unexpected service identity');
+          if (health.status !== 'SERVING') throw new Error('Public server is not reporting SERVING');
+          if (health.inventory?.effectiveMode !== 'demo') throw new Error('Smoke launch must remain in demo inventory mode');
+          if (health.inventory?.customerVisibleLiveInventory !== false) throw new Error('Smoke launch must not expose live inventory');
+          if (health.truthScope !== 'PUBLIC_SERVING_HEALTH_ONLY') throw new Error('Health endpoint truth scope drifted');
+          if (health.authorityEffect !== 'NONE') throw new Error('Health endpoint must not grant authority');
+          NODE
+
+      - name: Verify customer-facing pages and disclosures
+        run: |
+          curl --fail --silent http://127.0.0.1:3311/ > /tmp/norauto-home.html
+          curl --fail --silent http://127.0.0.1:3311/terms > /tmp/norauto-terms.html
+          grep -F "Representative matcher inventory" /tmp/norauto-home.html
+          grep -F "Independent shopping line" /tmp/norauto-home.html
+          grep -F "Know what this site is" /tmp/norauto-terms.html
+          grep -F "not presented as the official website" /tmp/norauto-terms.html
+
+      - name: Verify baseline response security headers
+        run: |
+          curl --fail --silent --head http://127.0.0.1:3311/ > /tmp/norauto-headers.txt
+          grep -i '^x-content-type-options: nosniff' /tmp/norauto-headers.txt
+          grep -i '^x-frame-options: DENY' /tmp/norauto-headers.txt
+          grep -i '^referrer-policy: strict-origin-when-cross-origin' /tmp/norauto-headers.txt
+          grep -i '^permissions-policy:' /tmp/norauto-headers.txt
+
+      - name: Preserve failure evidence
+        if: failure()
+        run: docker logs norautomatch-public-smoke || true
+
+      - name: Stop smoke container
+        if: always()
+        run: docker rm -f norautomatch-public-smoke 2>/dev/null || true
