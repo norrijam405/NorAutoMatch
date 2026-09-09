@@ -74,6 +74,9 @@ jobs:
           [scriptblock]::Create((Get-Content -Raw 'scripts/run-norautomatch-user-live.ps1')) | Out-Null
           Write-Host 'PASS_POWERSHELL_USER_LIVE_LAUNCHER_PARSE'
 
+      - name: Execute production configuration preflight challenges
+        run: node .tmp-inventory-tests/scripts/production-readiness.behavior.js
+
       - name: Execute relay trigger authentication checks
         run: node .tmp-inventory-tests/scripts/relay-trigger-auth.behavior.js
 
