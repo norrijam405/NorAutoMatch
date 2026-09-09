@@ -17,6 +17,7 @@
     "scripts/orr-algolia-sync.behavior.ts",
     "scripts/orr-customer-catalog.behavior.ts",
     "scripts/inventory-catalog-integrity.behavior.ts",
+    "scripts/lead-inventory-evidence.behavior.ts",
     "src/lib/live-inventory.ts",
     "src/lib/orr-public-inventory.ts",
     "src/lib/orr-public-algolia.ts",
@@ -27,6 +28,7 @@
     "src/lib/inventory-catalog.ts",
     "src/lib/inventory-catalog-integrity.ts",
     "src/lib/orr-customer-catalog.ts",
+    "src/lib/lead-inventory-evidence.ts",
     "src/lib/inventory.ts"
   ]
 }
