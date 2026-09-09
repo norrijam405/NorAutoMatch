@@ -21,6 +21,11 @@ yarn-error.log*
 pnpm-debug.log*
 .vercel
 
+# user-live validation local artifacts
+/.tmp-user-live/
+/validation_receipts/
+/validation_logs/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
