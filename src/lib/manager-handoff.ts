@@ -39,12 +39,12 @@ const systemTransitions = new Set([
   "LEAD_CAPTURED->INVENTORY_REVALIDATED",
   "INVENTORY_REVALIDATED->DESK_PREP_READY",
   "DESK_PREP_READY->MANAGER_REVIEW_PENDING",
+  "RETURNED_FOR_CLARIFICATION->DESK_PREP_READY",
 ]);
 
 const managerTransitions = new Set([
   "MANAGER_REVIEW_PENDING->MANAGER_ACKNOWLEDGED",
   "MANAGER_REVIEW_PENDING->RETURNED_FOR_CLARIFICATION",
-  "RETURNED_FOR_CLARIFICATION->MANAGER_REVIEW_PENDING",
 ]);
 
 function stableDeskIdentity(packet: DeskPrepPacket) {
@@ -117,7 +117,7 @@ export function managerDecisionTransition(input: {
   decision: ManagerDecision;
   observedAt?: string;
   note?: string;
-}) {
+}): WorkflowEvent {
   return advanceWorkflow({
     from: input.current,
     to: input.decision === "ACKNOWLEDGED" ? "MANAGER_ACKNOWLEDGED" : "RETURNED_FOR_CLARIFICATION",
