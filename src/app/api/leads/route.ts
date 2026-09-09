@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { buildCrmHandoffDelivery } from "@/lib/crm-handoff-delivery";
 import { persistLeadAsCrmOpportunity } from "@/lib/crm-lead-intake";
 import { createPostgresCrmPool, PostgresCrmPersistenceAdapter } from "@/lib/crm-postgres-adapter";
 import { buildDeskPrepPacket } from "@/lib/desk-prep";
@@ -73,21 +72,12 @@ export async function POST(request: Request) {
   }
 
   const submittedAt = new Date().toISOString();
-  const lead = {
-    ...parsed.data,
-    inventoryEvidence,
-    submittedAt,
-    pageUrl: request.headers.get("referer") || "unknown",
-    userAgent: request.headers.get("user-agent") || "unknown",
-  };
-
   const deskPrep = buildDeskPrepPacket({
     lead: parsed.data,
     inventoryEvidence,
     createdAt: submittedAt,
   });
   const managerHandoff = createManagerHandoff({ deskPrep, createdAt: submittedAt });
-  const delivery = buildCrmHandoffDelivery({ lead, managerHandoff });
 
   const persistenceAdapter = getCrmPersistenceAdapter();
   if (!persistenceAdapter) {
@@ -96,86 +86,36 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({
       accepted: true,
-      pipeline: lead.pipeline,
-      inventoryEvidence: lead.inventoryEvidence.state,
+      pipeline: parsed.data.pipeline,
+      inventoryEvidence: inventoryEvidence.state,
       workflowState: managerHandoff.workflowState,
       handoffId: managerHandoff.handoffId,
       persistence: "SKIPPED_DEVELOPMENT_MODE",
+      delivery: "NOT_ATTEMPTED_DEVELOPMENT_MODE",
       developmentMode: true,
     }, { status: 202 });
   }
 
-  let crmIntake;
   try {
-    crmIntake = await persistLeadAsCrmOpportunity({
+    const crmIntake = await persistLeadAsCrmOpportunity({
       lead: parsed.data,
       inventoryEvidence,
       managerHandoff,
       submittedAt,
       adapter: persistenceAdapter,
     });
-  } catch {
-    return NextResponse.json({ message: "We could not safely save this request. Call or text (405) 861-0061." }, { status: 503 });
-  }
 
-  const webhook = process.env.CRM_WEBHOOK_URL;
-  if (!webhook) {
     return NextResponse.json({
       accepted: true,
-      pipeline: lead.pipeline,
-      inventoryEvidence: lead.inventoryEvidence.state,
+      pipeline: parsed.data.pipeline,
+      inventoryEvidence: inventoryEvidence.state,
       workflowState: managerHandoff.workflowState,
       handoffId: managerHandoff.handoffId,
       opportunityId: crmIntake.opportunityId,
       persistence: crmIntake.persistenceStatus,
       delivery: "QUEUED",
     }, { status: 202 });
-  }
-
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    const response = await fetch(webhook, {
-      method: "POST",
-      headers: delivery.headers,
-      body: JSON.stringify(delivery.payload),
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      return NextResponse.json({
-        accepted: true,
-        pipeline: lead.pipeline,
-        inventoryEvidence: lead.inventoryEvidence.state,
-        workflowState: managerHandoff.workflowState,
-        handoffId: managerHandoff.handoffId,
-        opportunityId: crmIntake.opportunityId,
-        persistence: crmIntake.persistenceStatus,
-        delivery: "QUEUED_AFTER_WEBHOOK_REJECTION",
-      }, { status: 202 });
-    }
-
-    return NextResponse.json({
-      accepted: true,
-      pipeline: lead.pipeline,
-      inventoryEvidence: lead.inventoryEvidence.state,
-      workflowState: managerHandoff.workflowState,
-      handoffId: managerHandoff.handoffId,
-      opportunityId: crmIntake.opportunityId,
-      persistence: crmIntake.persistenceStatus,
-      delivery: "WEBHOOK_ACCEPTED",
-    });
   } catch {
-    return NextResponse.json({
-      accepted: true,
-      pipeline: lead.pipeline,
-      inventoryEvidence: lead.inventoryEvidence.state,
-      workflowState: managerHandoff.workflowState,
-      handoffId: managerHandoff.handoffId,
-      opportunityId: crmIntake.opportunityId,
-      persistence: crmIntake.persistenceStatus,
-      delivery: "QUEUED_AFTER_WEBHOOK_FAILURE",
-    }, { status: 202 });
+    return NextResponse.json({ message: "We could not safely save this request. Call or text (405) 861-0061." }, { status: 503 });
   }
 }
