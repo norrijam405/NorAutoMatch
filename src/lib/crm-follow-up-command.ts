@@ -8,7 +8,7 @@ export type FirstContactAttemptResult = {
   status: "APPLIED" | "DEDUPLICATED";
   opportunityId: string;
   obligationType: "FIRST_CONTACT";
-  stage: "CONTACT_PENDING";
+  stage: CrmOpportunity["stage"];
   satisfactionEvidenceRef: string;
   authorityEffect: "FIRST_CONTACT_ATTEMPT_RECORDED_ONLY";
 };
@@ -181,15 +181,15 @@ export async function executeFirstContactAttemptCommand(input: {
       if (row.satisfaction_evidence_ref !== evidenceRef) {
         throw new Error("First-contact obligation is already satisfied by different evidence.");
       }
-      if (row.stage !== "CONTACT_PENDING") {
-        throw new Error("Satisfied first-contact obligation is not in the expected contact-pending stage.");
+      if (row.stage === "NEW") {
+        throw new Error("Satisfied first-contact obligation is inconsistent with an unadvanced NEW opportunity.");
       }
       await client.query("COMMIT");
       return {
         status: "DEDUPLICATED",
         opportunityId,
         obligationType: "FIRST_CONTACT",
-        stage: "CONTACT_PENDING",
+        stage: row.stage,
         satisfactionEvidenceRef: evidenceRef,
         authorityEffect: "FIRST_CONTACT_ATTEMPT_RECORDED_ONLY",
       };
