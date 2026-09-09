@@ -1,5 +1,6 @@
 import type { CrmEvidenceRef, CrmOpportunity } from "./crm-core";
 import type { CrmAtomicWrite, CrmOutboxEvent } from "./crm-outbox";
+import type { ManagerHandoffEnvelope } from "./manager-handoff";
 import type { ManagerReviewReceipt } from "./manager-review-receipt";
 
 export const NORAUTO_WORKSPACE_ID = "norautomatch" as const;
@@ -33,6 +34,12 @@ export type PersistedOutboxRow = {
   event: CrmOutboxEvent;
 };
 
+export type PersistedManagerHandoffRow = {
+  workspaceId: string;
+  opportunityId: string;
+  handoff: ManagerHandoffEnvelope;
+};
+
 export type PersistedManagerReceiptRow = {
   workspaceId: string;
   opportunityId: string;
@@ -45,6 +52,7 @@ export type CrmPersistencePlan = {
   opportunity: PersistedOpportunityRow;
   evidence: PersistedEvidenceRow[];
   outbox: PersistedOutboxRow[];
+  managerHandoffs: PersistedManagerHandoffRow[];
   managerReceipts: PersistedManagerReceiptRow[];
   transactionInvariant: "ALL_ROWS_COMMIT_TOGETHER_OR_NONE_COMMIT";
 };
@@ -87,6 +95,7 @@ function mapOpportunity(workspaceId: string, opportunity: CrmOpportunity): Persi
 export function buildCrmPersistencePlan(input: {
   atomicWrite: CrmAtomicWrite;
   workspaceId?: string;
+  managerHandoff?: ManagerHandoffEnvelope;
   managerReceipts?: ManagerReviewReceipt[];
 }): CrmPersistencePlan {
   if (input.atomicWrite.invariant !== "OPPORTUNITY_AND_OUTBOX_COMMIT_TOGETHER_OR_NOT_AT_ALL") {
@@ -98,6 +107,13 @@ export function buildCrmPersistencePlan(input: {
   const appliedReceipts = (input.managerReceipts ?? []).filter(
     (receipt): receipt is Extract<ManagerReviewReceipt, { status: "APPLIED" }> => receipt.status === "APPLIED",
   );
+
+  if (input.managerHandoff && input.managerHandoff.handoffId !== opportunity.latestHandoffId) {
+    throw new Error("Manager handoff cannot be persisted against an unrelated opportunity.");
+  }
+  if (input.managerHandoff && input.managerHandoff.deskPrep.pipeline !== opportunity.pipeline) {
+    throw new Error("Manager handoff pipeline must match the CRM opportunity pipeline.");
+  }
 
   if (opportunity.outcome) {
     const outcomeEvidencePresent = opportunity.evidence.some(
@@ -124,6 +140,9 @@ export function buildCrmPersistencePlan(input: {
       opportunityId: opportunity.opportunityId,
     })),
     outbox: input.atomicWrite.outbox.map((event) => ({ workspaceId, event })),
+    managerHandoffs: input.managerHandoff
+      ? [{ workspaceId, opportunityId: opportunity.opportunityId, handoff: input.managerHandoff }]
+      : [],
     managerReceipts: appliedReceipts.map((receipt) => ({
       workspaceId,
       opportunityId: opportunity.opportunityId,
@@ -135,6 +154,7 @@ export function buildCrmPersistencePlan(input: {
 
 export interface CrmPersistenceTransaction {
   insertOpportunity(row: PersistedOpportunityRow): Promise<"INSERTED" | "ALREADY_EXISTS_SAME_IDEMPOTENCY_KEY">;
+  insertManagerHandoffs(rows: PersistedManagerHandoffRow[]): Promise<void>;
   insertEvidence(rows: PersistedEvidenceRow[]): Promise<void>;
   insertManagerReceipts(rows: PersistedManagerReceiptRow[]): Promise<void>;
   insertOutbox(rows: PersistedOutboxRow[]): Promise<void>;
@@ -159,6 +179,7 @@ export async function executeCrmPersistencePlan(input: {
       };
     }
 
+    await transaction.insertManagerHandoffs(input.plan.managerHandoffs);
     await transaction.insertEvidence(input.plan.evidence);
     await transaction.insertManagerReceipts(input.plan.managerReceipts);
     await transaction.insertOutbox(input.plan.outbox);
