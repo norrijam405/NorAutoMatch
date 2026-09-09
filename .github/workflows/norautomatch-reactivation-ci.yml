@@ -54,6 +54,7 @@ jobs:
         run: |
           cat infrastructure/norautomatch-crm-v1.sql | docker exec -i ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U norauto -d norauto_ci
           cat infrastructure/norautomatch-crm-v2-manager-handoffs.sql | docker exec -i ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U norauto -d norauto_ci
+          cat infrastructure/norautomatch-crm-v3-outbox-relay.sql | docker exec -i ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U norauto -d norauto_ci
           cat infrastructure/norautomatch-crm-v1.behavior.sql | docker exec -i ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U norauto -d norauto_ci
 
       - name: Compile NorAutoMatch verification surface
@@ -75,6 +76,11 @@ jobs:
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
         run: node .tmp-inventory-tests/scripts/crm-manager-handoff-persistence.integration.js
+
+      - name: Execute leased outbox relay roundtrip
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/crm-outbox-relay.integration.js
 
       - name: Full NorAutoMatch domain and persistence verification suite
         run: |
