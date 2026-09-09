@@ -1,6 +1,6 @@
 \set ON_ERROR_STOP on
 
-TRUNCATE TABLE crm_follow_up_obligations, crm_outbox, crm_manager_review_receipts, crm_evidence, crm_opportunities RESTART IDENTITY;
+TRUNCATE TABLE crm_follow_up_obligations, crm_outbox, crm_manager_review_receipts, crm_manager_handoffs, crm_evidence, crm_opportunities RESTART IDENTITY;
 
 INSERT INTO crm_opportunities (
     opportunity_id, workspace_id, intake_idempotency_key, pipeline, stage, desk_state,
