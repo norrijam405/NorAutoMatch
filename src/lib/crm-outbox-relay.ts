@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import type { CrmOpportunity } from "./crm-core";
 import type { ManagerHandoffEnvelope } from "./manager-handoff";
@@ -86,7 +85,6 @@ export async function claimCrmOutboxBatch(input: {
   const limit = Math.max(1, Math.min(input.limit ?? 10, 100));
   const leaseSeconds = Math.max(5, Math.min(input.leaseSeconds ?? 60, 600));
   const client = await input.pool.connect();
-  const claimBatchToken = randomUUID();
 
   try {
     await client.query("BEGIN");
@@ -151,7 +149,6 @@ export async function claimCrmOutboxBatch(input: {
     throw error;
   } finally {
     client.release();
-    void claimBatchToken;
   }
 }
 
