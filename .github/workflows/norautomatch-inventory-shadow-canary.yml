@@ -34,7 +34,31 @@ jobs:
           npx tsc -p tsconfig.inventory-tests.json
 
       - name: Observe Orr public inventory in shadow mode
+        id: observe
+        continue-on-error: true
         run: node .tmp-inventory-tests/scripts/run-orr-inventory-shadow.js
+
+      - name: Resolve shadow gate reason
+        id: gate
+        if: always()
+        shell: bash
+        run: |
+          receipt="$(find validation_receipts -maxdepth 1 -type f -name 'norautomatch_inventory_shadow_*.json' -print -quit 2>/dev/null || true)"
+          if [ -z "$receipt" ]; then
+            echo "status=FAIL" >> "$GITHUB_OUTPUT"
+            echo "reason=SOURCE_OBSERVATION_EXCEPTION" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          status="$(node -e 'const fs=require("fs");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(r.gate.status)' "$receipt")"
+          reason="$(node -e 'const fs=require("fs");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write((r.gate.reasons||[]).join("+")||"NONE")' "$receipt")"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+
+      - name: "Shadow gate — ${{ steps.gate.outputs.status }} — ${{ steps.gate.outputs.reason }}"
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.gate.outputs.status }}" = "PASS"
 
       - name: Upload observation receipt
         if: always()
