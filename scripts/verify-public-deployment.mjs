@@ -1,6 +1,7 @@
 const baseArg = process.argv[2]?.trim();
+const expectedSha = process.argv[3]?.trim();
 if (!baseArg) {
-  console.error("Usage: node scripts/verify-public-deployment.mjs https://public-host");
+  console.error("Usage: node scripts/verify-public-deployment.mjs https://public-host [expected-git-sha]");
   process.exit(2);
 }
 
@@ -18,8 +19,7 @@ if (base.protocol !== "https:" && !["127.0.0.1", "localhost"].includes(base.host
 }
 
 async function request(path, init = {}) {
-  const response = await fetch(new URL(path, base), { redirect: "manual", ...init });
-  return response;
+  return fetch(new URL(path, base), { redirect: "manual", ...init });
 }
 
 function assert(condition, message) {
@@ -32,7 +32,10 @@ async function run() {
   const health = await healthResponse.json();
   assert(health.service === "norauto-match", "Unexpected public service identity.");
   assert(health.status === "SERVING", "Public service is not reporting SERVING.");
-  assert(health.inventory?.customerVisibleLiveInventory === false, "This verifier is for the representative-inventory launch and requires customer-visible live inventory to remain false.");
+  assert(typeof health.releaseSha === "string" && health.releaseSha !== "UNSET", "Public service is missing immutable release identity.");
+  if (expectedSha) assert(health.releaseSha === expectedSha, `Serving release ${health.releaseSha} does not match expected ${expectedSha}.`);
+  assert(health.inventory?.effectiveMode === "demo", "Representative launch verifier requires effective inventory mode demo.");
+  assert(health.inventory?.customerVisibleLiveInventory === false, "Representative launch verifier requires customer-visible live inventory to remain false.");
   assert(health.truthScope === "PUBLIC_SERVING_HEALTH_ONLY", "Health truth scope drifted.");
   assert(health.authorityEffect === "NONE", "Health endpoint must not grant authority.");
 
@@ -60,6 +63,7 @@ async function run() {
 
   console.log("PASS_NORAUTO_PUBLIC_DEPLOYMENT_READ_ONLY_VERIFICATION");
   console.log(`BASE_URL=${base.origin}`);
+  console.log(`RELEASE_SHA=${health.releaseSha}`);
   console.log(`INVENTORY_MODE=${health.inventory?.effectiveMode}`);
   console.log("CUSTOMER_VISIBLE_LIVE_INVENTORY=false");
   console.log("AUTHORITY_EFFECT=NONE");
