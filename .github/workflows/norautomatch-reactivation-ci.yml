@@ -20,6 +20,18 @@ jobs:
         repeat: [1, 2, 3, 4]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,6 +47,11 @@ jobs:
 
       - name: Dependency security gate
         run: npm audit --audit-level=high
+
+      - name: Execute CRM schema on PostgreSQL
+        run: |
+          cat infrastructure/norautomatch-crm-v1.sql | docker exec -i ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U norauto -d norauto_ci
+          cat infrastructure/norautomatch-crm-v1.behavior.sql | docker exec -i ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U norauto -d norauto_ci
 
       - name: Full NorAutoMatch domain and persistence verification suite
         run: |
