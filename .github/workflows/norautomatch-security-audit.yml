@@ -28,7 +28,8 @@ jobs:
 
       - name: Capture installed framework versions
         run: |
-          node -e 'for (const p of ["next","react","react-dom","eslint-config-next"]) console.log(`${p}=${require(`${p}/package.json`).version}`)'
+          node -e 'for (const p of ["next","react","react-dom"]) console.log(`${p}=${require(`${p}/package.json`).version}`)'
+          npm ls eslint-config-next --depth=0
 
       - name: Capture npm audit evidence
         id: audit
