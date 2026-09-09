@@ -1,4 +1,5 @@
 import type { CrmEvidenceRef, CrmOpportunity } from "./crm-core";
+import { createFirstContactObligation, type PersistedFollowUpObligationRow } from "./crm-follow-up";
 import type { CrmAtomicWrite, CrmOutboxEvent } from "./crm-outbox";
 import type { ManagerHandoffEnvelope } from "./manager-handoff";
 import type { ManagerReviewReceipt } from "./manager-review-receipt";
@@ -54,6 +55,7 @@ export type CrmPersistencePlan = {
   outbox: PersistedOutboxRow[];
   managerHandoffs: PersistedManagerHandoffRow[];
   managerReceipts: PersistedManagerReceiptRow[];
+  followUpObligations: PersistedFollowUpObligationRow[];
   transactionInvariant: "ALL_ROWS_COMMIT_TOGETHER_OR_NONE_COMMIT";
 };
 
@@ -97,6 +99,7 @@ export function buildCrmPersistencePlan(input: {
   workspaceId?: string;
   managerHandoff?: ManagerHandoffEnvelope;
   managerReceipts?: ManagerReviewReceipt[];
+  firstContactSlaMinutes?: number;
 }): CrmPersistencePlan {
   if (input.atomicWrite.invariant !== "OPPORTUNITY_AND_OUTBOX_COMMIT_TOGETHER_OR_NOT_AT_ALL") {
     throw new Error("CRM persistence refused an atomic write without the required domain invariant.");
@@ -130,6 +133,14 @@ export function buildCrmPersistencePlan(input: {
     }
   }
 
+  const followUpObligations = opportunity.stage === "NEW"
+    ? [createFirstContactObligation({
+        workspaceId,
+        opportunity,
+        slaMinutes: input.firstContactSlaMinutes,
+      })]
+    : [];
+
   return {
     protocol: "NORAUTO_CRM_PERSISTENCE_PLAN_V1",
     workspaceId,
@@ -148,6 +159,7 @@ export function buildCrmPersistencePlan(input: {
       opportunityId: opportunity.opportunityId,
       receipt,
     })),
+    followUpObligations,
     transactionInvariant: "ALL_ROWS_COMMIT_TOGETHER_OR_NONE_COMMIT",
   };
 }
@@ -157,6 +169,7 @@ export interface CrmPersistenceTransaction {
   insertManagerHandoffs?: (rows: PersistedManagerHandoffRow[]) => Promise<void>;
   insertEvidence(rows: PersistedEvidenceRow[]): Promise<void>;
   insertManagerReceipts(rows: PersistedManagerReceiptRow[]): Promise<void>;
+  insertFollowUpObligations?: (rows: PersistedFollowUpObligationRow[]) => Promise<void>;
   insertOutbox(rows: PersistedOutboxRow[]): Promise<void>;
 }
 
@@ -187,6 +200,12 @@ export async function executeCrmPersistencePlan(input: {
     }
     await transaction.insertEvidence(input.plan.evidence);
     await transaction.insertManagerReceipts(input.plan.managerReceipts);
+    if (input.plan.followUpObligations.length > 0) {
+      if (!transaction.insertFollowUpObligations) {
+        throw new Error("CRM adapter lacks required follow-up obligation persistence capability.");
+      }
+      await transaction.insertFollowUpObligations(input.plan.followUpObligations);
+    }
     await transaction.insertOutbox(input.plan.outbox);
 
     return {
