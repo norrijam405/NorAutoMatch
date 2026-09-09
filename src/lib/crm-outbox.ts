@@ -41,7 +41,7 @@ function stableEventIdentity(input: {
 }
 
 export function createCrmOutboxEvent(input: {
-  opportunity: CrmOpportunity;
+  opportunity: Pick<CrmOpportunity, "opportunityId" | "pipeline">;
   eventType: CrmOutboxEventType;
   occurredAt: string;
   payload: Record<string, unknown>;
