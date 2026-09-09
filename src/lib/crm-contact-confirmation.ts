@@ -8,7 +8,7 @@ export type ConfirmCustomerContactResult =
       opportunityId: string;
       stage: "CONTACTED";
       satisfactionEvidenceRef: string;
-      outboxEventId: string;
+      outboxEventIds: string[];
       authorityEffect: "CONTACT_STATE_ONLY";
     }
   | {
@@ -27,6 +27,29 @@ function requireText(value: string, label: string, maxLength: number) {
   const normalized = value.trim();
   if (!normalized || normalized.length > maxLength) throw new Error(`${label} is invalid.`);
   return normalized;
+}
+
+function stageEvent(input: {
+  opportunityId: string;
+  pipeline: "Standard Retail" | "Vehicle Sourcing";
+  fromStage: "NEW" | "CONTACT_PENDING";
+  toStage: "CONTACT_PENDING" | "CONTACTED";
+  contactEvidenceRef?: string;
+}) {
+  const payload = {
+    opportunityId: input.opportunityId,
+    fromStage: input.fromStage,
+    toStage: input.toStage,
+    ...(input.contactEvidenceRef ? { contactEvidenceRef: input.contactEvidenceRef } : {}),
+  };
+  const identity = stableHash({
+    protocol: "NORAUTO_CRM_OUTBOX_V1",
+    eventType: "CRM_OPPORTUNITY_STAGE_CHANGED",
+    aggregateId: input.opportunityId,
+    pipeline: input.pipeline,
+    payload,
+  });
+  return { eventId: `name_${identity.slice(0, 24)}`, identity, payload };
 }
 
 export async function confirmCustomerContact(input: {
@@ -121,6 +144,23 @@ export async function confirmCustomerContact(input: {
       throw new Error("Conflicting CONTACT_CONFIRMED evidence already exists.");
     }
 
+    const outboxEvents: Array<ReturnType<typeof stageEvent>> = [];
+    if (opportunity.stage === "NEW") {
+      outboxEvents.push(stageEvent({
+        opportunityId,
+        pipeline: opportunity.pipeline,
+        fromStage: "NEW",
+        toStage: "CONTACT_PENDING",
+      }));
+    }
+    outboxEvents.push(stageEvent({
+      opportunityId,
+      pipeline: opportunity.pipeline,
+      fromStage: "CONTACT_PENDING",
+      toStage: "CONTACTED",
+      contactEvidenceRef: evidenceRef,
+    }));
+
     await client.query(
       `INSERT INTO crm_evidence (
          workspace_id, opportunity_id, kind, evidence_ref, authority, observed_at, payload
@@ -159,41 +199,16 @@ export async function confirmCustomerContact(input: {
     );
     if (satisfaction.rowCount !== 1) throw new Error("First-contact satisfaction was not recorded exactly once.");
 
-    const eventIdentity = stableHash({
-      protocol: "NORAUTO_CRM_OUTBOX_V1",
-      eventType: "CRM_OPPORTUNITY_STAGE_CHANGED",
-      aggregateId: opportunityId,
-      pipeline: opportunity.pipeline,
-      payload: {
-        opportunityId,
-        fromStage: opportunity.stage,
-        toStage: "CONTACTED",
-        contactEvidenceRef: evidenceRef,
-      },
-    });
-    const eventId = `name_${eventIdentity.slice(0, 24)}`;
-
-    await client.query(
-      `INSERT INTO crm_outbox (
-         event_id, workspace_id, aggregate_id, event_idempotency_key, event_type,
-         pipeline, payload, occurred_at, delivery_state, attempts, max_attempts
-       ) VALUES ($1, $2, $3, $4, 'CRM_OPPORTUNITY_STAGE_CHANGED', $5, $6::jsonb,
-                 $7::timestamptz, 'PENDING', 0, 8)`,
-      [
-        eventId,
-        workspaceId,
-        opportunityId,
-        eventIdentity,
-        opportunity.pipeline,
-        {
-          opportunityId,
-          fromStage: opportunity.stage,
-          toStage: "CONTACTED",
-          contactEvidenceRef: evidenceRef,
-        },
-        observedAt,
-      ],
-    );
+    for (const event of outboxEvents) {
+      await client.query(
+        `INSERT INTO crm_outbox (
+           event_id, workspace_id, aggregate_id, event_idempotency_key, event_type,
+           pipeline, payload, occurred_at, delivery_state, attempts, max_attempts
+         ) VALUES ($1, $2, $3, $4, 'CRM_OPPORTUNITY_STAGE_CHANGED', $5, $6::jsonb,
+                   $7::timestamptz, 'PENDING', 0, 8)`,
+        [event.eventId, workspaceId, opportunityId, event.identity, opportunity.pipeline, event.payload, observedAt],
+      );
+    }
 
     await client.query("COMMIT");
     return {
@@ -201,7 +216,7 @@ export async function confirmCustomerContact(input: {
       opportunityId,
       stage: "CONTACTED",
       satisfactionEvidenceRef: evidenceRef,
-      outboxEventId: eventId,
+      outboxEventIds: outboxEvents.map((event) => event.eventId),
       authorityEffect: "CONTACT_STATE_ONLY",
     };
   } catch (error) {
