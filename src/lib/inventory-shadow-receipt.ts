@@ -1,6 +1,5 @@
+import { selectInventoryForMatcher } from "./inventory-bridge";
 import { normalizeOrrAlgoliaDiscovery } from "./orr-algolia-normalizer";
-import { selectCustomerInventory } from "./inventory-runtime";
-import { inventory as demoInventory } from "./inventory";
 import type { OrrAlgoliaDiscovery } from "./orr-public-algolia";
 
 export type InventoryShadowReceipt = {
@@ -41,15 +40,9 @@ export type InventoryShadowReceipt = {
 
 export function buildInventoryShadowReceipt(discovery: OrrAlgoliaDiscovery): InventoryShadowReceipt {
   const normalized = normalizeOrrAlgoliaDiscovery(discovery);
-  const runtime = {
-    requestedMode: "live-shadow" as const,
-    effectiveMode: "live-enabled" as const,
-    customerVisibleLiveInventory: false,
-    reason: "SHADOW_REQUESTED" as const,
-  };
-  const bridge = selectCustomerInventory({
-    runtime,
-    demoInventory,
+  const bridge = selectInventoryForMatcher({
+    mode: "live-enabled",
+    demoInventory: [],
     liveRecords: normalized.records,
     nowMs: Date.parse(discovery.fetchedAt),
   });
