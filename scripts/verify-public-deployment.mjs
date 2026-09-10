@@ -67,6 +67,16 @@ async function run() {
     assert(!body.includes('"customer"'), `${path} returned customer data without manager authorization.`);
   }
 
+  const gatewayResponse = await request("/api/internal/conversation-events", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ protocol: "UNAUTHORIZED_SYNTHETIC_PROBE" }),
+  });
+  assert([401, 503].includes(gatewayResponse.status), `Conversation gateway accepted an unauthenticated public request; received ${gatewayResponse.status}`);
+  const gatewayBody = await gatewayResponse.text();
+  assert(!gatewayBody.includes("conversationId"), "Conversation gateway leaked conversation data to an unauthenticated probe.");
+  assert(!gatewayBody.includes("routingDecision"), "Conversation gateway leaked routing data to an unauthenticated probe.");
+
   for (const path of ["/playbook", "/master-build-prompt", "/master-build-prompt/download"]) {
     const response = await request(path);
     assert(response.status === 404, `${path} must not be public; received ${response.status}`);
@@ -84,6 +94,7 @@ async function run() {
   console.log(`INVENTORY_MODE=${health.inventory?.effectiveMode}`);
   console.log("CUSTOMER_VISIBLE_LIVE_INVENTORY=false");
   console.log("MANAGER_SURFACES_LOCKED_WITHOUT_SESSION=true");
+  console.log("CONVERSATION_GATEWAY_LOCKED_WITHOUT_AUTH=true");
   console.log("AUTHORITY_EFFECT=NONE");
 }
 
