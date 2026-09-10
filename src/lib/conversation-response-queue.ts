@@ -107,7 +107,7 @@ export async function readConversationResponseQueue(input: {
     }
 
     const routing = evaluateConversationRouting(event);
-    if (routing.decision !== row.routing_decision || routing.decision === "NOT_CONTACTABLE") {
+    if (routing.decision !== row.routing_decision) {
       throw new Error("CONVERSATION_QUEUE_ROUTING_DRIFT");
     }
 
