@@ -5,6 +5,7 @@ import { authorizeManagerSession } from "@/lib/manager-session-auth";
 import { createResponseDraft } from "@/lib/conversation-response-draft";
 import { createEnrichedResponseDraft } from "@/lib/conversation-response-enrichment";
 import { createResponseEvidencePassport } from "@/lib/evidence-passport";
+import { createResponsePreparationCostReceipt } from "@/lib/cost-receipt";
 import { readResponsePreparationPacket } from "@/lib/conversation-response-preparation-store";
 
 export const runtime = "nodejs";
@@ -120,13 +121,15 @@ export async function POST(request: Request) {
 
     const draft = createEnrichedResponseDraft({ packet, claims });
     const evidencePassport = createResponseEvidencePassport({ packet, draft });
+    const costReceipt = createResponsePreparationCostReceipt({ passport: evidencePassport });
     return noStore({
-      protocol: "NORAUTO_MANAGER_RESPONSE_PREPARATION_V4",
+      protocol: "NORAUTO_MANAGER_RESPONSE_PREPARATION_V5",
       truthState: "EVIDENCE_BOUND_DRAFT_ONLY",
       authorityEffect: "NONE",
       packet,
       draft,
       evidencePassport,
+      costReceipt,
     }, 200);
   } catch {
     return noStore({ message: "Response evidence enrichment failed safely." }, 503);
