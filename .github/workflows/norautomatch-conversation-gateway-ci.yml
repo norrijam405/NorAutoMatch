@@ -62,6 +62,9 @@ jobs:
       - name: Challenge provider-neutral conversation truth boundary
         run: node .tmp-inventory-tests/scripts/conversation-gateway.behavior.js
 
+      - name: Challenge fail-closed gateway bearer boundary
+        run: node .tmp-inventory-tests/scripts/conversation-gateway-auth.behavior.js
+
       - name: Challenge durable replay-safe conversation identity
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
