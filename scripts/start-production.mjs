@@ -12,6 +12,7 @@ const migrations = [
   "infrastructure/norautomatch-crm-v1.sql",
   "infrastructure/norautomatch-crm-v2-manager-handoffs.sql",
   "infrastructure/norautomatch-crm-v3-outbox-relay.sql",
+  "infrastructure/norautomatch-crm-v4-conversation-events.sql",
 ];
 
 function sha256(text) {
