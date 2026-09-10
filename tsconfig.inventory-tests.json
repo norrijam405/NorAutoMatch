@@ -47,6 +47,7 @@
     "scripts/conversation-crm-routing-policy.behavior.ts",
     "scripts/conversation-provider-adapter.behavior.ts",
     "scripts/conversation-response-queue.integration.ts",
+    "scripts/conversation-response-preparation.behavior.ts",
     "scripts/production-readiness.behavior.ts",
     "src/lib/live-inventory.ts",
     "src/lib/orr-public-inventory.ts",
@@ -90,6 +91,7 @@
     "src/lib/conversation-crm-routing-policy.ts",
     "src/lib/conversation-provider-adapter.ts",
     "src/lib/conversation-response-queue.ts",
+    "src/lib/conversation-response-preparation.ts",
     "src/lib/production-readiness.ts",
     "src/lib/inventory.ts"
   ]
