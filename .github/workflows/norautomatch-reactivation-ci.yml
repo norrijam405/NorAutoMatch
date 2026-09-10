@@ -173,3 +173,40 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+      - name: Exercise exact production startup path
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_RELEASE_SHA: ${{ github.sha }}
+          NORAUTO_INVENTORY_MODE: demo
+          NORAUTO_LIVE_INVENTORY_ACTIVATION: ""
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3321
+          HOSTNAME: 127.0.0.1
+          PORT: "3321"
+        run: |
+          npm start > /tmp/norauto-production-start.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3321/api/health > /tmp/norauto-production-health.json; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:3321/api/health > /tmp/norauto-production-health.json
+          grep -F 'STANDALONE_RUNTIME_PREPARED' /tmp/norauto-production-start.log
+          if grep -F '"next start" does not work with "output: standalone"' /tmp/norauto-production-start.log; then
+            echo 'Standalone warning regressed into exact production startup path.' >&2
+            exit 1
+          fi
+          node - <<'NODE'
+          const fs = require('fs');
+          const health = JSON.parse(fs.readFileSync('/tmp/norauto-production-health.json', 'utf8'));
+          if (health.service !== 'norauto-match' || health.status !== 'SERVING') throw new Error('Production startup health boundary failed.');
+          if (health.releaseSha !== process.env.GITHUB_SHA) throw new Error(`Production startup release identity drifted: ${health.releaseSha}`);
+          if (health.inventory?.effectiveMode !== 'demo' || health.inventory?.customerVisibleLiveInventory !== false) throw new Error('Production startup inventory truth boundary failed.');
+          if (health.authorityEffect !== 'NONE') throw new Error('Production startup health granted authority.');
+          NODE
+          kill "$server_pid"
+          wait "$server_pid" || true
+          trap - EXIT
