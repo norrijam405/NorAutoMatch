@@ -1,4 +1,5 @@
 import { buildDeskPrepPacket } from "../src/lib/desk-prep";
+import { readAppointmentConfirmationQueue } from "../src/lib/crm-appointment-queue";
 import { executeContactConfirmationCommand } from "../src/lib/crm-contact-confirmation-command";
 import { executeFirstContactAttemptCommand } from "../src/lib/crm-follow-up-command";
 import { executeAppointmentConfirmationCommand, executeOutcomeCommand } from "../src/lib/crm-sales-progression-command";
@@ -87,6 +88,12 @@ async function run() {
 
   try {
     const sold = await createContacted({ email: "sold-progression@example.com", submittedAt: "2026-09-09T07:00:00.000Z", adapter, pool });
+
+    const appointmentQueueBefore = await readAppointmentConfirmationQueue({ pool, workspaceId: "norautomatch", limit: 100 });
+    const queued = appointmentQueueBefore.find((item) => item.opportunityId === sold.opportunityId);
+    assert(queued?.stage === "CONTACTED", "CONTACTED opportunity must appear in appointment confirmation queue.");
+    assert(queued.truthState === "READ_MODEL_ONLY" && queued.authorityEffect === "NONE", "Appointment queue must remain non-authoritative.");
+
     const appointmentEvidence = "dealer-calendar:appointment:ci-001";
     const appointmentAt = "2026-09-09T07:06:00.000Z";
     const appointment = await executeAppointmentConfirmationCommand({
@@ -100,6 +107,9 @@ async function run() {
     assert(appointment.status === "APPLIED", "Appointment must apply exactly once.");
     assert(appointment.stage === "APPOINTMENT_SET", "Confirmed appointment must advance CONTACTED to APPOINTMENT_SET.");
     assert(appointment.attribution.source === "CI-Sales-Progression", "Appointment must preserve original acquisition source attribution.");
+
+    const appointmentQueueAfter = await readAppointmentConfirmationQueue({ pool, workspaceId: "norautomatch", limit: 100 });
+    assert(!appointmentQueueAfter.some((item) => item.opportunityId === sold.opportunityId), "APPOINTMENT_SET opportunity must leave confirmation queue.");
 
     const appointmentReplay = await executeAppointmentConfirmationCommand({
       pool,
@@ -167,6 +177,9 @@ async function run() {
       observedAt: "2026-09-09T09:20:00.000Z",
     });
     assert(lostResult.status === "APPLIED" && lostResult.stage === "LOST", "Manager evidence must allow CONTACTED -> LOST.");
+
+    const queueAfterLost = await readAppointmentConfirmationQueue({ pool, workspaceId: "norautomatch", limit: 100 });
+    assert(!queueAfterLost.some((item) => item.opportunityId === lost.opportunityId), "LOST opportunity must not remain in appointment confirmation queue.");
 
     let soldWithoutAppointmentRejected = false;
     const noAppointment = await createContacted({ email: "sold-without-appointment@example.com", submittedAt: "2026-09-09T10:00:00.000Z", adapter, pool });
