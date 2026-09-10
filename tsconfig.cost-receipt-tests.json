@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "outDir": ".tmp-cost-receipt-tests"
+  },
+  "include": [
+    "scripts/cost-receipt.behavior.ts",
+    "src/lib/cost-receipt.ts",
+    "src/lib/evidence-passport.ts",
+    "src/lib/conversation-response-enrichment.ts",
+    "src/lib/response-evidence-claim.ts",
+    "src/lib/conversation-response-draft.ts",
+    "src/lib/conversation-response-preparation.ts",
+    "src/lib/conversation-gateway.ts",
+    "src/lib/conversation-response-sla.ts"
+  ]
+}
