@@ -39,6 +39,9 @@ jobs:
       - name: Challenge provider-neutral conversation truth boundary
         run: node .tmp-inventory-tests/scripts/conversation-gateway.behavior.js
 
+      - name: Clean generated verification output
+        run: rm -rf .tmp-inventory-tests
+
       - name: Typecheck
         run: npm run typecheck
 
