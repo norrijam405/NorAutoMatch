@@ -50,7 +50,7 @@ async function run() {
     assert(response.status === 200, `${path} returned ${response.status}`);
   }
 
-  for (const path of ["/manager", "/manager/follow-up"]) {
+  for (const path of ["/manager", "/manager/follow-up", "/manager/appointments"]) {
     const response = await request(path);
     assert(response.status === 200, `${path} returned ${response.status}`);
     const html = await response.text();
@@ -59,7 +59,7 @@ async function run() {
     assert(!html.includes("norrijam405@gmail.com"), `${path} leaked an operator account identifier.`);
   }
 
-  for (const path of ["/api/manager/queue", "/api/manager/follow-up/queue"]) {
+  for (const path of ["/api/manager/queue", "/api/manager/follow-up/queue", "/api/manager/progression/queue"]) {
     const response = await request(path, { cache: "no-store" });
     assert([401, 503].includes(response.status), `${path} exposed a manager read model without a valid session; received ${response.status}`);
     const body = await response.text();
