@@ -41,6 +41,12 @@ jobs:
       - name: Execute Torque synthetic challenge slice
         run: node .tmp-torque-green-room-tests/scripts/torque-green-room.behavior.js
 
+      - name: Execute Torque workspace authority challenge tranche
+        run: node .tmp-torque-green-room-tests/scripts/torque-green-room-policy.behavior.js
+
+      - name: Execute Torque final challenge tranche
+        run: node .tmp-torque-green-room-tests/scripts/torque-green-room-final.behavior.js
+
       - name: Clean generated verification output
         run: rm -rf .tmp-torque-green-room-tests
 
