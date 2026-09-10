@@ -40,6 +40,7 @@
     "scripts/crm-follow-up-due.integration.ts",
     "scripts/crm-contact-confirmation.integration.ts",
     "scripts/crm-sales-progression.integration.ts",
+    "scripts/conversation-gateway.behavior.ts",
     "scripts/production-readiness.behavior.ts",
     "src/lib/live-inventory.ts",
     "src/lib/orr-public-inventory.ts",
@@ -76,6 +77,7 @@
     "src/lib/crm-manager-queue.ts",
     "src/lib/crm-manager-review-command.ts",
     "src/lib/manager-session-auth.ts",
+    "src/lib/conversation-gateway.ts",
     "src/lib/production-readiness.ts",
     "src/lib/inventory.ts"
   ]
