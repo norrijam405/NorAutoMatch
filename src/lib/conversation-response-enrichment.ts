@@ -8,7 +8,7 @@ import {
 
 export const RESPONSE_ENRICHMENT_PROTOCOL = "NORAUTO_RESPONSE_ENRICHMENT_V1" as const;
 
-export type EnrichedResponseDraft = ResponseDraft & {
+export type EnrichedResponseDraft = Omit<ResponseDraft, "protocol" | "authorityEffect"> & {
   protocol: typeof RESPONSE_ENRICHMENT_PROTOCOL;
   evidenceUsed: Array<{
     topic: ResponseEvidenceTopic;
@@ -19,7 +19,7 @@ export type EnrichedResponseDraft = ResponseDraft & {
     validUntil: string;
   }>;
   rejectedEvidence: Array<{
-    topic: ResponseEvidenceTopic;
+    topic: ResponseEvidenceTopic | null;
     reason: string;
   }>;
   mutableFactState: "PARTIALLY_VERIFIED" | "VERIFIED_AVAILABLE_FACTS" | "NO_VALID_CURRENT_EVIDENCE";
@@ -38,9 +38,17 @@ const labelFor: Record<ResponseEvidenceTopic, string> = {
   INCENTIVES: "Current incentive information",
 };
 
+function topicFromUnknown(value: unknown): ResponseEvidenceTopic | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const topic = (value as { topic?: unknown }).topic;
+  return ["AVAILABILITY", "PRICE", "INCENTIVES"].includes(String(topic))
+    ? topic as ResponseEvidenceTopic
+    : null;
+}
+
 export function createEnrichedResponseDraft(input: {
   packet: ResponsePreparationPacket;
-  claims: ResponseEvidenceClaim[];
+  claims: unknown[];
   now?: Date;
 }): EnrichedResponseDraft {
   const base = createResponseDraft(input.packet);
@@ -48,17 +56,18 @@ export function createEnrichedResponseDraft(input: {
   const rejectedEvidence: EnrichedResponseDraft["rejectedEvidence"] = [];
   const acceptedByTopic = new Map<ResponseEvidenceTopic, ResponseEvidenceClaim>();
 
-  for (const claim of input.claims) {
+  for (const candidate of input.claims) {
     const result = validateResponseEvidenceClaim({
-      claim,
+      claim: candidate,
       expectedWorkspaceId: input.packet.workspaceId,
       now: input.now,
     });
     if (!result.valid) {
-      rejectedEvidence.push({ topic: claim.topic, reason: result.reason });
+      rejectedEvidence.push({ topic: topicFromUnknown(candidate), reason: result.reason });
       continue;
     }
 
+    const claim = result.claim;
     const existing = acceptedByTopic.get(claim.topic);
     if (!existing || Date.parse(claim.observedAt) > Date.parse(existing.observedAt)) {
       acceptedByTopic.set(claim.topic, claim);
