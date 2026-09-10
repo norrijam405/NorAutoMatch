@@ -68,6 +68,9 @@ jobs:
       - name: Challenge two-to-three minute response target
         run: node .tmp-inventory-tests/scripts/conversation-response-sla.behavior.js
 
+      - name: Challenge CRM routing authorization policy
+        run: node .tmp-inventory-tests/scripts/conversation-crm-routing-policy.behavior.js
+
       - name: Challenge durable replay-safe conversation identity
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
