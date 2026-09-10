@@ -50,6 +50,23 @@ async function run() {
     assert(response.status === 200, `${path} returned ${response.status}`);
   }
 
+  for (const path of ["/manager", "/manager/follow-up"]) {
+    const response = await request(path);
+    assert(response.status === 200, `${path} returned ${response.status}`);
+    const html = await response.text();
+    assert(/name=["']robots["'][^>]*content=["'][^"']*noindex/i.test(html) || /content=["'][^"']*noindex[^"']*["'][^>]*name=["']robots/i.test(html), `${path} is missing noindex protection.`);
+    assert(html.includes("Restricted operator surface"), `${path} is missing restricted-surface disclosure.`);
+    assert(!html.includes("norrijam405@gmail.com"), `${path} leaked an operator account identifier.`);
+  }
+
+  for (const path of ["/api/manager/queue", "/api/manager/follow-up/queue"]) {
+    const response = await request(path, { cache: "no-store" });
+    assert([401, 503].includes(response.status), `${path} exposed a manager read model without a valid session; received ${response.status}`);
+    const body = await response.text();
+    assert(!body.includes('"items"'), `${path} returned queue items without manager authorization.`);
+    assert(!body.includes('"customer"'), `${path} returned customer data without manager authorization.`);
+  }
+
   for (const path of ["/playbook", "/master-build-prompt", "/master-build-prompt/download"]) {
     const response = await request(path);
     assert(response.status === 404, `${path} must not be public; received ${response.status}`);
@@ -66,6 +83,7 @@ async function run() {
   console.log(`RELEASE_SHA=${health.releaseSha}`);
   console.log(`INVENTORY_MODE=${health.inventory?.effectiveMode}`);
   console.log("CUSTOMER_VISIBLE_LIVE_INVENTORY=false");
+  console.log("MANAGER_SURFACES_LOCKED_WITHOUT_SESSION=true");
   console.log("AUTHORITY_EFFECT=NONE");
 }
 
