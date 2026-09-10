@@ -65,6 +65,9 @@ jobs:
       - name: Challenge fail-closed gateway bearer boundary
         run: node .tmp-inventory-tests/scripts/conversation-gateway-auth.behavior.js
 
+      - name: Challenge provider adapter authorization gate
+        run: node .tmp-inventory-tests/scripts/conversation-provider-adapter.behavior.js
+
       - name: Challenge two-to-three minute response target
         run: node .tmp-inventory-tests/scripts/conversation-response-sla.behavior.js
 
