@@ -24,29 +24,61 @@ const MAX_TTL_MS: Record<ResponseEvidenceTopic, number> = {
   INCENTIVES: 24 * 60 * 60 * 1000,
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseClaim(value: unknown): ResponseEvidenceClaim | null {
+  if (!isRecord(value)) return null;
+  const {
+    protocol,
+    workspaceId,
+    topic,
+    value: claimValue,
+    sourceType,
+    sourceRef,
+    observedAt,
+    validUntil,
+    evidenceState,
+  } = value;
+
+  if (
+    protocol !== RESPONSE_EVIDENCE_CLAIM_PROTOCOL ||
+    typeof workspaceId !== "string" || !workspaceId.trim() || workspaceId.length > 120 ||
+    !["AVAILABILITY", "PRICE", "INCENTIVES"].includes(String(topic)) ||
+    typeof claimValue !== "string" || !claimValue.trim() || claimValue.length > 500 ||
+    !["AUTHORIZED_INVENTORY", "DEALERSHIP_MANAGER"].includes(String(sourceType)) ||
+    typeof sourceRef !== "string" || !sourceRef.trim() || sourceRef.length > 300 ||
+    typeof observedAt !== "string" || observedAt.length > 80 ||
+    typeof validUntil !== "string" || validUntil.length > 80 ||
+    evidenceState !== "VERIFIED_CURRENT"
+  ) {
+    return null;
+  }
+
+  return {
+    protocol,
+    workspaceId,
+    topic: topic as ResponseEvidenceTopic,
+    value: claimValue,
+    sourceType: sourceType as ResponseEvidenceClaim["sourceType"],
+    sourceRef,
+    observedAt,
+    validUntil,
+    evidenceState,
+  };
+}
+
 export function validateResponseEvidenceClaim(input: {
-  claim: ResponseEvidenceClaim;
+  claim: unknown;
   expectedWorkspaceId: string;
   now?: Date;
 }): ResponseEvidenceValidation {
-  const { claim, expectedWorkspaceId } = input;
+  const claim = parseClaim(input.claim);
+  if (!claim) return { valid: false, reason: "INVALID_SHAPE" };
+
   const now = input.now ?? new Date();
-
-  if (
-    claim.protocol !== RESPONSE_EVIDENCE_CLAIM_PROTOCOL ||
-    !claim.workspaceId ||
-    !claim.value.trim() ||
-    claim.value.length > 500 ||
-    !claim.sourceRef.trim() ||
-    claim.sourceRef.length > 300 ||
-    !["AUTHORIZED_INVENTORY", "DEALERSHIP_MANAGER"].includes(claim.sourceType) ||
-    !["AVAILABILITY", "PRICE", "INCENTIVES"].includes(claim.topic) ||
-    claim.evidenceState !== "VERIFIED_CURRENT"
-  ) {
-    return { valid: false, reason: "INVALID_SHAPE" };
-  }
-
-  if (claim.workspaceId !== expectedWorkspaceId) {
+  if (claim.workspaceId !== input.expectedWorkspaceId) {
     return { valid: false, reason: "WORKSPACE_MISMATCH" };
   }
 
