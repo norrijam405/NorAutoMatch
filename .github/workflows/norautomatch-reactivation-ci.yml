@@ -58,7 +58,7 @@ jobs:
         run: |
           node scripts/start-production.mjs
           node scripts/start-production.mjs
-          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc 'SELECT COUNT(*) FROM norautomatch_schema_migrations')" = "3"
+          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc 'SELECT COUNT(*) FROM norautomatch_schema_migrations')" = "4"
           cat infrastructure/norautomatch-crm-v1.behavior.sql | docker exec -i ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U norauto -d norauto_ci
 
       - name: Compile NorAutoMatch verification surface
@@ -92,6 +92,14 @@ jobs:
 
       - name: Execute relay trigger authentication checks
         run: node .tmp-inventory-tests/scripts/relay-trigger-auth.behavior.js
+
+      - name: Execute provider-neutral conversation truth challenges
+        run: node .tmp-inventory-tests/scripts/conversation-gateway.behavior.js
+
+      - name: Execute durable conversation event roundtrip
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/conversation-gateway-persistence.integration.js
 
       - name: Execute real Node Postgres adapter roundtrip
         env:
