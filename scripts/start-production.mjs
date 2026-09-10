@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { cp, readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { spawn } from "node:child_process";
 import process from "node:process";
 import pg from "pg";
@@ -41,9 +43,7 @@ async function applyMigrations(connectionString) {
       if (existing.rowCount === 1) {
         const recorded = existing.rows[0].sha256.trim();
         if (recorded !== digest) {
-          throw new Error(
-            `MIGRATION_CHECKSUM_MISMATCH:${migrationName}:recorded=${recorded}:current=${digest}`,
-          );
+          throw new Error(`MIGRATION_CHECKSUM_MISMATCH:${migrationName}:recorded=${recorded}:current=${digest}`);
         }
         console.log(`MIGRATION_ALREADY_APPLIED ${migrationName} ${digest}`);
         continue;
@@ -71,6 +71,24 @@ async function applyMigrations(connectionString) {
   }
 }
 
+async function prepareStandaloneRuntime() {
+  const standaloneDir = resolve(".next/standalone");
+  const serverPath = resolve(standaloneDir, "server.js");
+  if (!existsSync(serverPath)) {
+    throw new Error("STANDALONE_SERVER_MISSING: run npm run build before starting production");
+  }
+
+  if (existsSync(resolve("public"))) {
+    await cp(resolve("public"), resolve(standaloneDir, "public"), { recursive: true, force: true });
+  }
+  if (existsSync(resolve(".next/static"))) {
+    await cp(resolve(".next/static"), resolve(standaloneDir, ".next/static"), { recursive: true, force: true });
+  }
+
+  console.log("STANDALONE_RUNTIME_PREPARED");
+  return { standaloneDir, serverPath };
+}
+
 async function main() {
   const connectionString = process.env.NORAUTO_CRM_DATABASE_URL?.trim();
 
@@ -85,11 +103,15 @@ async function main() {
     return;
   }
 
-  const child = spawn(
-    process.execPath,
-    ["node_modules/next/dist/bin/next", "start", "--hostname", "0.0.0.0"],
-    { stdio: "inherit", env: process.env },
-  );
+  const { standaloneDir, serverPath } = await prepareStandaloneRuntime();
+  const child = spawn(process.execPath, [serverPath], {
+    cwd: standaloneDir,
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      HOSTNAME: process.env.HOSTNAME?.trim() || "0.0.0.0",
+    },
+  });
 
   const forward = (signal) => {
     if (!child.killed) child.kill(signal);
