@@ -42,7 +42,7 @@ function opportunity(stage: CrmOpportunity["stage"] = "CONTACT_PENDING"): CrmOpp
       requestedVehicleIds: ["vehicle-demo-001"],
       verifiedVehicleIds: [],
       unverifiedVehicleIds: ["vehicle-demo-001"],
-      catalogSource: "representative",
+      catalogSource: "demo",
       catalogGeneratedAt: "2026-09-10T21:00:00.000Z",
     },
     latestHandoffId: "handoff_synthetic_001",
