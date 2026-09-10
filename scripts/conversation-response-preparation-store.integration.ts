@@ -46,7 +46,7 @@ async function run() {
     });
 
     const persisted = await persistConversationEvent({ pool, event });
-    assert(persisted.persistence === "COMMITTED", "Synthetic preparation event must commit before lookup.");
+    assert(persisted.status === "COMMITTED", "Synthetic preparation event must commit before lookup.");
 
     const packet = await readResponsePreparationPacket({
       pool,
