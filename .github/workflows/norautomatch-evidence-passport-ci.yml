@@ -1,0 +1,53 @@
+name: NorAutoMatch Evidence Passport CI
+
+on:
+  push:
+    branches:
+      - "candidate/**"
+      - "reactivation/**"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  evidence-passport-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+
+      - name: Compile Evidence Passport verification surface
+        run: |
+          rm -rf .tmp-evidence-passport-tests
+          npx tsc -p tsconfig.evidence-passport-tests.json
+
+      - name: Challenge Evidence Passport integrity and authority boundaries
+        run: node .tmp-evidence-passport-tests/scripts/evidence-passport.behavior.js
+
+      - name: Clean generated verification output
+        run: rm -rf .tmp-evidence-passport-tests
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
