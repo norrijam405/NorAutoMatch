@@ -50,7 +50,7 @@ async function run() {
     assert(response.status === 200, `${path} returned ${response.status}`);
   }
 
-  for (const path of ["/manager", "/manager/follow-up", "/manager/appointments"]) {
+  for (const path of ["/manager", "/manager/conversations", "/manager/follow-up", "/manager/appointments"]) {
     const response = await request(path);
     assert(response.status === 200, `${path} returned ${response.status}`);
     const html = await response.text();
@@ -59,12 +59,13 @@ async function run() {
     assert(!html.includes("norrijam405@gmail.com"), `${path} leaked an operator account identifier.`);
   }
 
-  for (const path of ["/api/manager/queue", "/api/manager/follow-up/queue", "/api/manager/progression/queue"]) {
+  for (const path of ["/api/manager/queue", "/api/manager/conversations/queue", "/api/manager/follow-up/queue", "/api/manager/progression/queue"]) {
     const response = await request(path, { cache: "no-store" });
     assert([401, 503].includes(response.status), `${path} exposed a manager read model without a valid session; received ${response.status}`);
     const body = await response.text();
     assert(!body.includes('"items"'), `${path} returned queue items without manager authorization.`);
     assert(!body.includes('"customer"'), `${path} returned customer data without manager authorization.`);
+    assert(!body.includes('"summary"'), `${path} returned conversation summary data without manager authorization.`);
   }
 
   const gatewayResponse = await request("/api/internal/conversation-events", {
@@ -94,6 +95,7 @@ async function run() {
   console.log(`INVENTORY_MODE=${health.inventory?.effectiveMode}`);
   console.log("CUSTOMER_VISIBLE_LIVE_INVENTORY=false");
   console.log("MANAGER_SURFACES_LOCKED_WITHOUT_SESSION=true");
+  console.log("CONVERSATION_RESPONSE_DESK_LOCKED_WITHOUT_SESSION=true");
   console.log("CONVERSATION_GATEWAY_LOCKED_WITHOUT_AUTH=true");
   console.log("AUTHORITY_EFFECT=NONE");
 }
