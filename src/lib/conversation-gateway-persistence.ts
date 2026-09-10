@@ -1,6 +1,8 @@
 import type { Pool } from "pg";
 import { conversationEventSchema, evaluateConversationRouting, type ConversationEvent } from "./conversation-gateway";
 
+export type ConversationProcessingState = "RECEIVED" | "ROUTED" | "DEAD_LETTER";
+
 export type PersistConversationEventResult = {
   status: "COMMITTED" | "DEDUPLICATED";
   workspaceId: string;
@@ -8,7 +10,7 @@ export type PersistConversationEventResult = {
   eventId: string;
   conversationId: string;
   routingDecision: "CONTACTABLE" | "HUMAN_REVIEW_REQUIRED" | "NOT_CONTACTABLE";
-  processingState: "RECEIVED";
+  processingState: ConversationProcessingState;
   authorityEffect: "NONE";
 };
 
@@ -19,6 +21,11 @@ function canonicalize(value: unknown): string {
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, child]) => `${JSON.stringify(key)}:${canonicalize(child)}`);
   return `{${entries.join(",")}}`;
+}
+
+function requireProcessingState(value: string): ConversationProcessingState {
+  if (value === "RECEIVED" || value === "ROUTED" || value === "DEAD_LETTER") return value;
+  throw new Error("CONVERSATION_PROCESSING_STATE_DRIFT");
 }
 
 export async function persistConversationEvent(input: {
@@ -50,6 +57,7 @@ export async function persistConversationEvent(input: {
       if (!row || canonicalize(row.normalized_payload) !== canonicalPayload) {
         throw new Error("CONVERSATION_EVENT_IDENTITY_COLLISION");
       }
+      const processingState = requireProcessingState(row.processing_state);
       await client.query("COMMIT");
       return {
         status: "DEDUPLICATED",
@@ -58,7 +66,7 @@ export async function persistConversationEvent(input: {
         eventId: event.eventId,
         conversationId: row.conversation_id,
         routingDecision: row.routing_decision,
-        processingState: "RECEIVED",
+        processingState,
         authorityEffect: "NONE",
       };
     }
