@@ -7,9 +7,11 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
+const testWorkspaceId = "norautomatch-response-queue-test";
+
 const base = {
   protocol: "IGNIAQUA_CONVERSATION_EVENT_V1" as const,
-  workspaceId: "norautomatch",
+  workspaceId: testWorkspaceId,
   provider: "synthetic-provider",
   eventType: "CONVERSATION_ENDED_OR_HANDOFF_READY" as const,
   customer: {
@@ -87,7 +89,7 @@ async function run() {
 
     const queue = await readConversationResponseQueue({
       pool,
-      workspaceId: "norautomatch",
+      workspaceId: testWorkspaceId,
       limit: 100,
       now: new Date("2026-09-10T09:04:10.000Z"),
     });
@@ -108,7 +110,7 @@ async function run() {
     assert(reviewItem?.customer.communicationConsent === null, "Queue must preserve unknown consent instead of coercing it to true.");
 
     assert(!queue.some((item) => item.conversationId === "synthetic-response-no-route"), "No-contact-route conversation must not appear in the actionable response queue.");
-    assert(!queue.some((item) => item.workspaceId !== "norautomatch"), "Queue must remain tenant/workspace isolated.");
+    assert(!queue.some((item) => item.workspaceId !== testWorkspaceId), "Queue must remain tenant/workspace isolated.");
 
     console.log("PASS_CONVERSATION_RESPONSE_QUEUE_TRUTH_BOUNDARY");
   } finally {
