@@ -79,6 +79,11 @@ jobs:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
         run: node .tmp-inventory-tests/scripts/conversation-gateway-persistence.integration.js
 
+      - name: Challenge conversation response queue truth boundary
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/conversation-response-queue.integration.js
+
       - name: Clean generated verification output
         run: rm -rf .tmp-inventory-tests
 
