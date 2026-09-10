@@ -8,6 +8,8 @@ on:
 permissions:
   contents: read
 
+# This validation branch is intentionally separate from the deploy branch.
+# A push here reruns the hosted proof after the expected deployed release identity is bound.
 jobs:
   prove-render-production:
     runs-on: ubuntu-latest
