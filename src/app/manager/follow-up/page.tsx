@@ -18,7 +18,7 @@ export default function ManagerFollowUpPage() {
           <p className="mt-5 max-w-2xl text-base leading-7 text-slate-400">
             Work the response queue without confusing an attempted call with confirmed contact. Every state-changing action requires an evidence reference and a valid short-lived manager session.
           </p>
-          <Link href="/manager" className="mt-5 inline-flex text-sm font-bold text-amber-300 hover:text-amber-200">← Manager review workbench</Link>
+          <div className="mt-5 flex flex-wrap gap-4 text-sm font-bold"><Link href="/manager" className="text-amber-300 hover:text-amber-200">← Manager review</Link><Link href="/manager/appointments" className="text-amber-300 hover:text-amber-200">Appointment desk →</Link></div>
         </div>
         <FollowUpDesk />
       </div>
