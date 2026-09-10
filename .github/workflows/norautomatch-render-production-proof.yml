@@ -44,20 +44,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p .validation
+          mkdir -p validation-receipt
           jq -n \
             --arg observedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg publicOrigin "$BASE_URL" \
             --arg expectedReleaseSha "$EXPECTED_RELEASE_SHA" \
-            '{receiptType:"NORAUTOMATCH_RENDER_PRODUCTION_PROOF",observedAt:$observedAt,publicOrigin:$publicOrigin,expectedReleaseSha:$expectedReleaseSha,inventoryPosture:"REPRESENTATIVE_DEMO_ONLY",customerVisibleLiveInventory:false,syntheticLeadOnly:true,proves:["public HTTPS service reachable","exact serving release identity matches expected SHA","public disclosure and internal-route boundaries pass reusable verifier","one unmistakably synthetic lead received HTTP 202 after durable CRM persistence returned COMMITTED or DEDUPLICATED"],doesNotProve:["live Orr inventory activation","external CRM webhook delivery","real customer conversion","SOLD or LOST outcome","Windows user-live validation","independent Beta assurance"],authorityEffect:"NONE"}' > .validation/render-production-proof.json
-          sha256sum .validation/render-production-proof.json | sed 's#.validation/##' > .validation/render-production-proof.sha256
-          cat .validation/render-production-proof.json
-          cat .validation/render-production-proof.sha256
+            '{receiptType:"NORAUTOMATCH_RENDER_PRODUCTION_PROOF",observedAt:$observedAt,publicOrigin:$publicOrigin,expectedReleaseSha:$expectedReleaseSha,inventoryPosture:"REPRESENTATIVE_DEMO_ONLY",customerVisibleLiveInventory:false,syntheticLeadOnly:true,proves:["public HTTPS service reachable","exact serving release identity matches expected SHA","public disclosure and internal-route boundaries pass reusable verifier","one unmistakably synthetic lead received HTTP 202 after durable CRM persistence returned COMMITTED or DEDUPLICATED"],doesNotProve:["live Orr inventory activation","external CRM webhook delivery","real customer conversion","SOLD or LOST outcome","Windows user-live validation","independent Beta assurance"],authorityEffect:"NONE"}' > validation-receipt/render-production-proof.json
+          sha256sum validation-receipt/render-production-proof.json | sed 's#validation-receipt/##' > validation-receipt/render-production-proof.sha256
+          cat validation-receipt/render-production-proof.json
+          cat validation-receipt/render-production-proof.sha256
 
       - name: Upload production proof receipt
         uses: actions/upload-artifact@v4
         with:
           name: norautomatch-render-production-proof
-          path: .validation/render-production-proof*
+          path: validation-receipt/render-production-proof*
           if-no-files-found: error
           retention-days: 30
