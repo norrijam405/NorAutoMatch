@@ -9,14 +9,14 @@ permissions:
   contents: read
 
 # This validation branch is intentionally separate from the deploy branch.
-# A push here reruns the hosted proof after the expected deployed release identity is bound.
+# A push here reruns the hosted proof against the exact promoted release.
 jobs:
   prove-render-production:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       BASE_URL: https://norautomatch.onrender.com
-      EXPECTED_RELEASE_SHA: 5fe083a6af945867cc79fbe14739aa9543d457fc
+      EXPECTED_RELEASE_SHA: 201171972aa023b6dd09965b7df018143b92b572
     steps:
       - name: Checkout
         uses: actions/checkout@v4
