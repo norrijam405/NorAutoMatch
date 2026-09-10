@@ -1,0 +1,108 @@
+name: NorAutoMatch Render Production Proof
+
+on:
+  push:
+    branches:
+      - "validation/2026-09-10-render-public-proof"
+
+permissions:
+  contents: read
+
+jobs:
+  prove-render-production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BASE_URL: https://norautomatch.onrender.com
+      EXPECTED_RELEASE_SHA: cf58a830c302cb9485fed8ca786379f18e2e57c6
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify exact public deployment read-only boundary
+        run: node scripts/verify-public-deployment.mjs "$BASE_URL" "$EXPECTED_RELEASE_SHA"
+
+      - name: Submit unmistakably synthetic production lead
+        id: lead
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload='{"firstName":"Synthetic","lastName":"LaunchProof","email":"synthetic-launch-proof@invalid.example","phone":"4055550199","budgetRange":"$400-$500","paymentMethod":"Financing","tradeIn":"","notes":"SYNTHETIC_PRODUCTION_VALIDATION — NOT A REAL CUSTOMER OR CONVERSION. Preserve only as deployment evidence.","source":"SYNTHETIC_PRODUCTION_VALIDATION","trigger":"retail","pipeline":"Standard Retail","shortlistedVehicleIds":[],"monthlyTarget":450,"downPayment":2000,"termMonths":72,"consent":true}'
+          response_file="$(mktemp)"
+          status="$(curl --fail-with-body --silent --show-error -o "$response_file" -w '%{http_code}' \
+            -H 'content-type: application/json' \
+            --data "$payload" \
+            "$BASE_URL/api/leads")"
+          cat "$response_file"
+          test "$status" = "202"
+          node - "$response_file" <<'NODE'
+          const fs = require('fs');
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const ok = body.accepted === true
+            && typeof body.opportunityId === 'string'
+            && body.opportunityId.length > 0
+            && typeof body.handoffId === 'string'
+            && body.handoffId.length > 0
+            && ['COMMITTED', 'DEDUPLICATED'].includes(body.persistence)
+            && body.delivery === 'QUEUED';
+          if (!ok) {
+            console.error('FAIL_SYNTHETIC_LEAD_PERSISTENCE_PROOF', body);
+            process.exit(1);
+          }
+          console.log('PASS_SYNTHETIC_LEAD_PERSISTENCE_PROOF');
+          console.log(`PERSISTENCE=${body.persistence}`);
+          console.log(`OPPORTUNITY_ID=${body.opportunityId}`);
+          console.log(`HANDOFF_ID=${body.handoffId}`);
+NODE
+
+      - name: Emit production proof receipt
+        shell: bash
+        run: |
+          mkdir -p .validation
+          node - <<'NODE'
+          const fs = require('fs');
+          const crypto = require('crypto');
+          const receipt = {
+            receiptType: 'NORAUTOMATCH_RENDER_PRODUCTION_PROOF',
+            observedAt: new Date().toISOString(),
+            publicOrigin: process.env.BASE_URL,
+            expectedReleaseSha: process.env.EXPECTED_RELEASE_SHA,
+            inventoryPosture: 'REPRESENTATIVE_DEMO_ONLY',
+            customerVisibleLiveInventory: false,
+            syntheticLeadOnly: true,
+            proves: [
+              'public HTTPS service reachable',
+              'exact serving release identity matches expected SHA',
+              'public disclosure and internal-route boundaries pass reusable verifier',
+              'one unmistakably synthetic lead received HTTP 202 after durable CRM persistence returned COMMITTED or DEDUPLICATED'
+            ],
+            doesNotProve: [
+              'live Orr inventory activation',
+              'external CRM webhook delivery',
+              'real customer conversion',
+              'SOLD or LOST outcome',
+              'Windows user-live validation',
+              'independent Beta assurance'
+            ],
+            authorityEffect: 'NONE'
+          };
+          const canonical = JSON.stringify(receipt, null, 2) + '\n';
+          fs.writeFileSync('.validation/render-production-proof.json', canonical);
+          const sha = crypto.createHash('sha256').update(canonical).digest('hex');
+          fs.writeFileSync('.validation/render-production-proof.sha256', `${sha}  render-production-proof.json\n`);
+          console.log(canonical);
+          console.log(`RECEIPT_SHA256=${sha}`);
+NODE
+
+      - name: Upload production proof receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: norautomatch-render-production-proof
+          path: .validation/render-production-proof*
+          if-no-files-found: error
+          retention-days: 30
