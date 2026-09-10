@@ -43,6 +43,7 @@
     "scripts/conversation-gateway.behavior.ts",
     "scripts/conversation-gateway-auth.behavior.ts",
     "scripts/conversation-gateway-persistence.integration.ts",
+    "scripts/conversation-response-sla.behavior.ts",
     "scripts/production-readiness.behavior.ts",
     "src/lib/live-inventory.ts",
     "src/lib/orr-public-inventory.ts",
@@ -82,6 +83,7 @@
     "src/lib/conversation-gateway.ts",
     "src/lib/conversation-gateway-auth.ts",
     "src/lib/conversation-gateway-persistence.ts",
+    "src/lib/conversation-response-sla.ts",
     "src/lib/production-readiness.ts",
     "src/lib/inventory.ts"
   ]
