@@ -49,6 +49,7 @@
     "scripts/conversation-response-queue.integration.ts",
     "scripts/conversation-response-preparation.behavior.ts",
     "scripts/conversation-response-preparation-store.integration.ts",
+    "scripts/conversation-response-draft.behavior.ts",
     "scripts/production-readiness.behavior.ts",
     "src/lib/live-inventory.ts",
     "src/lib/orr-public-inventory.ts",
@@ -94,6 +95,7 @@
     "src/lib/conversation-response-queue.ts",
     "src/lib/conversation-response-preparation.ts",
     "src/lib/conversation-response-preparation-store.ts",
+    "src/lib/conversation-response-draft.ts",
     "src/lib/production-readiness.ts",
     "src/lib/inventory.ts"
   ]
