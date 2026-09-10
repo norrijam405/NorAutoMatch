@@ -39,6 +39,9 @@ jobs:
       - name: Challenge response preparation packet truth boundary
         run: node .tmp-inventory-tests/scripts/conversation-response-preparation.behavior.js
 
+      - name: Challenge response draft truth boundary
+        run: node .tmp-inventory-tests/scripts/conversation-response-draft.behavior.js
+
       - name: Clean generated verification output
         run: rm -rf .tmp-inventory-tests
 
