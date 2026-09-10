@@ -15,6 +15,20 @@ jobs:
   conversation-gateway-truth-boundary:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,6 +45,15 @@ jobs:
       - name: Dependency security gate
         run: npm audit --audit-level=high
 
+      - name: Apply checksum-bound production schema
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          node scripts/start-production.mjs
+          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc 'SELECT COUNT(*) FROM norautomatch_schema_migrations')" = "4"
+
       - name: Compile verification surface
         run: |
           rm -rf .tmp-inventory-tests
@@ -38,6 +61,11 @@ jobs:
 
       - name: Challenge provider-neutral conversation truth boundary
         run: node .tmp-inventory-tests/scripts/conversation-gateway.behavior.js
+
+      - name: Challenge durable replay-safe conversation identity
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/conversation-gateway-persistence.integration.js
 
       - name: Clean generated verification output
         run: rm -rf .tmp-inventory-tests
