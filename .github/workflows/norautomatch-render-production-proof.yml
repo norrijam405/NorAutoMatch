@@ -28,76 +28,31 @@ jobs:
         run: node scripts/verify-public-deployment.mjs "$BASE_URL" "$EXPECTED_RELEASE_SHA"
 
       - name: Submit unmistakably synthetic production lead
-        id: lead
         shell: bash
         run: |
           set -euo pipefail
           payload='{"firstName":"Synthetic","lastName":"LaunchProof","email":"synthetic-launch-proof@invalid.example","phone":"4055550199","budgetRange":"$400-$500","paymentMethod":"Financing","tradeIn":"","notes":"SYNTHETIC_PRODUCTION_VALIDATION — NOT A REAL CUSTOMER OR CONVERSION. Preserve only as deployment evidence.","source":"SYNTHETIC_PRODUCTION_VALIDATION","trigger":"retail","pipeline":"Standard Retail","shortlistedVehicleIds":[],"monthlyTarget":450,"downPayment":2000,"termMonths":72,"consent":true}'
           response_file="$(mktemp)"
-          status="$(curl --fail-with-body --silent --show-error -o "$response_file" -w '%{http_code}' \
-            -H 'content-type: application/json' \
-            --data "$payload" \
-            "$BASE_URL/api/leads")"
+          status="$(curl --silent --show-error -o "$response_file" -w '%{http_code}' -H 'content-type: application/json' --data "$payload" "$BASE_URL/api/leads")"
           cat "$response_file"
           test "$status" = "202"
-          node - "$response_file" <<'NODE'
-          const fs = require('fs');
-          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-          const ok = body.accepted === true
-            && typeof body.opportunityId === 'string'
-            && body.opportunityId.length > 0
-            && typeof body.handoffId === 'string'
-            && body.handoffId.length > 0
-            && ['COMMITTED', 'DEDUPLICATED'].includes(body.persistence)
-            && body.delivery === 'QUEUED';
-          if (!ok) {
-            console.error('FAIL_SYNTHETIC_LEAD_PERSISTENCE_PROOF', body);
-            process.exit(1);
-          }
-          console.log('PASS_SYNTHETIC_LEAD_PERSISTENCE_PROOF');
-          console.log(`PERSISTENCE=${body.persistence}`);
-          console.log(`OPPORTUNITY_ID=${body.opportunityId}`);
-          console.log(`HANDOFF_ID=${body.handoffId}`);
-NODE
+          jq -e '.accepted == true and (.opportunityId | type == "string" and length > 0) and (.handoffId | type == "string" and length > 0) and (.persistence == "COMMITTED" or .persistence == "DEDUPLICATED") and .delivery == "QUEUED"' "$response_file" >/dev/null
+          echo 'PASS_SYNTHETIC_LEAD_PERSISTENCE_PROOF'
+          jq -r '"PERSISTENCE=" + .persistence, "OPPORTUNITY_ID=" + .opportunityId, "HANDOFF_ID=" + .handoffId' "$response_file"
 
       - name: Emit production proof receipt
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p .validation
-          node - <<'NODE'
-          const fs = require('fs');
-          const crypto = require('crypto');
-          const receipt = {
-            receiptType: 'NORAUTOMATCH_RENDER_PRODUCTION_PROOF',
-            observedAt: new Date().toISOString(),
-            publicOrigin: process.env.BASE_URL,
-            expectedReleaseSha: process.env.EXPECTED_RELEASE_SHA,
-            inventoryPosture: 'REPRESENTATIVE_DEMO_ONLY',
-            customerVisibleLiveInventory: false,
-            syntheticLeadOnly: true,
-            proves: [
-              'public HTTPS service reachable',
-              'exact serving release identity matches expected SHA',
-              'public disclosure and internal-route boundaries pass reusable verifier',
-              'one unmistakably synthetic lead received HTTP 202 after durable CRM persistence returned COMMITTED or DEDUPLICATED'
-            ],
-            doesNotProve: [
-              'live Orr inventory activation',
-              'external CRM webhook delivery',
-              'real customer conversion',
-              'SOLD or LOST outcome',
-              'Windows user-live validation',
-              'independent Beta assurance'
-            ],
-            authorityEffect: 'NONE'
-          };
-          const canonical = JSON.stringify(receipt, null, 2) + '\n';
-          fs.writeFileSync('.validation/render-production-proof.json', canonical);
-          const sha = crypto.createHash('sha256').update(canonical).digest('hex');
-          fs.writeFileSync('.validation/render-production-proof.sha256', `${sha}  render-production-proof.json\n`);
-          console.log(canonical);
-          console.log(`RECEIPT_SHA256=${sha}`);
-NODE
+          jq -n \
+            --arg observedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg publicOrigin "$BASE_URL" \
+            --arg expectedReleaseSha "$EXPECTED_RELEASE_SHA" \
+            '{receiptType:"NORAUTOMATCH_RENDER_PRODUCTION_PROOF",observedAt:$observedAt,publicOrigin:$publicOrigin,expectedReleaseSha:$expectedReleaseSha,inventoryPosture:"REPRESENTATIVE_DEMO_ONLY",customerVisibleLiveInventory:false,syntheticLeadOnly:true,proves:["public HTTPS service reachable","exact serving release identity matches expected SHA","public disclosure and internal-route boundaries pass reusable verifier","one unmistakably synthetic lead received HTTP 202 after durable CRM persistence returned COMMITTED or DEDUPLICATED"],doesNotProve:["live Orr inventory activation","external CRM webhook delivery","real customer conversion","SOLD or LOST outcome","Windows user-live validation","independent Beta assurance"],authorityEffect:"NONE"}' > .validation/render-production-proof.json
+          sha256sum .validation/render-production-proof.json | sed 's#.validation/##' > .validation/render-production-proof.sha256
+          cat .validation/render-production-proof.json
+          cat .validation/render-production-proof.sha256
 
       - name: Upload production proof receipt
         uses: actions/upload-artifact@v4
