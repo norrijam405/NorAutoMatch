@@ -11,25 +11,27 @@ const event: ConversationEvent = {
   provider: "TEST_PROVIDER",
   eventId: "evt-1",
   conversationId: "conv-1",
-  occurredAt: "2026-09-10T16:59:00.000Z",
-  receivedAt: "2026-09-10T16:59:01.000Z",
+  eventType: "CONVERSATION_ENDED_OR_HANDOFF_READY",
+  observedAt: "2026-09-10T16:59:00.000Z",
   customer: {
     name: "Alex",
     email: "alex@example.com",
     phone: "+14055550100",
-    preferredContact: "SMS",
+    preferredContact: "TEXT",
     communicationConsent: true,
   },
   intent: {
+    category: "VEHICLE_INQUIRY",
     subjectRefs: ["stock-123"],
     questions: ["Is it available?", "What is the price?"],
     constraints: [],
     urgency: "HIGH",
   },
   summary: "Customer asked about current availability and price.",
-  provenance: {
-    sourceType: "AUTHORIZED_PROVIDER_EVENT",
+  evidence: {
+    transcriptAvailable: true,
     sourceRef: "provider:event:evt-1",
+    sourceHash: null,
   },
   authorityEffect: "NONE",
 };
@@ -104,5 +106,9 @@ const tooLongAvailabilityTtl = createEnrichedResponseDraft({
 });
 assert.equal(tooLongAvailabilityTtl.evidenceUsed.length, 0);
 assert.equal(tooLongAvailabilityTtl.rejectedEvidence[0]?.reason, "TTL_TOO_LONG");
+
+const malformed = createEnrichedResponseDraft({ packet, claims: [{ topic: "PRICE" }], now });
+assert.equal(malformed.evidenceUsed.length, 0);
+assert.equal(malformed.rejectedEvidence[0]?.reason, "INVALID_SHAPE");
 
 console.log("PASS_CONVERSATION_RESPONSE_ENRICHMENT_TRUTH_BOUNDARY");
