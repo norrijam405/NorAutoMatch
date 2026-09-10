@@ -1,0 +1,77 @@
+name: NorAutoMatch Deployment Repeatability CI
+
+on:
+  push:
+    branches:
+      - "candidate/**"
+      - "reactivation/**"
+  pull_request:
+    branches:
+      - main
+      - "reactivation/**"
+
+permissions:
+  contents: read
+
+jobs:
+  deployment-repeatability-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      NEXT_PUBLIC_SITE_URL: https://repeatability.invalid
+      NORAUTO_INVENTORY_MODE: demo
+      NORAUTO_LIVE_INVENTORY_ACTIVATION: ""
+      NORAUTO_REPEATABILITY_WORKSPACE_ID: norautomatch-repeatability-synthetic-v1
+      NORAUTO_RELEASE_SHA: ${{ github.sha }}
+      NORAUTO_REPEATABILITY_RECEIPT_PATH: artifacts/deployment-repeatability-preflight.json
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
+
+      - name: Generate deterministic repeatability preflight receipt
+        run: node scripts/deployment-repeatability-preflight.mjs
+
+      - name: Verify receipt truth boundaries
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile } from "node:fs/promises";
+          const receipt = JSON.parse(await readFile("artifacts/deployment-repeatability-preflight.json", "utf8"));
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          assert(receipt.status === "PREFLIGHT_VERIFIED_NOT_DEPLOYED", "preflight must not claim deployment");
+          assert(receipt.authorityEffect === "NONE", "preflight must have no authority effect");
+          assert(receipt.customerVisibleLiveInventory === false, "live inventory must remain off");
+          assert(receipt.outcomeClaims.deployed === false, "preflight must not claim deployed");
+          assert(receipt.outcomeClaims.serving === false, "preflight must not claim serving");
+          assert(receipt.outcomeClaims.databaseMigrated === false, "preflight must not claim database migration");
+          assert(receipt.outcomeClaims.leadPersisted === false, "preflight must not claim persisted lead");
+          assert(/^[0-9a-f]{64}$/.test(receipt.deploymentFingerprintSha256), "fingerprint must be SHA-256");
+          console.log("DEPLOYMENT_REPEATABILITY_PREFLIGHT_TRUTH_OK");
+          NODE
+
+      - name: Upload repeatability preflight artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: norautomatch-deployment-repeatability-preflight
+          path: artifacts/deployment-repeatability-preflight.json
+          if-no-files-found: error
