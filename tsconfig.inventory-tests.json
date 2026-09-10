@@ -63,6 +63,7 @@
     "src/lib/crm-core.ts",
     "src/lib/crm-outbox.ts",
     "src/lib/crm-follow-up.ts",
+    "src/lib/crm-appointment-queue.ts",
     "src/lib/crm-follow-up-command.ts",
     "src/lib/crm-follow-up-due.ts",
     "src/lib/crm-contact-confirmation-command.ts",
