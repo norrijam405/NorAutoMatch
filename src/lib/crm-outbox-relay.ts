@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import type { CrmOpportunity } from "./crm-core";
 import type { ManagerHandoffEnvelope } from "./manager-handoff";
+import { decideCrmRelayRetry } from "./crm-relay-retry-policy";
 
 export type ClaimedCrmOutboxEvent = {
   eventId: string;
@@ -47,12 +48,6 @@ export type CrmRelayOutcome =
 function safeError(error: unknown) {
   const text = error instanceof Error ? error.message : String(error);
   return text.slice(0, 1000);
-}
-
-function retryDelayMs(attempt: number) {
-  const base = 5_000;
-  const cappedExponent = Math.min(Math.max(attempt - 1, 0), 8);
-  return Math.min(base * 2 ** cappedExponent, 15 * 60_000);
 }
 
 function requireDeliveryUrl(rawUrl: string, allowInsecureLocalhost: boolean) {
@@ -227,8 +222,10 @@ async function markDelivered(pool: Pool, event: ClaimedCrmOutboxEvent) {
 }
 
 async function markFailure(pool: Pool, event: ClaimedCrmOutboxEvent, error: unknown): Promise<CrmRelayOutcome> {
-  const parked = event.attempts >= event.maxAttempts;
-  const nextAttemptAt = parked ? null : new Date(Date.now() + retryDelayMs(event.attempts)).toISOString();
+  const retryDecision = decideCrmRelayRetry({ attempt: event.attempts, maxAttempts: event.maxAttempts });
+  const nextAttemptAt = retryDecision.state === "PARKED"
+    ? null
+    : new Date(Date.now() + retryDecision.delayMs).toISOString();
   const result = await pool.query(
     `UPDATE crm_outbox
      SET delivery_state = 'FAILED',
@@ -239,7 +236,7 @@ async function markFailure(pool: Pool, event: ClaimedCrmOutboxEvent, error: unkn
     [event.eventId, event.claimToken, nextAttemptAt, safeError(error)],
   );
   if (result.rowCount !== 1) throw new Error("CRM relay lost its claim before recording failure.");
-  return parked
+  return retryDecision.state === "PARKED"
     ? { eventId: event.eventId, status: "PARKED", attempt: event.attempts }
     : { eventId: event.eventId, status: "RETRY_SCHEDULED", attempt: event.attempts, nextAttemptAt: nextAttemptAt! };
 }
