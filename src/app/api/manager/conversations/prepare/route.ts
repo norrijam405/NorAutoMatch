@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { NORAUTO_WORKSPACE_ID } from "@/lib/crm-persistence";
 import { createPostgresCrmPool } from "@/lib/crm-postgres-adapter";
 import { authorizeManagerSession } from "@/lib/manager-session-auth";
+import { createResponseDraft } from "@/lib/conversation-response-draft";
 import { readResponsePreparationPacket } from "@/lib/conversation-response-preparation-store";
 
 export const runtime = "nodejs";
@@ -52,11 +53,14 @@ export async function GET(request: Request) {
     });
     if (!packet) return noStore({ message: "Response preparation evidence was not found or is not eligible." }, 404);
 
+    const draft = createResponseDraft(packet);
+
     return noStore({
-      protocol: "NORAUTO_MANAGER_RESPONSE_PREPARATION_V1",
-      truthState: "DRAFT_PREPARATION_ONLY",
+      protocol: "NORAUTO_MANAGER_RESPONSE_PREPARATION_V2",
+      truthState: "DRAFT_ONLY",
       authorityEffect: "NONE",
       packet,
+      draft,
     }, 200);
   } catch {
     return noStore({ message: "Response preparation failed safely." }, 503);
