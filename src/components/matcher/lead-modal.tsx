@@ -18,6 +18,14 @@ interface LeadModalProps {
   context?: string;
 }
 
+type LeadReceipt = {
+  opportunityId?: string;
+  handoffId?: string;
+  persistence?: "COMMITTED" | "DEDUPLICATED" | string;
+  delivery?: string;
+  workflowState?: string;
+};
+
 export function LeadModal(props: LeadModalProps) {
   if (!props.open) return null;
   return <LeadModalContent {...props} />;
@@ -33,6 +41,7 @@ function LeadModalContent({
   context,
 }: LeadModalProps) {
   const [submitted, setSubmitted] = useState(false);
+  const [receipt, setReceipt] = useState<LeadReceipt | null>(null);
   const [serverError, setServerError] = useState("");
   const pipeline = trigger === "trapdoor" ? "Vehicle Sourcing" : "Standard Retail";
 
@@ -82,13 +91,24 @@ function LeadModalContent({
       body: JSON.stringify(values),
     });
 
+    const data = await response.json().catch(() => null);
     if (!response.ok) {
-      const data = await response.json().catch(() => null);
       setServerError(data?.message || "I couldn’t send that yet. Call or text (405) 861-0061 instead.");
       return;
     }
+
+    setReceipt({
+      opportunityId: data?.opportunityId,
+      handoffId: data?.handoffId,
+      persistence: data?.persistence,
+      delivery: data?.delivery,
+      workflowState: data?.workflowState,
+    });
     setSubmitted(true);
   }
+
+  const customerReference = receipt?.opportunityId || receipt?.handoffId;
+  const requestWasRecovered = receipt?.persistence === "DEDUPLICATED";
 
   return (
     <div className="fixed inset-0 z-[80] grid place-items-end bg-slate-950/80 p-0 backdrop-blur-sm sm:place-items-center sm:p-5" role="dialog" aria-modal="true" aria-labelledby="lead-modal-title" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -105,10 +125,29 @@ function LeadModalContent({
         </div>
 
         {submitted ? (
-          <div className="px-6 py-16 text-center sm:px-10">
+          <div className="px-6 py-14 text-center sm:px-10 sm:py-16">
             <span className="mx-auto grid size-16 place-items-center rounded-full bg-emerald-400/10 text-emerald-300"><CheckCircle2 size={34} /></span>
-            <h3 className="mt-6 text-3xl font-black text-white">You’re in the right lane.</h3>
-            <p className="mx-auto mt-3 max-w-md leading-7 text-slate-400">Your request is routed to <strong className="text-slate-200">{pipeline}</strong>. Expect a direct call or text from 405-861-0061.</p>
+            <h3 className="mt-6 text-3xl font-black text-white">{requestWasRecovered ? "Your request is already in the lane." : "Your request is saved."}</h3>
+            <p className="mx-auto mt-3 max-w-md leading-7 text-slate-400">{requestWasRecovered ? "I found the existing request instead of creating a duplicate." : "NorAuto Match recorded your request successfully."} The next step is a direct call or text from <strong className="text-slate-200">405-861-0061</strong>.</p>
+
+            <div className="mx-auto mt-6 max-w-md rounded-2xl border border-white/10 bg-slate-950/55 p-4 text-left">
+              <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-3">
+                <span className="text-xs font-bold uppercase tracking-[.12em] text-slate-500">Pipeline</span>
+                <span className="text-sm font-black text-white">{pipeline}</span>
+              </div>
+              {customerReference && (
+                <div className="flex items-start justify-between gap-4 border-b border-white/10 py-3">
+                  <span className="text-xs font-bold uppercase tracking-[.12em] text-slate-500">Request ref</span>
+                  <code className="max-w-[68%] break-all text-right text-xs font-bold text-amber-200">{customerReference}</code>
+                </div>
+              )}
+              <div className="flex items-start justify-between gap-4 pt-3">
+                <span className="text-xs font-bold uppercase tracking-[.12em] text-slate-500">Current status</span>
+                <span className="text-right text-xs font-bold text-emerald-200">Saved · awaiting human follow-up</span>
+              </div>
+            </div>
+
+            <p className="mx-auto mt-5 max-w-md text-xs leading-5 text-slate-500">This confirmation means your request was saved. It does not mean a vehicle is reserved, financing is approved, or a dealership transaction is complete.</p>
             <button onClick={onClose} className="btn-primary mt-8">Back to the matcher</button>
           </div>
         ) : (
