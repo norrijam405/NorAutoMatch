@@ -4,6 +4,7 @@ import { createPostgresCrmPool } from "@/lib/crm-postgres-adapter";
 import { authorizeManagerSession } from "@/lib/manager-session-auth";
 import { createResponseDraft } from "@/lib/conversation-response-draft";
 import { createEnrichedResponseDraft } from "@/lib/conversation-response-enrichment";
+import { createResponseEvidencePassport } from "@/lib/evidence-passport";
 import { readResponsePreparationPacket } from "@/lib/conversation-response-preparation-store";
 
 export const runtime = "nodejs";
@@ -118,12 +119,14 @@ export async function POST(request: Request) {
     if (!packet) return noStore({ message: "Response preparation evidence was not found or is not eligible." }, 404);
 
     const draft = createEnrichedResponseDraft({ packet, claims });
+    const evidencePassport = createResponseEvidencePassport({ packet, draft });
     return noStore({
-      protocol: "NORAUTO_MANAGER_RESPONSE_PREPARATION_V3",
-      truthState: "DRAFT_WITH_EVIDENCE_ONLY",
+      protocol: "NORAUTO_MANAGER_RESPONSE_PREPARATION_V4",
+      truthState: "EVIDENCE_BOUND_DRAFT_ONLY",
       authorityEffect: "NONE",
       packet,
       draft,
+      evidencePassport,
     }, 200);
   } catch {
     return noStore({ message: "Response evidence enrichment failed safely." }, 503);
