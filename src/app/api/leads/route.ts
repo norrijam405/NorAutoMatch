@@ -6,39 +6,82 @@ import { classifyLeadInventoryEvidence } from "@/lib/lead-inventory-evidence";
 import { leadSchema } from "@/lib/lead-schema";
 import { createManagerHandoff } from "@/lib/manager-handoff";
 import { loadOrrCustomerCatalog } from "@/lib/orr-customer-catalog";
+import {
+  MemoryPublicAbuseCounterStore,
+  evaluatePublicAbuse,
+  extractPublicNetworkSubject,
+} from "@/lib/public-abuse-control";
+import { PostgresPublicAbuseCounterStore } from "@/lib/public-abuse-postgres";
 import { readJsonBodyWithByteLimit } from "@/lib/request-body-limit";
 
 export const runtime = "nodejs";
 
 const MAX_LEAD_REQUEST_BYTES = 32 * 1024;
-const requests = new Map<string, { count: number; expires: number }>();
+const DEVELOPMENT_ABUSE_HMAC_SECRET = "development-only-norautomatch-public-abuse-v1";
+const localPublicAbuseStore = new MemoryPublicAbuseCounterStore();
 let crmPool: ReturnType<typeof createPostgresCrmPool> | undefined;
+let postgresPublicAbuseStore: PostgresPublicAbuseCounterStore | undefined;
 
-function isRateLimited(ip: string) {
-  const now = Date.now();
-  const record = requests.get(ip);
-  if (!record || record.expires < now) {
-    requests.set(ip, { count: 1, expires: now + 10 * 60 * 1000 });
-    return false;
-  }
-  record.count += 1;
-  requests.set(ip, record);
-  return record.count > 5;
-}
-
-function getCrmPersistenceAdapter() {
+function getCrmPool() {
   const connectionString = process.env.NORAUTO_CRM_DATABASE_URL?.trim();
   if (!connectionString) return null;
   crmPool ??= createPostgresCrmPool(connectionString);
-  return new PostgresCrmPersistenceAdapter(crmPool);
+  return crmPool;
+}
+
+function getCrmPersistenceAdapter() {
+  const pool = getCrmPool();
+  if (!pool) return null;
+  return new PostgresCrmPersistenceAdapter(pool);
+}
+
+function getPublicAbuseGuard() {
+  if (process.env.NODE_ENV !== "production") {
+    return {
+      store: localPublicAbuseStore,
+      hmacSecret: DEVELOPMENT_ABUSE_HMAC_SECRET,
+    };
+  }
+
+  const hmacSecret = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_SECRET?.trim();
+  const pool = getCrmPool();
+  if (!pool || !hmacSecret || hmacSecret.length < 32) return null;
+
+  postgresPublicAbuseStore ??= new PostgresPublicAbuseCounterStore(pool);
+  return { store: postgresPublicAbuseStore, hmacSecret };
 }
 
 export async function POST(request: Request) {
-  // This local limiter is development/defense-in-depth friction only. It is not
-  // represented as durable or distributed production abuse protection.
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  if (isRateLimited(ip)) {
-    return NextResponse.json({ message: "Too many requests. Call or text (405) 861-0061." }, { status: 429 });
+  const abuseGuard = getPublicAbuseGuard();
+  if (!abuseGuard) {
+    return NextResponse.json(
+      { message: "Online intake protection is being connected. Call or text (405) 861-0061 for a direct response." },
+      { status: 503 },
+    );
+  }
+
+  try {
+    const abuseDecision = await evaluatePublicAbuse({
+      store: abuseGuard.store,
+      networkSubject: extractPublicNetworkSubject(request),
+      hmacSecret: abuseGuard.hmacSecret,
+    });
+
+    if (!abuseDecision.allowed) {
+      const retryAfterSeconds = Math.max(
+        1,
+        Math.ceil((Date.parse(abuseDecision.resetAt) - Date.now()) / 1000),
+      );
+      return NextResponse.json(
+        { message: "Too many requests. Call or text (405) 861-0061." },
+        { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
+      );
+    }
+  } catch {
+    return NextResponse.json(
+      { message: "Online intake protection is temporarily unavailable. Call or text (405) 861-0061 for a direct response." },
+      { status: 503 },
+    );
   }
 
   const bodyRead = await readJsonBodyWithByteLimit(request, MAX_LEAD_REQUEST_BYTES);
