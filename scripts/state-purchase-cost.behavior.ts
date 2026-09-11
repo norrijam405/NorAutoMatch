@@ -14,6 +14,9 @@ function run() {
   assert(california.startingVehiclePrice === 25000, "Starting vehicle price should remain displayable as starting price.");
   assert(california.dueAtDealer === undefined, "Unverified jurisdiction must not emit due-at-dealer purchase-cost calculation.");
   assert(california.estimatedPurchaseTotal === undefined, "Unverified jurisdiction must not emit a purchase total.");
+  assert(california.legalBoundary.authorityEffect === "NONE", "State-cost runtime must not create authority.");
+  assert(california.legalBoundary.externalActionAuthority === "DENY_BY_DEFAULT", "State-cost runtime must not create external legal action authority.");
+  assert(california.legalBoundary.legalAdviceClaimed === false, "State-cost runtime must not claim legal advice.");
 
   const oklahomaPartial = evaluateStatePurchaseCost({
     jurisdiction: "ok",
@@ -78,6 +81,7 @@ function run() {
   assert(texasVerified.estimatedPurchaseTotal === 32100, "Complete verified inputs should produce an estimated purchase total.");
   assert(texasVerified.truthState === "VERIFIED_CURRENT", "Complete verified Texas inputs may reach VERIFIED_CURRENT for the bounded runtime.");
   assert(texasVerified.labels.total === "ESTIMATED_PURCHASE_TOTAL", "Runtime must not label computed result as final/true OTD.");
+  assert(texasVerified.legalBoundary.regulatoryApprovalClaimed === false, "Verified computation must not be misrepresented as regulatory approval.");
 
   let rejectedFalseCompleteness = false;
   try {
