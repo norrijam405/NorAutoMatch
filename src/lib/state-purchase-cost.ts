@@ -1,5 +1,4 @@
 export type StatePurchaseCostTruthState =
-  | "VERIFIED_CURRENT"
   | "PARTIALLY_VERIFIED"
   | "UNVERIFIED_DO_NOT_CALCULATE"
   | "STALE_REVIEW_REQUIRED";
@@ -21,6 +20,7 @@ export type StatePurchaseCostInput = {
   taxBasisProvenance?: string;
   verifiedAdditionalGovernmentCharges?: VerifiedGovernmentCharge[];
   governmentChargesComplete?: boolean;
+  governmentChargesCompletenessProvenance?: string;
   ordinaryDealerSale?: boolean;
 };
 
@@ -125,9 +125,12 @@ export function evaluateStatePurchaseCost(input: StatePurchaseCostInput): StateP
   const government = partitionGovernmentCharges(input.verifiedAdditionalGovernmentCharges);
   const hasGovernmentChargeEvidence = Boolean(input.verifiedAdditionalGovernmentCharges?.length);
   const governmentChargesComplete = input.governmentChargesComplete === true;
+  const completenessProvenancePresent = Boolean(input.governmentChargesCompletenessProvenance?.trim());
 
-  if (governmentChargesComplete && !hasGovernmentChargeEvidence) {
-    throw new Error("governmentChargesComplete cannot be true without verified government charge evidence");
+  if (governmentChargesComplete && (!hasGovernmentChargeEvidence || !completenessProvenancePresent)) {
+    throw new Error(
+      "governmentChargesComplete requires verified government charge evidence and completeness provenance",
+    );
   }
 
   if (jurisdiction === "OK") {
@@ -144,6 +147,9 @@ export function evaluateStatePurchaseCost(input: StatePurchaseCostInput): StateP
     if (governmentChargesComplete) {
       result.estimatedPurchaseTotal = money(result.dueAtDealer + government.later);
       result.labels.total = "ESTIMATED_PURCHASE_TOTAL";
+      result.limitations.push(
+        "Estimated total relies on caller-supplied completeness evidence; this runtime does not independently validate that evidence and therefore remains PARTIALLY_VERIFIED.",
+      );
     } else if (hasGovernmentChargeEvidence) {
       result.limitations.push(
         "Some verified government charges are present, but completeness has not been established; no total is emitted.",
@@ -184,7 +190,9 @@ export function evaluateStatePurchaseCost(input: StatePurchaseCostInput): StateP
     if (taxBasisSupported && governmentChargesComplete) {
       result.estimatedPurchaseTotal = money(result.dueAtDealer + government.later);
       result.labels.total = "ESTIMATED_PURCHASE_TOTAL";
-      result.truthState = "VERIFIED_CURRENT";
+      result.limitations.push(
+        "Estimated total relies on caller-supplied tax-basis and completeness provenance; this runtime does not independently validate those evidence objects and therefore remains PARTIALLY_VERIFIED.",
+      );
     }
     return result;
   }
