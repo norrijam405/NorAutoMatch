@@ -1,0 +1,54 @@
+name: NorAutoMatch Purchase Estimate CI
+
+on:
+  push:
+    branches:
+      - "candidate/**"
+      - "reactivation/**"
+  pull_request:
+    branches:
+      - main
+      - "reactivation/**"
+
+permissions:
+  contents: read
+
+jobs:
+  purchase-estimate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+
+      - name: Compile purchase estimate policy tests
+        run: |
+          rm -rf .tmp-purchase-estimate-endpoint
+          npx tsc -p tsconfig.purchase-estimate-endpoint-tests.json
+
+      - name: Run purchase estimate policy challenges
+        run: node .tmp-purchase-estimate-endpoint/scripts/purchase-estimate-endpoint-policy.behavior.js
+
+      - name: Clean test output
+        run: rm -rf .tmp-purchase-estimate-endpoint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
