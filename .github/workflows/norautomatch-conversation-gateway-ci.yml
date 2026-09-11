@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+      - "reactivation/**"
 
 permissions:
   contents: read
@@ -52,7 +53,7 @@ jobs:
           NORAUTO_RELEASE_SHA: ${{ github.sha }}
         run: |
           node scripts/start-production.mjs
-          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc 'SELECT COUNT(*) FROM norautomatch_schema_migrations')" = "4"
+          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc 'SELECT COUNT(*) FROM norautomatch_schema_migrations')" = "5"
 
       - name: Compile verification surface
         run: |
@@ -62,8 +63,13 @@ jobs:
       - name: Challenge provider-neutral conversation truth boundary
         run: node .tmp-inventory-tests/scripts/conversation-gateway.behavior.js
 
-      - name: Challenge fail-closed gateway bearer boundary
-        run: node .tmp-inventory-tests/scripts/conversation-gateway-auth.behavior.js
+      - name: Challenge scoped short-lived machine assertion boundary
+        run: node .tmp-inventory-tests/scripts/machine-service-auth.behavior.js
+
+      - name: Challenge durable one-time machine assertion nonce consumption
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/machine-service-replay.integration.js
 
       - name: Challenge provider adapter authorization gate
         run: node .tmp-inventory-tests/scripts/conversation-provider-adapter.behavior.js
