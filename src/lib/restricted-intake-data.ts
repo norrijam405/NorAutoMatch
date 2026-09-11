@@ -5,8 +5,16 @@ export type RestrictedIntakeReason =
   | "BANK_ACCOUNT_LIKE_VALUE"
   | "DRIVER_LICENSE_LIKE_VALUE";
 
+export type RestrictedIntakeField =
+  | "firstName"
+  | "lastName"
+  | "budgetRange"
+  | "tradeIn"
+  | "notes"
+  | "source";
+
 export type RestrictedIntakeFinding = {
-  field: "tradeIn" | "notes";
+  field: RestrictedIntakeField;
   reason: RestrictedIntakeReason;
 };
 
@@ -53,13 +61,18 @@ function containsDriverLicenseLikeValue(text: string) {
   return /\b(?:driver'?s?\s+license|dl)\s*(?:number|no\.?|#|:|is)\s*[A-Z0-9][A-Z0-9-]{4,19}\b/i.test(text);
 }
 
-export function findRestrictedIntakeData(input: {
-  tradeIn?: string;
-  notes?: string;
-}): RestrictedIntakeFinding[] {
+export function findRestrictedIntakeData(input: Partial<Record<RestrictedIntakeField, string>>): RestrictedIntakeFinding[] {
   const findings: RestrictedIntakeFinding[] = [];
+  const fields: RestrictedIntakeField[] = [
+    "firstName",
+    "lastName",
+    "budgetRange",
+    "tradeIn",
+    "notes",
+    "source",
+  ];
 
-  for (const field of ["tradeIn", "notes"] as const) {
+  for (const field of fields) {
     const text = input[field]?.trim() ?? "";
     if (!text) continue;
 
