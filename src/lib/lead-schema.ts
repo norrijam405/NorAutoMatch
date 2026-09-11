@@ -6,7 +6,7 @@ export const leadSchema = z.object({
   lastName: z.string().trim().min(2).max(60),
   email: z.string().trim().email(),
   phone: z.string().trim().min(10).max(24),
-  budgetRange: z.string().trim().min(1),
+  budgetRange: z.string().trim().min(1).max(100),
   paymentMethod: z.enum(["Cash", "Financing", "Lease"]),
   tradeIn: z.string().trim().max(500).optional().default(""),
   notes: z.string().trim().max(1000).optional().default(""),
@@ -23,7 +23,7 @@ export const leadSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: [finding.field],
-      message: "Please remove sensitive financial or identity information from this field.",
+      message: `[${finding.reason}] Please remove sensitive financial or identity information from this field.`,
       params: { reason: finding.reason },
     });
   }
