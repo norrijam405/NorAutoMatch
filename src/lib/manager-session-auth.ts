@@ -24,11 +24,13 @@ export type ManagerSessionAuthResult =
         | "INVALID_SIGNATURE"
         | "INVALID_CLAIMS"
         | "EXPIRED"
-        | "WRONG_WORKSPACE";
+        | "WRONG_WORKSPACE"
+        | "REVOKED";
     };
 
 const MAX_SESSION_LIFETIME_SECONDS = 60 * 60;
 const CLOCK_SKEW_SECONDS = 30;
+const MAX_REVOKED_NONCES = 256;
 
 function b64url(input: Buffer | string) {
   return Buffer.from(input).toString("base64url");
@@ -74,14 +76,38 @@ function parseClaims(encodedPayload: string): ManagerSessionClaims | undefined {
   }
 }
 
+function secureSignatureMatch(supplied: Buffer, expected: Buffer) {
+  return supplied.length === expected.length && timingSafeEqual(supplied, expected);
+}
+
+function parseRevokedNonces(raw: string | undefined): Set<string> | undefined {
+  const value = raw?.trim();
+  if (!value) return new Set();
+
+  const entries = value.split(",").map((entry) => entry.trim()).filter(Boolean);
+  if (entries.length > MAX_REVOKED_NONCES) return undefined;
+  if (entries.some((entry) => entry.length < 16 || entry.length > 256)) return undefined;
+  return new Set(entries);
+}
+
 export function authorizeManagerSession(input: {
   authorizationHeader: string | null | undefined;
   configuredSecret: string | undefined;
+  configuredPreviousSecret?: string | undefined;
+  revokedNonces?: string | undefined;
   expectedWorkspaceId: string;
   nowEpochSeconds?: number;
 }): ManagerSessionAuthResult {
   const secret = configuredSecret(input.configuredSecret);
   if (!secret) return { authorized: false, reason: "NOT_CONFIGURED" };
+
+  const previousRaw = input.configuredPreviousSecret ?? process.env.NORAUTO_MANAGER_SESSION_PREVIOUS_SECRET;
+  const previousSecret = previousRaw?.trim() ? configuredSecret(previousRaw) : undefined;
+  if (previousRaw?.trim() && !previousSecret) return { authorized: false, reason: "NOT_CONFIGURED" };
+  if (previousSecret && previousSecret === secret) return { authorized: false, reason: "NOT_CONFIGURED" };
+
+  const revoked = parseRevokedNonces(input.revokedNonces ?? process.env.NORAUTO_MANAGER_REVOKED_SESSION_NONCES);
+  if (!revoked) return { authorized: false, reason: "NOT_CONFIGURED" };
 
   const token = readBearer(input.authorizationHeader);
   if (!token) return { authorized: false, reason: "MISSING_TOKEN" };
@@ -95,8 +121,12 @@ export function authorizeManagerSession(input: {
   } catch {
     return { authorized: false, reason: "MALFORMED_TOKEN" };
   }
-  const expectedSignature = sign(parts[0], secret);
-  if (suppliedSignature.length !== expectedSignature.length || !timingSafeEqual(suppliedSignature, expectedSignature)) {
+
+  const currentMatch = secureSignatureMatch(suppliedSignature, sign(parts[0], secret));
+  const previousMatch = previousSecret
+    ? secureSignatureMatch(suppliedSignature, sign(parts[0], previousSecret))
+    : false;
+  if (!currentMatch && !previousMatch) {
     return { authorized: false, reason: "INVALID_SIGNATURE" };
   }
 
@@ -106,6 +136,10 @@ export function authorizeManagerSession(input: {
   const expectedWorkspaceId = input.expectedWorkspaceId.trim();
   if (!expectedWorkspaceId || claims.workspaceId !== expectedWorkspaceId) {
     return { authorized: false, reason: "WRONG_WORKSPACE" };
+  }
+
+  if (revoked.has(claims.nonce)) {
+    return { authorized: false, reason: "REVOKED" };
   }
 
   const now = input.nowEpochSeconds ?? Math.floor(Date.now() / 1000);
@@ -127,6 +161,7 @@ export function authorizeManagerSession(input: {
 }
 
 // Issuance belongs behind a trusted identity boundary. There is intentionally no public HTTP issuer route.
+// New sessions are always signed with the current secret; the previous secret is verification-only during rollover.
 export function createManagerSessionTokenForTrustedIssuer(input: {
   claims: ManagerSessionClaims;
   configuredSecret: string;
