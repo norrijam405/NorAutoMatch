@@ -8,6 +8,7 @@ import {
   executeCrmPersistencePlan,
   type CrmPersistenceAdapter,
 } from "./crm-persistence";
+import { findRestrictedIntakeData } from "./restricted-intake-data";
 
 export type CrmLeadIntakeResult = {
   opportunityId: string;
@@ -26,6 +27,15 @@ export async function persistLeadAsCrmOpportunity(input: {
   adapter: CrmPersistenceAdapter;
   workspaceId?: string;
 }): Promise<CrmLeadIntakeResult> {
+  const restrictedFindings = findRestrictedIntakeData(input.lead);
+  if (restrictedFindings.length > 0) {
+    const boundedReasons = restrictedFindings
+      .map((finding) => `${finding.field}:${finding.reason}`)
+      .sort()
+      .join(",");
+    throw new Error(`CRM intake rejected restricted data (${boundedReasons}).`);
+  }
+
   const opportunity = createCrmOpportunity({
     lead: input.lead,
     inventoryEvidence: input.inventoryEvidence,
