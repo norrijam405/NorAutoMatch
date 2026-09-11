@@ -88,6 +88,26 @@ function run() {
   );
   assert(!futureEvidence.valid && futureEvidence.reasons.includes("EVIDENCE_FROM_FUTURE"), "Future-dated evidence must fail closed.");
 
+  const oldOfficialEvidence = verifyStateCostEvidencePackage(
+    {
+      packageId: "sce_tx_old_official",
+      jurisdiction: "TX",
+      ruleSources: [txDmv],
+      evidence: [
+        {
+          evidenceId: "old_title_rule",
+          jurisdiction: "TX",
+          evidenceClass: "OFFICIAL_GOVERNMENT_SOURCE",
+          sourceUrl: txDmv,
+          observedAt: "2026-08-01T08:00:00.000Z",
+        },
+      ],
+      calculationInput: { jurisdiction: "TX", startingVehiclePrice: 30000 },
+    },
+    nowMs,
+  );
+  assert(!oldOfficialEvidence.valid && oldOfficialEvidence.reasons.includes("OFFICIAL_EVIDENCE_PREDATES_RULE_VERIFICATION"), "Official evidence older than the current rule-verification baseline must fail closed.");
+
   const forgedRule = verifyStateCostEvidencePackage(
     {
       packageId: "sce_tx_bad_rule",
