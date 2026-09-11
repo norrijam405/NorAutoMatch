@@ -4,10 +4,11 @@ export type StatePurchaseCostTruthState =
   | "UNVERIFIED_DO_NOT_CALCULATE"
   | "STALE_REVIEW_REQUIRED";
 
-export type VerifiedAmount = {
+export type VerifiedGovernmentCharge = {
   amount: number;
   provenance: string;
   verifiedAt: string;
+  collectionTiming: "DEALER" | "LATER";
 };
 
 export type StatePurchaseCostInput = {
@@ -18,7 +19,7 @@ export type StatePurchaseCostInput = {
   otherDealerFees?: number;
   taxBasisAmount?: number;
   taxBasisProvenance?: string;
-  verifiedAdditionalGovernmentCharges?: VerifiedAmount[];
+  verifiedAdditionalGovernmentCharges?: VerifiedGovernmentCharge[];
   ordinaryDealerSale?: boolean;
 };
 
@@ -60,6 +61,30 @@ function dealerSubtotal(input: StatePurchaseCostInput) {
   );
 }
 
+function partitionGovernmentCharges(charges: VerifiedGovernmentCharge[] = []) {
+  for (const charge of charges) {
+    if (!Number.isFinite(charge.amount) || charge.amount < 0) {
+      throw new Error("verified government charges must be finite non-negative amounts");
+    }
+    if (!charge.provenance.trim() || !charge.verifiedAt.trim()) {
+      throw new Error("verified government charges require provenance and verifiedAt");
+    }
+  }
+
+  return {
+    dealer: money(
+      charges
+        .filter((charge) => charge.collectionTiming === "DEALER")
+        .reduce((sum, charge) => sum + charge.amount, 0),
+    ),
+    later: money(
+      charges
+        .filter((charge) => charge.collectionTiming === "LATER")
+        .reduce((sum, charge) => sum + charge.amount, 0),
+    ),
+  };
+}
+
 function baseResult(input: StatePurchaseCostInput): StatePurchaseCostResult {
   return {
     jurisdiction: input.jurisdiction.trim().toUpperCase(),
@@ -82,22 +107,22 @@ export function evaluateStatePurchaseCost(input: StatePurchaseCostInput): StateP
 
   const result = baseResult(input);
   const jurisdiction = result.jurisdiction;
+  const government = partitionGovernmentCharges(input.verifiedAdditionalGovernmentCharges);
+  const hasGovernmentChargeEvidence = Boolean(input.verifiedAdditionalGovernmentCharges?.length);
 
   if (jurisdiction === "OK") {
     result.ruleLastVerified = "2026-09-10";
     result.truthState = "PARTIALLY_VERIFIED";
-    result.dueAtDealer = dealerSubtotal(input);
+    result.dueAtDealer = money(dealerSubtotal(input) + government.dealer);
+    if (government.later > 0) result.dueLaterToStateOrLocalAuthority = government.later;
+
     result.limitations.push(
-      "Oklahoma workflow is verified, but the current canonical contract does not contain a tax-rate/basis implementation sufficient to calculate taxes, title, registration, or a complete purchase total.",
-      "Dealer generally does not collect all title/tax/license amounts at sale under the verified workflow; deal-specific government charges must come from official current evidence.",
+      "Oklahoma workflow is verified, but the current canonical contract does not contain a tax-rate/basis implementation sufficient to independently calculate taxes, title, registration, or a complete purchase total.",
+      "Dealer generally does not collect all title/tax/license amounts at sale under the verified workflow; deal-specific government charges must come from official current evidence with collection timing.",
     );
 
-    if (input.verifiedAdditionalGovernmentCharges?.length) {
-      const verifiedGovernment = money(
-        input.verifiedAdditionalGovernmentCharges.reduce((sum, charge) => sum + charge.amount, 0),
-      );
-      result.dueLaterToStateOrLocalAuthority = verifiedGovernment;
-      result.estimatedPurchaseTotal = money(result.dueAtDealer + verifiedGovernment);
+    if (hasGovernmentChargeEvidence) {
+      result.estimatedPurchaseTotal = money(result.dueAtDealer + government.later);
       result.labels.total = "ESTIMATED_PURCHASE_TOTAL";
     }
     return result;
@@ -123,21 +148,17 @@ export function evaluateStatePurchaseCost(input: StatePurchaseCostInput): StateP
       );
     }
 
-    if (input.verifiedAdditionalGovernmentCharges?.length) {
-      const verifiedGovernment = money(
-        input.verifiedAdditionalGovernmentCharges.reduce((sum, charge) => sum + charge.amount, 0),
-      );
-      result.dueAtDealer = money(result.dueAtDealer + verifiedGovernment);
-    } else {
+    result.dueAtDealer = money(result.dueAtDealer + government.dealer);
+    if (government.later > 0) result.dueLaterToStateOrLocalAuthority = government.later;
+
+    if (!hasGovernmentChargeEvidence) {
       result.limitations.push(
         "Title, registration, plate, local, and other deal-specific government charges are not assumed from the state tax rate.",
       );
     }
 
-    const hasCompleteKnownTax = taxBasisSupported;
-    const hasAdditionalGovernmentCharges = Boolean(input.verifiedAdditionalGovernmentCharges?.length);
-    if (hasCompleteKnownTax && hasAdditionalGovernmentCharges) {
-      result.estimatedPurchaseTotal = result.dueAtDealer;
+    if (taxBasisSupported && hasGovernmentChargeEvidence) {
+      result.estimatedPurchaseTotal = money(result.dueAtDealer + government.later);
       result.labels.total = "ESTIMATED_PURCHASE_TOTAL";
       result.truthState = "VERIFIED_CURRENT";
     }
