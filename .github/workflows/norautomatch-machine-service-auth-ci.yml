@@ -55,7 +55,7 @@ jobs:
           node scripts/start-production.mjs
           node scripts/start-production.mjs
           test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc 'SELECT COUNT(*) FROM norautomatch_schema_migrations')" = "5"
-          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc \"SELECT to_regclass('public.crm_machine_assertion_nonces') IS NOT NULL\")" = "t"
+          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.crm_machine_assertion_nonces') IS NOT NULL")" = "t"
 
       - name: Compile security verification surface
         run: |
