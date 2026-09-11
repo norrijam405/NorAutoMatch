@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { findRestrictedIntakeData } from "@/lib/restricted-intake-data";
 
 export const leadSchema = z.object({
   firstName: z.string().trim().min(2).max(60),
@@ -17,6 +18,15 @@ export const leadSchema = z.object({
   downPayment: z.number().min(0).max(100000).optional(),
   termMonths: z.number().min(12).max(120).optional(),
   consent: z.literal(true),
+}).superRefine((lead, ctx) => {
+  for (const finding of findRestrictedIntakeData(lead)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [finding.field],
+      message: "Please remove sensitive financial or identity information from this field.",
+      params: { reason: finding.reason },
+    });
+  }
 });
 
 export type LeadPayload = z.infer<typeof leadSchema>;
