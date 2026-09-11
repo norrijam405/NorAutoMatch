@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { evaluateInstructionPrecedence } from "../src/lib/authority-precedence";
 import { decideCrmRelayRetry } from "../src/lib/crm-relay-retry-policy";
 import { evaluateWorkspaceAction, type WorkspaceActionPolicy } from "../src/lib/workspace-policy-runtime";
+import type { ConversationEvent } from "../src/lib/conversation-gateway";
+import { createResponsePreparationPacket } from "../src/lib/conversation-response-preparation";
+import { createEnrichedResponseDraft } from "../src/lib/conversation-response-enrichment";
+import { createResponseEvidencePassport } from "../src/lib/evidence-passport";
+import { verifyResponseEvidencePassport } from "../src/lib/evidence-passport-verifier";
 
 const basePolicy: WorkspaceActionPolicy = {
   workspaceId: "dealer-a",
@@ -146,6 +151,55 @@ for (const actionClass of ["COMPLAINT_RESOLUTION", "FINANCING_COMMITMENT"] as co
   const terminal = decideCrmRelayRetry({ attempt: 3, maxAttempts: 3 });
   assert.deepEqual(terminal, { state: "PARKED", delayMs: null });
   pass("retry_exhaustion_parks_work", terminal.state);
+}
+
+// Evidence-tampering attack: a changed draft must no longer match the proof receipt created for it.
+{
+  const event: ConversationEvent = {
+    protocol: "IGNIAQUA_CONVERSATION_EVENT_V1",
+    workspaceId: "dealer-a",
+    provider: "synthetic-provider",
+    conversationId: "paired-conv-001",
+    eventId: "paired-event-001",
+    eventType: "CONVERSATION_ENDED_OR_HANDOFF_READY",
+    observedAt: "2026-09-10T23:20:00.000Z",
+    customer: {
+      name: "Synthetic Customer",
+      phone: "+15555550100",
+      email: "synthetic@example.invalid",
+      preferredContact: "TEXT",
+      communicationConsent: true,
+    },
+    intent: {
+      category: "VEHICLE_DETAILS",
+      subjectRefs: ["vehicle-demo-001"],
+      questions: ["Is it available?"],
+      constraints: [],
+      urgency: "NORMAL",
+    },
+    summary: "Synthetic event for paired challenge integrity testing.",
+    evidence: {
+      transcriptAvailable: false,
+      sourceRef: "synthetic://paired-challenge/evidence",
+      sourceHash: "c".repeat(64),
+    },
+    authorityEffect: "NONE",
+  };
+  const packet = createResponsePreparationPacket({ event });
+  const draft = createEnrichedResponseDraft({
+    packet,
+    claims: [],
+    now: new Date("2026-09-10T23:30:00.000Z"),
+  });
+  const passport = createResponseEvidencePassport({ packet, draft });
+  const original = verifyResponseEvidencePassport({ packet, draft, passport });
+  assert.equal(original.valid, true);
+
+  const tamperedDraft = { ...draft, text: `${draft.text}\nUNSUPPORTED CHANGE` };
+  const tampered = verifyResponseEvidencePassport({ packet, draft: tamperedDraft, passport });
+  assert.equal(tampered.valid, false);
+  assert.ok(tampered.reasons.includes("DRAFT_DIGEST_MISMATCH"));
+  pass("evidence_tampering_detected", "BLOCKED_BY_INTEGRITY_MISMATCH");
 }
 
 // Mutation challenge: flip a normally-safe permission to true and prove only that bounded action changes.
