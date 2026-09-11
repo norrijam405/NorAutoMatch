@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "outDir": ".tmp-state-purchase-cost"
+  },
+  "include": [
+    "scripts/state-purchase-cost.behavior.ts",
+    "src/lib/state-purchase-cost.ts"
+  ]
+}
