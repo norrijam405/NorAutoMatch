@@ -55,6 +55,27 @@ for (const authorityState of ["REVOKED", "EXPIRED", "UNKNOWN"] as const) {
   pass(`authority_${authorityState.toLowerCase()}_blocks`, result.state);
 }
 
+// Shutdown/revocation must beat earlier permissive settings. Prior permission is not permanent power.
+{
+  const previouslyPermissive: WorkspaceActionPolicy = {
+    ...basePolicy,
+    authorityState: "REVOKED",
+    autonomousSendAllowed: true,
+    realCrmWriteAllowed: true,
+    secondaryCrmCopyAllowed: true,
+  };
+  for (const actionClass of ["EXTERNAL_SEND", "REAL_CRM_WRITE", "SECONDARY_CRM_COPY"] as const) {
+    const result = decision(previouslyPermissive, {
+      workspaceId: "dealer-a",
+      actionClass,
+      actor: "NORAUTO_SYSTEM",
+    });
+    assert.equal(result.state, "BLOCK");
+    assert.ok(result.reasons.includes("AUTHORITY_REVOKED"));
+  }
+  pass("revocation_overrides_prior_permissions", "BLOCK");
+}
+
 // The system cannot quietly grant itself outbound or CRM powers.
 for (const actionClass of ["EXTERNAL_SEND", "REAL_CRM_WRITE", "SECONDARY_CRM_COPY"] as const) {
   const result = decision(basePolicy, {
@@ -64,6 +85,30 @@ for (const actionClass of ["EXTERNAL_SEND", "REAL_CRM_WRITE", "SECONDARY_CRM_COP
   });
   assert.equal(result.state, "BLOCK");
   pass(`${actionClass.toLowerCase()}_not_self_authorized`, result.state);
+}
+
+// Approval for one consequential action cannot be reused as authority for a different action.
+{
+  const oneApprovalOnly: WorkspaceActionPolicy = {
+    ...basePolicy,
+    humanApprovalPresentFor: ["COMPLAINT_RESOLUTION"],
+  };
+  const financing = decision(oneApprovalOnly, {
+    workspaceId: "dealer-a",
+    actionClass: "FINANCING_COMMITMENT",
+    actor: "NORAUTO_SYSTEM",
+  });
+  assert.equal(financing.state, "ESCALATE_HUMAN");
+  assert.ok(financing.reasons.includes("HUMAN_APPROVAL_REQUIRED"));
+
+  const send = decision(oneApprovalOnly, {
+    workspaceId: "dealer-a",
+    actionClass: "EXTERNAL_SEND",
+    actor: "NORAUTO_SYSTEM",
+  });
+  assert.equal(send.state, "BLOCK");
+  assert.ok(send.reasons.includes("AUTONOMOUS_SEND_NOT_AUTHORIZED"));
+  pass("approval_cannot_be_reused_outside_its_action", `${financing.state}/${send.state}`);
 }
 
 // A provider that has not already been qualified cannot be used as fallback.
@@ -77,6 +122,18 @@ for (const actionClass of ["EXTERNAL_SEND", "REAL_CRM_WRITE", "SECONDARY_CRM_COP
   assert.equal(result.state, "BLOCK");
   assert.ok(result.reasons.includes("MODEL_PROVIDER_NOT_QUALIFIED_OR_ALLOWED"));
   pass("unqualified_provider_blocked", result.state);
+}
+
+// Missing provider identity cannot be treated as harmless or auto-filled.
+{
+  const result = decision(basePolicy, {
+    workspaceId: "dealer-a",
+    actionClass: "MODEL_PROVIDER_USE",
+    actor: "NORAUTO_SYSTEM",
+  });
+  assert.equal(result.state, "BLOCK");
+  assert.ok(result.reasons.includes("MODEL_PROVIDER_IDENTITY_REQUIRED"));
+  pass("missing_provider_identity_blocked", result.state);
 }
 
 // An unapproved tool or network destination cannot be used.
@@ -102,6 +159,28 @@ for (const actionClass of ["EXTERNAL_SEND", "REAL_CRM_WRITE", "SECONDARY_CRM_COP
   assert.equal(badNetwork.state, "BLOCK");
   assert.ok(badNetwork.reasons.includes("NETWORK_DESTINATION_NOT_ALLOWED"));
   pass("unapproved_network_blocked", badNetwork.state);
+}
+
+// Missing tool/network identity also fails closed; the system cannot hide the destination.
+{
+  const missingTool = decision(basePolicy, {
+    workspaceId: "dealer-a",
+    actionClass: "TOOL_NETWORK_USE",
+    actor: "NORAUTO_SYSTEM",
+    networkDestination: "api.example.invalid",
+  });
+  assert.equal(missingTool.state, "BLOCK");
+  assert.ok(missingTool.reasons.includes("TOOL_CLASS_REQUIRED"));
+
+  const missingNetwork = decision(basePolicy, {
+    workspaceId: "dealer-a",
+    actionClass: "TOOL_NETWORK_USE",
+    actor: "NORAUTO_SYSTEM",
+    toolClass: "inventory-read",
+  });
+  assert.equal(missingNetwork.state, "BLOCK");
+  assert.ok(missingNetwork.reasons.includes("NETWORK_DESTINATION_REQUIRED"));
+  pass("missing_tool_or_network_identity_blocked", `${missingTool.state}/${missingNetwork.state}`);
 }
 
 // The AI cannot mark the real sales result by itself.
@@ -153,38 +232,38 @@ for (const actionClass of ["COMPLAINT_RESOLUTION", "FINANCING_COMMITMENT"] as co
   pass("retry_exhaustion_parks_work", terminal.state);
 }
 
-// Evidence-tampering attack: a changed draft must no longer match the proof receipt created for it.
-{
-  const event: ConversationEvent = {
-    protocol: "IGNIAQUA_CONVERSATION_EVENT_V1",
-    workspaceId: "dealer-a",
-    provider: "synthetic-provider",
-    conversationId: "paired-conv-001",
-    eventId: "paired-event-001",
-    eventType: "CONVERSATION_ENDED_OR_HANDOFF_READY",
-    observedAt: "2026-09-10T23:20:00.000Z",
-    customer: {
-      name: "Synthetic Customer",
-      phone: "+15555550100",
-      email: "synthetic@example.invalid",
-      preferredContact: "TEXT",
-      communicationConsent: true,
-    },
-    intent: {
-      category: "VEHICLE_DETAILS",
-      subjectRefs: ["vehicle-demo-001"],
-      questions: ["Is it available?"],
-      constraints: [],
-      urgency: "NORMAL",
-    },
-    summary: "Synthetic event for paired challenge integrity testing.",
-    evidence: {
-      transcriptAvailable: false,
-      sourceRef: "synthetic://paired-challenge/evidence",
-      sourceHash: "c".repeat(64),
-    },
-    authorityEffect: "NONE",
-  };
+const event: ConversationEvent = {
+  protocol: "IGNIAQUA_CONVERSATION_EVENT_V1",
+  workspaceId: "dealer-a",
+  provider: "synthetic-provider",
+  conversationId: "paired-conv-001",
+  eventId: "paired-event-001",
+  eventType: "CONVERSATION_ENDED_OR_HANDOFF_READY",
+  observedAt: "2026-09-10T23:20:00.000Z",
+  customer: {
+    name: "Synthetic Customer",
+    phone: "+15555550100",
+    email: "synthetic@example.invalid",
+    preferredContact: "TEXT",
+    communicationConsent: true,
+  },
+  intent: {
+    category: "VEHICLE_DETAILS",
+    subjectRefs: ["vehicle-demo-001"],
+    questions: ["Is it available?"],
+    constraints: [],
+    urgency: "NORMAL",
+  },
+  summary: "Synthetic event for paired challenge integrity testing.",
+  evidence: {
+    transcriptAvailable: false,
+    sourceRef: "synthetic://paired-challenge/evidence",
+    sourceHash: "c".repeat(64),
+  },
+  authorityEffect: "NONE",
+};
+
+function evidenceFixture() {
   const packet = createResponsePreparationPacket({ event });
   const draft = createEnrichedResponseDraft({
     packet,
@@ -192,6 +271,12 @@ for (const actionClass of ["COMPLAINT_RESOLUTION", "FINANCING_COMMITMENT"] as co
     now: new Date("2026-09-10T23:30:00.000Z"),
   });
   const passport = createResponseEvidencePassport({ packet, draft });
+  return { packet, draft, passport };
+}
+
+// Evidence-tampering attack: a changed draft must no longer match the proof receipt created for it.
+{
+  const { packet, draft, passport } = evidenceFixture();
   const original = verifyResponseEvidencePassport({ packet, draft, passport });
   assert.equal(original.valid, true);
 
@@ -200,6 +285,45 @@ for (const actionClass of ["COMPLAINT_RESOLUTION", "FINANCING_COMMITMENT"] as co
   assert.equal(tampered.valid, false);
   assert.ok(tampered.reasons.includes("DRAFT_DIGEST_MISMATCH"));
   pass("evidence_tampering_detected", "BLOCKED_BY_INTEGRITY_MISMATCH");
+}
+
+// Reward-hacking style attack: changing the draft after evidence was issued to claim success
+// cannot preserve a valid proof receipt. A success-looking sentence is not outcome evidence.
+{
+  const { packet, draft, passport } = evidenceFixture();
+  const fakeSuccessDraft = {
+    ...draft,
+    text: `${draft.text}\nCustomer contacted successfully. Appointment confirmed. Vehicle sold.`,
+  };
+  const result = verifyResponseEvidencePassport({ packet, draft: fakeSuccessDraft, passport });
+  assert.equal(result.valid, false);
+  assert.ok(result.reasons.includes("DRAFT_DIGEST_MISMATCH"));
+  pass("success_claim_cannot_replace_evidence", "INVALID_PASSPORT");
+}
+
+// Identity-swap attack: proof from one conversation cannot be quietly reused for another.
+{
+  const { packet, draft, passport } = evidenceFixture();
+  const swappedDraft = { ...draft, conversationId: "paired-conv-OTHER" };
+  const result = verifyResponseEvidencePassport({ packet, draft: swappedDraft, passport });
+  assert.equal(result.valid, false);
+  assert.ok(result.reasons.includes("CONVERSATION_IDENTITY_MISMATCH"));
+  assert.ok(result.reasons.includes("DRAFT_DIGEST_MISMATCH"));
+  pass("evidence_cannot_be_reused_across_conversations", "INVALID_PASSPORT");
+}
+
+// Receipt-tampering attack: editing the proof object itself is detectable.
+{
+  const { packet, draft, passport } = evidenceFixture();
+  const alteredPassport = {
+    ...passport,
+    subject: { ...passport.subject, eventId: "paired-event-FAKE" },
+  };
+  const result = verifyResponseEvidencePassport({ packet, draft, passport: alteredPassport });
+  assert.equal(result.valid, false);
+  assert.ok(result.reasons.includes("EVENT_IDENTITY_MISMATCH"));
+  assert.ok(result.reasons.includes("PASSPORT_DIGEST_MISMATCH"));
+  pass("proof_receipt_identity_tampering_detected", "INVALID_PASSPORT");
 }
 
 // Mutation challenge: flip a normally-safe permission to true and prove only that bounded action changes.
