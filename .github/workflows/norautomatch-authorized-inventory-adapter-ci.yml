@@ -1,0 +1,54 @@
+name: NorAutoMatch Authorized Inventory Adapter CI
+
+on:
+  push:
+    branches:
+      - "candidate/**"
+      - "reactivation/**"
+  pull_request:
+    branches:
+      - main
+      - "reactivation/**"
+
+permissions:
+  contents: read
+
+jobs:
+  authorized-inventory-adapter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+
+      - name: Compile authorized inventory adapter tests
+        run: |
+          rm -rf .tmp-authorized-inventory-snapshot
+          npx tsc -p tsconfig.authorized-inventory-snapshot.json
+
+      - name: Run authorized inventory adapter challenges
+        run: node .tmp-authorized-inventory-snapshot/scripts/authorized-inventory-snapshot.behavior.js
+
+      - name: Clean test output
+        run: rm -rf .tmp-authorized-inventory-snapshot
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
