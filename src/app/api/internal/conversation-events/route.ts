@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createPostgresCrmPool } from "@/lib/crm-postgres-adapter";
+import { NORAUTO_WORKSPACE_ID } from "@/lib/crm-persistence";
 import { conversationEventSchema } from "@/lib/conversation-gateway";
 import { persistConversationEvent } from "@/lib/conversation-gateway-persistence";
 import { authorizeMachineServiceAssertion } from "@/lib/machine-service-auth";
@@ -27,6 +28,19 @@ export async function POST(request: Request) {
     return noStore({ message: "Conversation persistence dependency is not configured." }, 503);
   }
 
+  const auth = authorizeMachineServiceAssertion({
+    authorizationHeader: request.headers.get("authorization"),
+    configuredSecret: process.env.NORAUTO_CONVERSATION_GATEWAY_ASSERTION_SECRET,
+    expectedAudience: "CONVERSATION_GATEWAY",
+    expectedWorkspaceId: NORAUTO_WORKSPACE_ID,
+  });
+  if (!auth.authorized) {
+    if (auth.reason === "NOT_CONFIGURED") {
+      return noStore({ message: "Conversation machine identity is not configured." }, 503);
+    }
+    return noStore({ message: "Unauthorized." }, 401);
+  }
+
   let raw: unknown;
   try {
     raw = await request.json();
@@ -42,18 +56,12 @@ export async function POST(request: Request) {
       authorityEffect: "NONE",
     }, 400);
   }
-
-  const auth = authorizeMachineServiceAssertion({
-    authorizationHeader: request.headers.get("authorization"),
-    configuredSecret: process.env.NORAUTO_CONVERSATION_GATEWAY_ASSERTION_SECRET,
-    expectedAudience: "CONVERSATION_GATEWAY",
-    expectedWorkspaceId: parsed.data.workspaceId,
-  });
-  if (!auth.authorized) {
-    if (auth.reason === "NOT_CONFIGURED") {
-      return noStore({ message: "Conversation machine identity is not configured." }, 503);
-    }
-    return noStore({ message: "Unauthorized." }, 401);
+  if (parsed.data.workspaceId !== auth.claims.workspaceId) {
+    return noStore({
+      message: "Conversation event workspace does not match authenticated machine scope.",
+      truthState: "REJECTED_WRONG_WORKSPACE",
+      authorityEffect: "NONE",
+    }, 403);
   }
 
   gatewayPool ??= createPostgresCrmPool(connectionString);
