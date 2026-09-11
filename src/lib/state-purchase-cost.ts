@@ -20,6 +20,7 @@ export type StatePurchaseCostInput = {
   taxBasisAmount?: number;
   taxBasisProvenance?: string;
   verifiedAdditionalGovernmentCharges?: VerifiedGovernmentCharge[];
+  governmentChargesComplete?: boolean;
   ordinaryDealerSale?: boolean;
 };
 
@@ -109,6 +110,11 @@ export function evaluateStatePurchaseCost(input: StatePurchaseCostInput): StateP
   const jurisdiction = result.jurisdiction;
   const government = partitionGovernmentCharges(input.verifiedAdditionalGovernmentCharges);
   const hasGovernmentChargeEvidence = Boolean(input.verifiedAdditionalGovernmentCharges?.length);
+  const governmentChargesComplete = input.governmentChargesComplete === true;
+
+  if (governmentChargesComplete && !hasGovernmentChargeEvidence) {
+    throw new Error("governmentChargesComplete cannot be true without verified government charge evidence");
+  }
 
   if (jurisdiction === "OK") {
     result.ruleLastVerified = "2026-09-10";
@@ -121,9 +127,13 @@ export function evaluateStatePurchaseCost(input: StatePurchaseCostInput): StateP
       "Dealer generally does not collect all title/tax/license amounts at sale under the verified workflow; deal-specific government charges must come from official current evidence with collection timing.",
     );
 
-    if (hasGovernmentChargeEvidence) {
+    if (governmentChargesComplete) {
       result.estimatedPurchaseTotal = money(result.dueAtDealer + government.later);
       result.labels.total = "ESTIMATED_PURCHASE_TOTAL";
+    } else if (hasGovernmentChargeEvidence) {
+      result.limitations.push(
+        "Some verified government charges are present, but completeness has not been established; no total is emitted.",
+      );
     }
     return result;
   }
@@ -151,13 +161,13 @@ export function evaluateStatePurchaseCost(input: StatePurchaseCostInput): StateP
     result.dueAtDealer = money(result.dueAtDealer + government.dealer);
     if (government.later > 0) result.dueLaterToStateOrLocalAuthority = government.later;
 
-    if (!hasGovernmentChargeEvidence) {
+    if (!governmentChargesComplete) {
       result.limitations.push(
-        "Title, registration, plate, local, and other deal-specific government charges are not assumed from the state tax rate.",
+        "Title, registration, plate, local, and other deal-specific government charges are not treated as complete unless completeness is explicitly supported.",
       );
     }
 
-    if (taxBasisSupported && hasGovernmentChargeEvidence) {
+    if (taxBasisSupported && governmentChargesComplete) {
       result.estimatedPurchaseTotal = money(result.dueAtDealer + government.later);
       result.labels.total = "ESTIMATED_PURCHASE_TOTAL";
       result.truthState = "VERIFIED_CURRENT";
