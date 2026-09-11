@@ -3,7 +3,6 @@ import {
   reconcileAuthorizedInventorySnapshot,
   type AuthorizedInventorySnapshot,
 } from "../src/lib/authorized-inventory-snapshot";
-import type { LiveInventoryRecord } from "../src/lib/live-inventory";
 
 const observedAt = "2026-09-10T23:45:00.000Z";
 const expectedWorkspaceId = "orr-nissan-west";
@@ -94,6 +93,44 @@ expectRejected(snapshot({ completeSnapshot: false }), "SNAPSHOT_INCOMPLETE");
 expectRejected(snapshot({ observedAt: "not-a-date" }), "OBSERVED_AT_INVALID");
 expectRejected(snapshot({ records: [{ ...snapshot().records[0], vin: "BADVIN" }] }), "VIN_INVALID");
 expectRejected(snapshot({ records: [snapshot().records[0], snapshot().records[0]] }), "DUPLICATE_VIN");
+
+// A snapshot fingerprint must represent the data, not the arbitrary order in
+// which a provider happened to return otherwise-identical vehicle records.
+{
+  const firstRecord = snapshot().records[0];
+  const secondRecord = {
+    ...firstRecord,
+    sourceUrl: "synthetic://authorized-inventory/vehicle-2",
+    sourceVehicleId: "provider-vehicle-2",
+    vin: "1N4BL4CV7SN123456",
+    stockNumber: "123456P",
+    model: "Sentra",
+    trim: "SV",
+    price: 18750,
+    mileage: 12000,
+  };
+  const forward = reconcileAuthorizedInventorySnapshot({
+    previousRecords: [],
+    snapshot: snapshot({ records: [firstRecord, secondRecord] }),
+    expectedWorkspaceId,
+    expectedDealerId,
+  });
+  const reversed = reconcileAuthorizedInventorySnapshot({
+    previousRecords: [],
+    snapshot: snapshot({ records: [secondRecord, firstRecord] }),
+    expectedWorkspaceId,
+    expectedDealerId,
+  });
+  assert.equal(forward.sourceDigest, reversed.sourceDigest);
+
+  const changed = reconcileAuthorizedInventorySnapshot({
+    previousRecords: [],
+    snapshot: snapshot({ records: [firstRecord, { ...secondRecord, price: 18250 }] }),
+    expectedWorkspaceId,
+    expectedDealerId,
+  });
+  assert.notEqual(forward.sourceDigest, changed.sourceDigest);
+}
 
 // Complete healthy absence advances cautiously: one missing snapshot is pending,
 // the second independent complete snapshot confirms removal under default policy.
