@@ -40,11 +40,14 @@ jobs:
       - name: Challenge restricted intake detection and false positives
         run: node .tmp-inventory-tests/scripts/restricted-intake-data.behavior.js
 
-      - name: Enforce schema integration and non-echo policy
+      - name: Enforce schema and persistence integration with non-echo policy
         run: |
           grep -q 'findRestrictedIntakeData' src/lib/lead-schema.ts
-          grep -q 'Please remove sensitive financial or identity information from this field.' src/lib/lead-schema.ts
+          grep -q 'finding.reason' src/lib/lead-schema.ts
+          grep -q 'findRestrictedIntakeData(input.lead)' src/lib/crm-lead-intake.ts
+          grep -q 'CRM intake rejected restricted data' src/lib/crm-lead-intake.ts
           ! grep -q 'finding.value' src/lib/lead-schema.ts
+          ! grep -q 'restrictedFindings.*input.lead' src/lib/crm-lead-intake.ts
           ! grep -q 'console.log.*lead' src/app/api/leads/route.ts
           ! grep -q 'console.error.*lead' src/app/api/leads/route.ts
 
