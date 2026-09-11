@@ -4,17 +4,30 @@ import {
   evaluatePublicAbuse,
   extractPublicNetworkSubject,
   hashPublicAbuseSubject,
+  parsePublicNetworkSubjectHeader,
   PUBLIC_LEAD_ABUSE_LIMIT,
   PUBLIC_LEAD_ABUSE_WINDOW_SECONDS,
+  TRUSTED_PROXY_NETWORK_HEADERS_ACTIVATION,
 } from "../src/lib/public-abuse-control";
 
 const secret = "0123456789abcdef0123456789abcdef";
 
 async function main() {
+  assert.equal(TRUSTED_PROXY_NETWORK_HEADERS_ACTIVATION, "TRUST_DEPLOYMENT_PROXY_NETWORK_HEADERS");
+  assert.equal(parsePublicNetworkSubjectHeader("x-forwarded-for"), "x-forwarded-for");
+  assert.equal(parsePublicNetworkSubjectHeader(" X-Real-IP "), "x-real-ip");
+  assert.equal(parsePublicNetworkSubjectHeader("cf-connecting-ip"), null, "unreviewed network headers must not be trusted implicitly");
+  assert.equal(parsePublicNetworkSubjectHeader(undefined), null);
+
   assert.throws(
     () => hashPublicAbuseSubject("203.0.113.10", "too-short"),
     /at least 32 characters/,
     "weak public-abuse HMAC secrets must fail closed",
+  );
+  assert.throws(
+    () => hashPublicAbuseSubject("   ", secret),
+    /network subject is required/,
+    "missing network subjects must not collapse into a shared production identity",
   );
 
   const hashA = hashPublicAbuseSubject("203.0.113.10", secret);
@@ -25,24 +38,26 @@ async function main() {
   assert.notEqual(hashA, hashB, "different network subjects must not collapse to one hash");
   assert.equal(hashA.includes("203.0.113.10"), false, "stored subject identifiers must not echo raw network values");
 
+  const bothHeaders = new Request("https://example.test", {
+    headers: {
+      "x-forwarded-for": "203.0.113.10, 10.0.0.1",
+      "x-real-ip": "198.51.100.7",
+    },
+  });
   assert.equal(
-    extractPublicNetworkSubject(new Request("https://example.test", {
-      headers: { "x-forwarded-for": "203.0.113.10, 10.0.0.1" },
-    })),
+    extractPublicNetworkSubject(bothHeaders, "x-forwarded-for"),
     "203.0.113.10",
-    "the first forwarded network subject must be used",
+    "only the explicitly selected forwarded header may define the network subject",
   );
   assert.equal(
-    extractPublicNetworkSubject(new Request("https://example.test", {
-      headers: { "x-real-ip": "198.51.100.7" },
-    })),
+    extractPublicNetworkSubject(bothHeaders, "x-real-ip"),
     "198.51.100.7",
-    "x-real-ip must be a bounded fallback when forwarded context is absent",
+    "only the explicitly selected real-ip header may define the network subject",
   );
   assert.equal(
-    extractPublicNetworkSubject(new Request("https://example.test")),
-    "unknown",
-    "missing network context must collapse to a bounded shared subject instead of bypassing control",
+    extractPublicNetworkSubject(new Request("https://example.test"), "x-forwarded-for"),
+    null,
+    "missing trusted ingress context must fail closed instead of sharing one global unknown bucket",
   );
 
   const store = new MemoryPublicAbuseCounterStore();
