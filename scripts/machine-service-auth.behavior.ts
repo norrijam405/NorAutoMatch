@@ -79,7 +79,7 @@ assert(!wrongWorkspace.authorized && wrongWorkspace.reason === "WRONG_WORKSPACE"
 
 const expiredToken = createMachineServiceAssertionForTrustedIssuer({
   configuredSecret: secret,
-  claims: { ...claims, issuedAt: now - 400, expiresAt: now - 60, nonce: "machine-assertion-expired-0001" },
+  claims: { ...claims, issuedAt: now - 200, expiresAt: now - 60, nonce: "machine-assertion-expired-0001" },
 });
 const expired = authorizeMachineServiceAssertion({
   authorizationHeader: `Bearer ${expiredToken}`,
