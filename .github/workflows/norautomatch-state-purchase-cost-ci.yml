@@ -41,6 +41,9 @@ jobs:
       - name: Run state purchase cost truth challenges
         run: node .tmp-state-purchase-cost/scripts/state-purchase-cost.behavior.js
 
+      - name: Run state purchase cost evidence gate challenges
+        run: node .tmp-state-purchase-cost/scripts/state-purchase-cost-evidence-gate.behavior.js
+
       - name: Clean test output
         run: rm -rf .tmp-state-purchase-cost
 
