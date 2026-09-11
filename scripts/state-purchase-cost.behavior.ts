@@ -52,7 +52,7 @@ function run() {
   assert(texasNoBasis.truthState === "PARTIALLY_VERIFIED", "Texas without tax basis must remain partial.");
   assert(texasNoBasis.estimatedPurchaseTotal === undefined, "Texas without complete material charges must not emit total.");
 
-  const texasVerified = evaluateStatePurchaseCost({
+  const texasCompleteInput = evaluateStatePurchaseCost({
     jurisdiction: "TX",
     startingVehiclePrice: 30000,
     docFee: 225,
@@ -74,26 +74,35 @@ function run() {
       },
     ],
     governmentChargesComplete: true,
+    governmentChargesCompletenessProvenance: "deal-specific-government-charge-completeness-record",
   });
-  assert(texasVerified.motorVehicleSalesTax === 1750, "Texas 6.25% tax should apply only to supplied verified basis.");
-  assert(texasVerified.dueAtDealer === 32050, "Texas dealer bucket should include vehicle, dealer fee, verified tax, and dealer-collected government charge.");
-  assert(texasVerified.dueLaterToStateOrLocalAuthority === 50, "Later government charge must remain outside dealer bucket.");
-  assert(texasVerified.estimatedPurchaseTotal === 32100, "Complete verified inputs should produce an estimated purchase total.");
-  assert(texasVerified.truthState === "VERIFIED_CURRENT", "Complete verified Texas inputs may reach VERIFIED_CURRENT for the bounded runtime.");
-  assert(texasVerified.labels.total === "ESTIMATED_PURCHASE_TOTAL", "Runtime must not label computed result as final/true OTD.");
-  assert(texasVerified.legalBoundary.regulatoryApprovalClaimed === false, "Verified computation must not be misrepresented as regulatory approval.");
+  assert(texasCompleteInput.motorVehicleSalesTax === 1750, "Texas 6.25% tax should apply only to supplied verified basis.");
+  assert(texasCompleteInput.dueAtDealer === 32050, "Texas dealer bucket should include vehicle, dealer fee, verified tax, and dealer-collected government charge.");
+  assert(texasCompleteInput.dueLaterToStateOrLocalAuthority === 50, "Later government charge must remain outside dealer bucket.");
+  assert(texasCompleteInput.estimatedPurchaseTotal === 32100, "Complete supported inputs should produce an estimated purchase total.");
+  assert(texasCompleteInput.truthState === "PARTIALLY_VERIFIED", "Runtime calculation alone must not promote caller-supplied evidence to independently verified truth.");
+  assert(texasCompleteInput.labels.total === "ESTIMATED_PURCHASE_TOTAL", "Runtime must not label computed result as final/true OTD.");
+  assert(texasCompleteInput.legalBoundary.regulatoryApprovalClaimed === false, "Bounded computation must not be misrepresented as regulatory approval.");
 
   let rejectedFalseCompleteness = false;
   try {
     evaluateStatePurchaseCost({
       jurisdiction: "TX",
       startingVehiclePrice: 30000,
+      verifiedAdditionalGovernmentCharges: [
+        {
+          amount: 75,
+          provenance: "official-current-title-fee",
+          verifiedAt: "2026-09-11",
+          collectionTiming: "DEALER",
+        },
+      ],
       governmentChargesComplete: true,
     });
   } catch {
     rejectedFalseCompleteness = true;
   }
-  assert(rejectedFalseCompleteness, "Completeness claim without verified government-charge evidence must fail closed.");
+  assert(rejectedFalseCompleteness, "Completeness claim without completeness provenance must fail closed.");
 
   console.log("PASS state purchase cost truth invariants");
 }
