@@ -15,7 +15,21 @@ permissions:
 jobs:
   public-abuse-control:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,6 +46,17 @@ jobs:
       - name: Dependency security gate
         run: npm audit --audit-level=high
 
+      - name: Apply checksum-bound production schema twice
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          node scripts/start-production.mjs
+          node scripts/start-production.mjs
+          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc 'SELECT COUNT(*) FROM norautomatch_schema_migrations')" = "6"
+          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.public_abuse_buckets') IS NOT NULL")" = "t"
+
       - name: Compile verification surface
         run: |
           rm -rf .tmp-inventory-tests
@@ -39,6 +64,11 @@ jobs:
 
       - name: Challenge abuse-control policy and false bypasses
         run: node .tmp-inventory-tests/scripts/public-abuse-control.behavior.js
+
+      - name: Challenge distributed Postgres atomicity and reset semantics
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/public-abuse-postgres.integration.js
 
       - name: Enforce distributed persistence, privacy, and trusted-ingress contract
         run: |
@@ -48,6 +78,7 @@ jobs:
           grep -q 'NORAUTO_TRUST_PROXY_NETWORK_HEADERS' src/app/api/leads/route.ts
           grep -q 'TRUSTED_PROXY_NETWORK_HEADERS_ACTIVATION' src/app/api/leads/route.ts
           grep -q 'evaluatePublicAbuse' src/app/api/leads/route.ts
+          grep -q 'norautomatch-crm-v6-public-abuse-control.sql' scripts/start-production.mjs
           grep -q 'ON CONFLICT (bucket_key, subject_hash) DO UPDATE' src/lib/public-abuse-postgres.ts
           grep -q 'public_abuse_buckets' infrastructure/norautomatch-crm-v6-public-abuse-control.sql
           grep -q 'subject_hash CHAR(64)' infrastructure/norautomatch-crm-v6-public-abuse-control.sql
