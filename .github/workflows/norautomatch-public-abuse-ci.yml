@@ -40,17 +40,22 @@ jobs:
       - name: Challenge abuse-control policy and false bypasses
         run: node .tmp-inventory-tests/scripts/public-abuse-control.behavior.js
 
-      - name: Enforce distributed persistence and privacy contract
+      - name: Enforce distributed persistence, privacy, and trusted-ingress contract
         run: |
           grep -q 'PostgresPublicAbuseCounterStore' src/app/api/leads/route.ts
           grep -q 'NORAUTO_PUBLIC_ABUSE_HMAC_SECRET' src/app/api/leads/route.ts
+          grep -q 'NORAUTO_PUBLIC_NETWORK_SUBJECT_HEADER' src/app/api/leads/route.ts
+          grep -q 'NORAUTO_TRUST_PROXY_NETWORK_HEADERS' src/app/api/leads/route.ts
+          grep -q 'TRUSTED_PROXY_NETWORK_HEADERS_ACTIVATION' src/app/api/leads/route.ts
           grep -q 'evaluatePublicAbuse' src/app/api/leads/route.ts
           grep -q 'ON CONFLICT (bucket_key, subject_hash) DO UPDATE' src/lib/public-abuse-postgres.ts
           grep -q 'public_abuse_buckets' infrastructure/norautomatch-crm-v6-public-abuse-control.sql
           grep -q 'subject_hash CHAR(64)' infrastructure/norautomatch-crm-v6-public-abuse-control.sql
+          grep -q 'TRUST_DEPLOYMENT_PROXY_NETWORK_HEADERS' .env.example
           ! grep -q 'const requests = new Map' src/app/api/leads/route.ts
           ! grep -q 'raw_ip' infrastructure/norautomatch-crm-v6-public-abuse-control.sql
           ! grep -q 'ip_address' infrastructure/norautomatch-crm-v6-public-abuse-control.sql
+          ! grep -q 'extractPublicNetworkSubject(request)' src/app/api/leads/route.ts
 
       - name: Clean generated verification output
         run: rm -rf .tmp-inventory-tests
