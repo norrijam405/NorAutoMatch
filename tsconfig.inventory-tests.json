@@ -37,6 +37,7 @@
     "scripts/manager-session-auth.behavior.ts",
     "scripts/machine-service-auth.behavior.ts",
     "scripts/machine-service-replay.integration.ts",
+    "scripts/machine-service-route-policy.behavior.ts",
     "scripts/crm-follow-up.integration.ts",
     "scripts/crm-follow-up-command.integration.ts",
     "scripts/crm-follow-up-due.integration.ts",
