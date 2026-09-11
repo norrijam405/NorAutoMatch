@@ -11,6 +11,8 @@
   },
   "include": [
     "scripts/state-purchase-cost.behavior.ts",
-    "src/lib/state-purchase-cost.ts"
+    "scripts/state-purchase-cost-evidence-gate.behavior.ts",
+    "src/lib/state-purchase-cost.ts",
+    "src/lib/state-purchase-cost-evidence-gate.ts"
   ]
 }
