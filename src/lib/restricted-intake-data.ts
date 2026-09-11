@@ -53,8 +53,12 @@ function containsSsnLikeValue(text: string) {
   return /\b(?:ssn|social\s+security(?:\s+number)?)\b\s*(?:(?:number|no\.?)\s*)?(?:#|:|is)?\s*\d{9}\b/i.test(text);
 }
 
-function containsContextualDigits(text: string, keyword: RegExp, digitPattern: RegExp) {
-  return keyword.test(text) && digitPattern.test(text);
+function containsRoutingLikeValue(text: string) {
+  return /\b(?:routing|aba)(?:\s+(?:number|no\.?))?\s*(?:#|:|is)?\s*\d{9}\b/i.test(text);
+}
+
+function containsBankAccountLikeValue(text: string) {
+  return /\b(?:bank\s+account|account\s+(?:number|no\.?))\s*(?:#|:|is)?\s*\d{6,17}\b/i.test(text);
 }
 
 function containsDriverLicenseLikeValue(text: string) {
@@ -82,22 +86,10 @@ export function findRestrictedIntakeData(input: Partial<Record<RestrictedIntakeF
     if (containsPaymentCardLikeValue(text)) {
       findings.push({ field, reason: "PAYMENT_CARD_LIKE_VALUE" });
     }
-    if (
-      containsContextualDigits(
-        text,
-        /\b(?:routing|aba)\b/i,
-        /(?:^|\D)\d{9}(?:\D|$)/,
-      )
-    ) {
+    if (containsRoutingLikeValue(text)) {
       findings.push({ field, reason: "BANK_ROUTING_LIKE_VALUE" });
     }
-    if (
-      containsContextualDigits(
-        text,
-        /\b(?:bank\s+account|account\s+(?:number|no\.?))\b/i,
-        /(?:^|\D)\d{6,17}(?:\D|$)/,
-      )
-    ) {
+    if (containsBankAccountLikeValue(text)) {
       findings.push({ field, reason: "BANK_ACCOUNT_LIKE_VALUE" });
     }
     if (containsDriverLicenseLikeValue(text)) {
