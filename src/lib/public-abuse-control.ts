@@ -3,6 +3,9 @@ import { createHmac } from "node:crypto";
 export const PUBLIC_LEAD_ABUSE_BUCKET = "public-lead-intake";
 export const PUBLIC_LEAD_ABUSE_LIMIT = 5;
 export const PUBLIC_LEAD_ABUSE_WINDOW_SECONDS = 10 * 60;
+export const TRUSTED_PROXY_NETWORK_HEADERS_ACTIVATION = "TRUST_DEPLOYMENT_PROXY_NETWORK_HEADERS";
+
+export type PublicNetworkSubjectHeader = "x-forwarded-for" | "x-real-ip";
 
 export type PublicAbuseCounterInput = {
   bucketKey: string;
@@ -29,23 +32,38 @@ export type PublicAbuseDecision = {
 };
 
 function normalizeNetworkSubject(value: string) {
-  return value.trim().slice(0, 128) || "unknown";
+  return value.trim().slice(0, 128);
 }
 
-export function extractPublicNetworkSubject(request: Request) {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0];
-  const realIp = request.headers.get("x-real-ip");
-  return normalizeNetworkSubject(forwarded ?? realIp ?? "unknown");
+export function parsePublicNetworkSubjectHeader(value: string | undefined | null): PublicNetworkSubjectHeader | null {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === "x-forwarded-for" || normalized === "x-real-ip") return normalized;
+  return null;
+}
+
+export function extractPublicNetworkSubject(
+  request: Request,
+  trustedHeader: PublicNetworkSubjectHeader,
+): string | null {
+  const raw = trustedHeader === "x-forwarded-for"
+    ? request.headers.get("x-forwarded-for")?.split(",")[0]
+    : request.headers.get("x-real-ip");
+  if (!raw) return null;
+  const normalized = normalizeNetworkSubject(raw);
+  return normalized || null;
 }
 
 export function hashPublicAbuseSubject(subject: string, secret: string) {
+  const normalizedSubject = normalizeNetworkSubject(subject);
+  if (!normalizedSubject) throw new Error("Public abuse network subject is required.");
+
   const normalizedSecret = secret.trim();
   if (normalizedSecret.length < 32) {
     throw new Error("Public abuse HMAC secret must be at least 32 characters.");
   }
 
   return createHmac("sha256", normalizedSecret)
-    .update(`norautomatch:public-abuse:v1:${normalizeNetworkSubject(subject)}`)
+    .update(`norautomatch:public-abuse:v1:${normalizedSubject}`)
     .digest("hex");
 }
 
