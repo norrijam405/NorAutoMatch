@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { findRestrictedIntakeData } from "@/lib/restricted-intake-data";
+import { findRestrictedIntakeData } from "./restricted-intake-data";
 
 export const leadSchema = z.object({
   firstName: z.string().trim().min(2).max(60),
