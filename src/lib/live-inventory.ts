@@ -8,6 +8,10 @@ export type InventoryAvailabilityState =
 export type InventoryEventType =
   | "VEHICLE_FIRST_SEEN"
   | "PRICE_CHANGED"
+  | "MARKET_PRICE_CHANGED"
+  | "DISCOUNT_CHANGED"
+  | "DEALER_FEE_CHANGED"
+  | "DISPLAYED_SUBTOTAL_CHANGED"
   | "MSRP_CHANGED"
   | "MILEAGE_CHANGED"
   | "INCENTIVE_CHANGED"
@@ -33,7 +37,15 @@ export type LiveInventoryRecord = {
   model?: string;
   trim?: string;
   condition?: "New" | "Used" | "Certified" | string;
+  /** Provider/dealer advertised vehicle price. This is not automatically an out-the-door price. */
   price?: number;
+  /** Optional provider-supported pricing components. Undefined means not supplied/verified by the source. */
+  marketPrice?: number;
+  discountAmount?: number;
+  docFee?: number;
+  serviceHandlingFee?: number;
+  otherDealerFees?: number;
+  displayedDealerSubtotal?: number;
   msrp?: number;
   mileage?: number;
   exteriorColor?: string;
@@ -67,6 +79,8 @@ export type InventoryEvent = {
   field?: string;
   previousValue?: unknown;
   newValue?: unknown;
+  /** Present only when both compared values are finite numbers. Positive means the observed value increased. */
+  numericDelta?: number;
   note?: string;
 };
 
@@ -86,11 +100,43 @@ export const DEFAULT_REFRESH_POLICY: RefreshPolicy = {
 
 const trackedFields: Array<keyof Pick<
   LiveInventoryRecord,
-  "price" | "msrp" | "mileage" | "incentives" | "availabilityState" | "sourceStockStatus" | "inTransit"
->> = ["price", "msrp", "mileage", "incentives", "availabilityState", "sourceStockStatus", "inTransit"];
+  | "price"
+  | "marketPrice"
+  | "discountAmount"
+  | "docFee"
+  | "serviceHandlingFee"
+  | "otherDealerFees"
+  | "displayedDealerSubtotal"
+  | "msrp"
+  | "mileage"
+  | "incentives"
+  | "availabilityState"
+  | "sourceStockStatus"
+  | "inTransit"
+>> = [
+  "price",
+  "marketPrice",
+  "discountAmount",
+  "docFee",
+  "serviceHandlingFee",
+  "otherDealerFees",
+  "displayedDealerSubtotal",
+  "msrp",
+  "mileage",
+  "incentives",
+  "availabilityState",
+  "sourceStockStatus",
+  "inTransit",
+];
 
 const eventForField: Record<(typeof trackedFields)[number], InventoryEventType> = {
   price: "PRICE_CHANGED",
+  marketPrice: "MARKET_PRICE_CHANGED",
+  discountAmount: "DISCOUNT_CHANGED",
+  docFee: "DEALER_FEE_CHANGED",
+  serviceHandlingFee: "DEALER_FEE_CHANGED",
+  otherDealerFees: "DEALER_FEE_CHANGED",
+  displayedDealerSubtotal: "DISPLAYED_SUBTOTAL_CHANGED",
   msrp: "MSRP_CHANGED",
   mileage: "MILEAGE_CHANGED",
   incentives: "INCENTIVE_CHANGED",
@@ -102,6 +148,12 @@ const eventForField: Record<(typeof trackedFields)[number], InventoryEventType> 
 function stableJson(value: unknown) {
   if (Array.isArray(value)) return JSON.stringify([...value].sort());
   return JSON.stringify(value);
+}
+
+function finiteNumericDelta(previousValue: unknown, newValue: unknown) {
+  if (typeof previousValue !== "number" || typeof newValue !== "number") return undefined;
+  if (!Number.isFinite(previousValue) || !Number.isFinite(newValue)) return undefined;
+  return newValue - previousValue;
 }
 
 export function diffInventoryRecord(
@@ -121,12 +173,14 @@ export function diffInventoryRecord(
   const events: InventoryEvent[] = [];
   for (const field of trackedFields) {
     if (stableJson(previous[field]) !== stableJson(next[field])) {
+      const numericDelta = finiteNumericDelta(previous[field], next[field]);
       events.push({
         type: eventForField[field],
         ...base,
         field,
         previousValue: previous[field],
         newValue: next[field],
+        ...(numericDelta === undefined ? {} : { numericDelta }),
       });
     }
   }
