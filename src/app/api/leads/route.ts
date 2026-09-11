@@ -6,9 +6,11 @@ import { classifyLeadInventoryEvidence } from "@/lib/lead-inventory-evidence";
 import { leadSchema } from "@/lib/lead-schema";
 import { createManagerHandoff } from "@/lib/manager-handoff";
 import { loadOrrCustomerCatalog } from "@/lib/orr-customer-catalog";
+import { readJsonBodyWithByteLimit } from "@/lib/request-body-limit";
 
 export const runtime = "nodejs";
 
+const MAX_LEAD_REQUEST_BYTES = 32 * 1024;
 const requests = new Map<string, { count: number; expires: number }>();
 let crmPool: ReturnType<typeof createPostgresCrmPool> | undefined;
 
@@ -32,19 +34,22 @@ function getCrmPersistenceAdapter() {
 }
 
 export async function POST(request: Request) {
+  // This local limiter is development/defense-in-depth friction only. It is not
+  // represented as durable or distributed production abuse protection.
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   if (isRateLimited(ip)) {
     return NextResponse.json({ message: "Too many requests. Call or text (405) 861-0061." }, { status: 429 });
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
+  const bodyRead = await readJsonBodyWithByteLimit(request, MAX_LEAD_REQUEST_BYTES);
+  if (!bodyRead.ok) {
+    if (bodyRead.reason === "TOO_LARGE") {
+      return NextResponse.json({ message: "Request is too large." }, { status: 413 });
+    }
     return NextResponse.json({ message: "Invalid request." }, { status: 400 });
   }
 
-  const parsed = leadSchema.safeParse(body);
+  const parsed = leadSchema.safeParse(bodyRead.value);
   if (!parsed.success) {
     return NextResponse.json({ message: "Please check the highlighted fields.", issues: parsed.error.flatten().fieldErrors }, { status: 400 });
   }

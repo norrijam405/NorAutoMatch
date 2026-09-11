@@ -5,10 +5,12 @@ import { conversationEventSchema } from "@/lib/conversation-gateway";
 import { persistConversationEvent } from "@/lib/conversation-gateway-persistence";
 import { authorizeMachineServiceAssertion } from "@/lib/machine-service-auth";
 import { consumeMachineAssertionNonce } from "@/lib/machine-service-replay";
+import { readJsonBodyWithByteLimit } from "@/lib/request-body-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const MAX_CONVERSATION_EVENT_BYTES = 128 * 1024;
 let gatewayPool: ReturnType<typeof createPostgresCrmPool> | undefined;
 
 function noStore(body: Record<string, unknown>, status: number) {
@@ -41,14 +43,19 @@ export async function POST(request: Request) {
     return noStore({ message: "Unauthorized." }, 401);
   }
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
+  const bodyRead = await readJsonBodyWithByteLimit(request, MAX_CONVERSATION_EVENT_BYTES);
+  if (!bodyRead.ok) {
+    if (bodyRead.reason === "TOO_LARGE") {
+      return noStore({
+        message: "Conversation event exceeds the accepted request size.",
+        truthState: "REJECTED_REQUEST_TOO_LARGE",
+        authorityEffect: "NONE",
+      }, 413);
+    }
     return noStore({ message: "Invalid request body." }, 400);
   }
 
-  const parsed = conversationEventSchema.safeParse(raw);
+  const parsed = conversationEventSchema.safeParse(bodyRead.value);
   if (!parsed.success) {
     return noStore({
       message: "Conversation event failed schema validation.",
