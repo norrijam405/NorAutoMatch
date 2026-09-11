@@ -1,0 +1,54 @@
+name: NorAutoMatch Paired Challenge CI
+
+on:
+  push:
+    branches:
+      - "candidate/**"
+      - "reactivation/**"
+  pull_request:
+    branches:
+      - main
+      - "reactivation/**"
+
+permissions:
+  contents: read
+
+jobs:
+  paired-challenge-campaign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+
+      - name: Compile paired challenge campaign
+        run: |
+          rm -rf .tmp-paired-challenge-campaign
+          npx tsc -p tsconfig.paired-challenge-campaign.json
+
+      - name: Run paired adversarial challenge campaign
+        run: node .tmp-paired-challenge-campaign/scripts/paired-challenge-campaign.behavior.js
+
+      - name: Clean challenge output
+        run: rm -rf .tmp-paired-challenge-campaign
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
