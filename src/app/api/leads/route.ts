@@ -10,6 +10,9 @@ import {
   MemoryPublicAbuseCounterStore,
   evaluatePublicAbuse,
   extractPublicNetworkSubject,
+  parsePublicNetworkSubjectHeader,
+  TRUSTED_PROXY_NETWORK_HEADERS_ACTIVATION,
+  type PublicNetworkSubjectHeader,
 } from "@/lib/public-abuse-control";
 import { PostgresPublicAbuseCounterStore } from "@/lib/public-abuse-postgres";
 import { readJsonBodyWithByteLimit } from "@/lib/request-body-limit";
@@ -35,20 +38,30 @@ function getCrmPersistenceAdapter() {
   return new PostgresCrmPersistenceAdapter(pool);
 }
 
-function getPublicAbuseGuard() {
+function getPublicAbuseGuard(): {
+  store: MemoryPublicAbuseCounterStore | PostgresPublicAbuseCounterStore;
+  hmacSecret: string;
+  networkHeader: PublicNetworkSubjectHeader;
+} | null {
   if (process.env.NODE_ENV !== "production") {
     return {
       store: localPublicAbuseStore,
       hmacSecret: DEVELOPMENT_ABUSE_HMAC_SECRET,
+      networkHeader: "x-forwarded-for",
     };
   }
 
+  if (process.env.NORAUTO_TRUST_PROXY_NETWORK_HEADERS?.trim() !== TRUSTED_PROXY_NETWORK_HEADERS_ACTIVATION) {
+    return null;
+  }
+
+  const networkHeader = parsePublicNetworkSubjectHeader(process.env.NORAUTO_PUBLIC_NETWORK_SUBJECT_HEADER);
   const hmacSecret = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_SECRET?.trim();
   const pool = getCrmPool();
-  if (!pool || !hmacSecret || hmacSecret.length < 32) return null;
+  if (!pool || !networkHeader || !hmacSecret || hmacSecret.length < 32) return null;
 
   postgresPublicAbuseStore ??= new PostgresPublicAbuseCounterStore(pool);
-  return { store: postgresPublicAbuseStore, hmacSecret };
+  return { store: postgresPublicAbuseStore, hmacSecret, networkHeader };
 }
 
 export async function POST(request: Request) {
@@ -60,10 +73,18 @@ export async function POST(request: Request) {
     );
   }
 
+  const networkSubject = extractPublicNetworkSubject(request, abuseGuard.networkHeader);
+  if (!networkSubject) {
+    return NextResponse.json(
+      { message: "Online intake protection could not verify this request path. Call or text (405) 861-0061 for a direct response." },
+      { status: 503 },
+    );
+  }
+
   try {
     const abuseDecision = await evaluatePublicAbuse({
       store: abuseGuard.store,
-      networkSubject: extractPublicNetworkSubject(request),
+      networkSubject,
       hmacSecret: abuseGuard.hmacSecret,
     });
 
