@@ -8,6 +8,8 @@ export type RestrictedIntakeReason =
 export type RestrictedIntakeField =
   | "firstName"
   | "lastName"
+  | "email"
+  | "phone"
   | "budgetRange"
   | "tradeIn"
   | "notes"
@@ -70,6 +72,8 @@ export function findRestrictedIntakeData(input: Partial<Record<RestrictedIntakeF
   const fields: RestrictedIntakeField[] = [
     "firstName",
     "lastName",
+    "email",
+    "phone",
     "budgetRange",
     "tradeIn",
     "notes",
