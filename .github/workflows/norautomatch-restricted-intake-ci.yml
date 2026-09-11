@@ -1,0 +1,61 @@
+name: NorAutoMatch Restricted Intake CI
+
+on:
+  push:
+    branches:
+      - "reactivation/**"
+  pull_request:
+    branches:
+      - main
+      - "reactivation/**"
+
+permissions:
+  contents: read
+
+jobs:
+  restricted-intake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+
+      - name: Compile verification surface
+        run: |
+          rm -rf .tmp-inventory-tests
+          npx tsc -p tsconfig.inventory-tests.json
+
+      - name: Challenge restricted intake detection and false positives
+        run: node .tmp-inventory-tests/scripts/restricted-intake-data.behavior.js
+
+      - name: Enforce schema integration and non-echo policy
+        run: |
+          grep -q 'findRestrictedIntakeData' src/lib/lead-schema.ts
+          grep -q 'Please remove sensitive financial or identity information from this field.' src/lib/lead-schema.ts
+          ! grep -q 'finding.value' src/lib/lead-schema.ts
+          ! grep -q 'console.log.*lead' src/app/api/leads/route.ts
+          ! grep -q 'console.error.*lead' src/app/api/leads/route.ts
+
+      - name: Clean generated verification output
+        run: rm -rf .tmp-inventory-tests
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
