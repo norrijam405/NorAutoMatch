@@ -33,20 +33,34 @@ export type StateCostEvidenceGateResult = {
   reasons: string[];
   authorityEffect: "NONE";
   evidenceDigestSha256: string;
+  ruleReviewState: "CURRENT" | "STALE_REVIEW_REQUIRED" | "UNVERIFIED";
   calculation?: StatePurchaseCostResult;
 };
 
-const OFFICIAL_RULE_SOURCES: Record<"OK" | "TX", readonly string[]> = {
-  OK: [
-    "https://oklahoma.gov/service/popular-services/readysettag.html",
-    "https://oklahoma.gov/service/all-services/auto-vehicle/new-used-vehicle-registration.html",
-    "https://oklahoma.gov/oumvdmhc/consumers/faq.html",
-    "https://oklahoma.gov/service/all-services/auto-vehicle/fees.html",
-  ],
-  TX: [
-    "https://comptroller.texas.gov/taxes/motor-vehicle/sales-use.php",
-    "https://www.txdmv.gov/motorists/buying-or-selling-a-vehicle",
-  ],
+const DAY_MS = 24 * 60 * 60 * 1000;
+const RULE_REVIEW_MAX_AGE_MS = 30 * DAY_MS;
+const FUTURE_CLOCK_TOLERANCE_MS = 5 * 60 * 1000;
+
+const JURISDICTION_RULES: Record<
+  "OK" | "TX",
+  { lastVerified: string; officialSources: readonly string[] }
+> = {
+  OK: {
+    lastVerified: "2026-09-10T00:00:00.000Z",
+    officialSources: [
+      "https://oklahoma.gov/service/popular-services/readysettag.html",
+      "https://oklahoma.gov/service/all-services/auto-vehicle/new-used-vehicle-registration.html",
+      "https://oklahoma.gov/oumvdmhc/consumers/faq.html",
+      "https://oklahoma.gov/service/all-services/auto-vehicle/fees.html",
+    ],
+  },
+  TX: {
+    lastVerified: "2026-09-10T00:00:00.000Z",
+    officialSources: [
+      "https://comptroller.texas.gov/taxes/motor-vehicle/sales-use.php",
+      "https://www.txdmv.gov/motorists/buying-or-selling-a-vehicle",
+    ],
+  },
 };
 
 function stable(value: unknown): string {
@@ -65,23 +79,40 @@ function digest(value: unknown) {
   return createHash("sha256").update(stable(value)).digest("hex");
 }
 
-function isIsoDate(value: string) {
-  return Number.isFinite(Date.parse(value));
+function parsedTime(value: string) {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 export function verifyStateCostEvidencePackage(
   input: StateCostEvidencePackage,
+  nowMs = Date.now(),
 ): StateCostEvidenceGateResult {
   const reasons: string[] = [];
   const jurisdiction = input.jurisdiction.trim().toUpperCase();
   const calculationJurisdiction = input.calculationInput.jurisdiction.trim().toUpperCase();
   const evidenceDigestSha256 = digest(input);
+  let ruleReviewState: StateCostEvidenceGateResult["ruleReviewState"] = "UNVERIFIED";
 
   if (!input.packageId.trim()) reasons.push("PACKAGE_ID_REQUIRED");
   if (jurisdiction !== calculationJurisdiction) reasons.push("CALCULATION_JURISDICTION_MISMATCH");
 
   const supportedJurisdiction = jurisdiction === "OK" || jurisdiction === "TX";
-  if (!supportedJurisdiction) reasons.push("JURISDICTION_NOT_VERIFIED");
+  if (!supportedJurisdiction) {
+    reasons.push("JURISDICTION_NOT_VERIFIED");
+  } else {
+    const rule = JURISDICTION_RULES[jurisdiction as "OK" | "TX"];
+    const lastVerifiedMs = Date.parse(rule.lastVerified);
+    if (nowMs - lastVerifiedMs > RULE_REVIEW_MAX_AGE_MS) {
+      ruleReviewState = "STALE_REVIEW_REQUIRED";
+      reasons.push("RULE_REVIEW_STALE");
+    } else if (nowMs + FUTURE_CLOCK_TOLERANCE_MS < lastVerifiedMs) {
+      ruleReviewState = "UNVERIFIED";
+      reasons.push("RULE_VERIFICATION_FROM_FUTURE");
+    } else {
+      ruleReviewState = "CURRENT";
+    }
+  }
 
   if (new Set(input.evidence.map((item) => item.evidenceId)).size !== input.evidence.length) {
     reasons.push("DUPLICATE_EVIDENCE_ID");
@@ -90,14 +121,19 @@ export function verifyStateCostEvidencePackage(
   for (const item of input.evidence) {
     if (!item.evidenceId.trim()) reasons.push("EVIDENCE_ID_REQUIRED");
     if (item.jurisdiction.trim().toUpperCase() !== jurisdiction) reasons.push("EVIDENCE_JURISDICTION_MISMATCH");
-    if (!isIsoDate(item.observedAt)) reasons.push("INVALID_EVIDENCE_OBSERVED_AT");
+    const observedAtMs = parsedTime(item.observedAt);
+    if (observedAtMs === undefined) {
+      reasons.push("INVALID_EVIDENCE_OBSERVED_AT");
+    } else if (observedAtMs > nowMs + FUTURE_CLOCK_TOLERANCE_MS) {
+      reasons.push("EVIDENCE_FROM_FUTURE");
+    }
     if (item.evidenceClass === "OFFICIAL_GOVERNMENT_SOURCE" && !item.sourceUrl?.trim()) {
       reasons.push("OFFICIAL_SOURCE_URL_REQUIRED");
     }
   }
 
   if (supportedJurisdiction) {
-    const allowed = OFFICIAL_RULE_SOURCES[jurisdiction as "OK" | "TX"];
+    const allowed = JURISDICTION_RULES[jurisdiction as "OK" | "TX"].officialSources;
     if (input.ruleSources.length === 0) reasons.push("OFFICIAL_RULE_SOURCE_REQUIRED");
     for (const source of input.ruleSources) {
       if (!allowed.includes(source)) reasons.push("UNRECOGNIZED_RULE_SOURCE");
@@ -125,7 +161,7 @@ export function verifyStateCostEvidencePackage(
       reasons.push("GOVERNMENT_CHARGE_REQUIRES_OFFICIAL_SOURCE");
     }
     if (chargeEvidence.sourceUrl && supportedJurisdiction) {
-      const allowed = OFFICIAL_RULE_SOURCES[jurisdiction as "OK" | "TX"];
+      const allowed = JURISDICTION_RULES[jurisdiction as "OK" | "TX"].officialSources;
       if (!allowed.includes(chargeEvidence.sourceUrl)) reasons.push("GOVERNMENT_CHARGE_SOURCE_NOT_ALLOWLISTED");
     }
     if (charge.verifiedAt !== chargeEvidence.observedAt) {
@@ -140,6 +176,9 @@ export function verifyStateCostEvidencePackage(
       reasons.push("COMPLETENESS_PROVENANCE_UNRESOLVED");
     } else if (completenessEvidence.evidenceClass !== "OFFICIAL_GOVERNMENT_SOURCE") {
       reasons.push("COMPLETENESS_REQUIRES_OFFICIAL_SOURCE");
+    } else if (completenessEvidence.sourceUrl && supportedJurisdiction) {
+      const allowed = JURISDICTION_RULES[jurisdiction as "OK" | "TX"].officialSources;
+      if (!allowed.includes(completenessEvidence.sourceUrl)) reasons.push("COMPLETENESS_SOURCE_NOT_ALLOWLISTED");
     }
   }
 
@@ -151,6 +190,7 @@ export function verifyStateCostEvidencePackage(
       reasons: uniqueReasons,
       authorityEffect: "NONE",
       evidenceDigestSha256,
+      ruleReviewState,
     };
   }
 
@@ -160,6 +200,7 @@ export function verifyStateCostEvidencePackage(
     reasons: [],
     authorityEffect: "NONE",
     evidenceDigestSha256,
+    ruleReviewState,
     calculation: evaluateStatePurchaseCost(input.calculationInput),
   };
 }
