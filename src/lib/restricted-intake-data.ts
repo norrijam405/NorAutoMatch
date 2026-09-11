@@ -46,6 +46,10 @@ function containsContextualDigits(text: string, keyword: RegExp, digitPattern: R
   return keyword.test(text) && digitPattern.test(text);
 }
 
+function containsDriverLicenseLikeValue(text: string) {
+  return /\b(?:driver'?s?\s+license|dl)\s*(?:number|no\.?|#|:|is)\s*[A-Z0-9][A-Z0-9-]{4,19}\b/i.test(text);
+}
+
 export function findRestrictedIntakeData(input: {
   tradeIn?: string;
   notes?: string;
@@ -80,10 +84,7 @@ export function findRestrictedIntakeData(input: {
     ) {
       findings.push({ field, reason: "BANK_ACCOUNT_LIKE_VALUE" });
     }
-    if (
-      /\b(?:driver'?s?\s+license|dl\s*(?:number|no\.?))\b/i.test(text) &&
-      /\b[A-Z0-9][A-Z0-9 -]{4,19}\b/i.test(text)
-    ) {
+    if (containsDriverLicenseLikeValue(text)) {
       findings.push({ field, reason: "DRIVER_LICENSE_LIKE_VALUE" });
     }
   }
