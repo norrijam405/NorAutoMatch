@@ -47,7 +47,45 @@ function run() {
 
   const priceChanged = record({ price: 30995, fetchedAt: "2026-09-08T15:05:00.000Z", sourceHash: "b".repeat(64) });
   const priceEvents = diffInventoryRecord(base, priceChanged);
-  assert(priceEvents.some((event) => event.type === "PRICE_CHANGED" && event.previousValue === 31500 && event.newValue === 30995), "Price change event was not preserved.");
+  assert(priceEvents.some((event) => event.type === "PRICE_CHANGED" && event.previousValue === 31500 && event.newValue === 30995 && event.numericDelta === -505), "Price change event was not preserved with its numeric delta.");
+
+  const altimaPrevious = record({
+    source: "authorized_provider",
+    sourceUrl: "provider://dealer/2175/inventory",
+    sourceVehicleId: "1N4BL4DV9SN320880",
+    vin: "1N4BL4DV9SN320880",
+    stockNumber: "320880P",
+    year: 2025,
+    make: "Nissan",
+    model: "Altima",
+    trim: "2.5 SV",
+    condition: "Used",
+    price: 19970,
+    docFee: 599,
+    mileage: 40776,
+    fetchedAt: "2026-09-10T14:00:00.000Z",
+    firstSeenAt: "2026-09-10T14:00:00.000Z",
+    lastSeenAt: "2026-09-10T14:00:00.000Z",
+    sourceHash: "d".repeat(64),
+    parserVersion: "authorized-provider-v1",
+  });
+  const altimaNext = record({
+    ...altimaPrevious,
+    price: 20701,
+    docFee: 699,
+    fetchedAt: "2026-09-10T15:00:00.000Z",
+    lastSeenAt: "2026-09-10T15:00:00.000Z",
+    sourceHash: "e".repeat(64),
+  });
+  const altimaEvents = diffInventoryRecord(altimaPrevious, altimaNext);
+  const altimaPriceEvent = altimaEvents.find((event) => event.type === "PRICE_CHANGED");
+  assert(altimaPriceEvent?.previousValue === 19970, "Altima previous price was not preserved.");
+  assert(altimaPriceEvent?.newValue === 20701, "Altima new price was not preserved.");
+  assert(altimaPriceEvent?.numericDelta === 731, "Altima price delta must be +731.");
+  assert(altimaEvents.some((event) => event.type === "DEALER_FEE_CHANGED" && event.field === "docFee" && event.numericDelta === 100), "Dealer document-fee change was not preserved independently.");
+  assert(!altimaEvents.some((event) => event.type === "VEHICLE_REMOVED_CONFIRMED"), "A price movement must never imply confirmed removal/sale.");
+  assert(!altimaEvents.some((event) => event.type === "AVAILABILITY_CHANGED"), "A price movement must not manufacture an availability change.");
+  assert(altimaNext.availabilityState === "ACTIVE_CURRENT", "The synthetic Altima must remain ACTIVE_CURRENT after a price change.");
 
   const firstMiss = applyHealthyAbsence(base, "2026-09-08T15:15:00.000Z");
   assert(firstMiss.availabilityState === "MISSING_PENDING", "First healthy absence must not mark a unit removed.");
