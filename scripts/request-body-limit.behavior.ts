@@ -82,7 +82,7 @@ async function main() {
   );
   assert.deepEqual(malformedJson, { ok: false, reason: "INVALID_JSON" });
 
-  assert.throws(
+  await assert.rejects(
     () => readJsonBodyWithByteLimit(new Request("https://example.invalid"), 0),
     /REQUEST_BODY_LIMIT_INVALID_MAX_BYTES/,
   );
