@@ -29,6 +29,13 @@ export type StatePurchaseCostResult = {
   truthState: StatePurchaseCostTruthState;
   sourceContract: "IGNIAQUA_STATE_VEHICLE_PURCHASE_COST_TRUTH_V0_1";
   sourceContractBlobSha: "733c87de9f294942f41c84e2ea482990f905d7c1";
+  legalBoundary: {
+    matterClass: "L1_BOUNDED_COMPLIANCE_SUPPORT";
+    authorityEffect: "NONE";
+    externalActionAuthority: "DENY_BY_DEFAULT";
+    legalAdviceClaimed: false;
+    regulatoryApprovalClaimed: false;
+  };
   ruleLastVerified?: string;
   startingVehiclePrice: number;
   dueAtDealer?: number;
@@ -92,6 +99,13 @@ function baseResult(input: StatePurchaseCostInput): StatePurchaseCostResult {
     truthState: "UNVERIFIED_DO_NOT_CALCULATE",
     sourceContract: SOURCE_CONTRACT,
     sourceContractBlobSha: SOURCE_BLOB_SHA,
+    legalBoundary: {
+      matterClass: "L1_BOUNDED_COMPLIANCE_SUPPORT",
+      authorityEffect: "NONE",
+      externalActionAuthority: "DENY_BY_DEFAULT",
+      legalAdviceClaimed: false,
+      regulatoryApprovalClaimed: false,
+    },
     startingVehiclePrice: money(input.startingVehiclePrice),
     labels: { startingVehiclePrice: "STARTING_VEHICLE_PRICE" },
     limitations: [],
