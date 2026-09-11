@@ -93,25 +93,27 @@ export function verifyStateCostEvidencePackage(
   const calculationJurisdiction = input.calculationInput.jurisdiction.trim().toUpperCase();
   const evidenceDigestSha256 = digest(input);
   let ruleReviewState: StateCostEvidenceGateResult["ruleReviewState"] = "UNVERIFIED";
+  const supportedJurisdiction = jurisdiction === "OK" || jurisdiction === "TX";
+  const jurisdictionRule = supportedJurisdiction
+    ? JURISDICTION_RULES[jurisdiction as "OK" | "TX"]
+    : undefined;
+  const ruleLastVerifiedMs = jurisdictionRule
+    ? Date.parse(jurisdictionRule.lastVerified)
+    : undefined;
 
   if (!input.packageId.trim()) reasons.push("PACKAGE_ID_REQUIRED");
   if (jurisdiction !== calculationJurisdiction) reasons.push("CALCULATION_JURISDICTION_MISMATCH");
 
-  const supportedJurisdiction = jurisdiction === "OK" || jurisdiction === "TX";
-  if (!supportedJurisdiction) {
+  if (!supportedJurisdiction || !jurisdictionRule || ruleLastVerifiedMs === undefined) {
     reasons.push("JURISDICTION_NOT_VERIFIED");
+  } else if (nowMs - ruleLastVerifiedMs > RULE_REVIEW_MAX_AGE_MS) {
+    ruleReviewState = "STALE_REVIEW_REQUIRED";
+    reasons.push("RULE_REVIEW_STALE");
+  } else if (nowMs + FUTURE_CLOCK_TOLERANCE_MS < ruleLastVerifiedMs) {
+    ruleReviewState = "UNVERIFIED";
+    reasons.push("RULE_VERIFICATION_FROM_FUTURE");
   } else {
-    const rule = JURISDICTION_RULES[jurisdiction as "OK" | "TX"];
-    const lastVerifiedMs = Date.parse(rule.lastVerified);
-    if (nowMs - lastVerifiedMs > RULE_REVIEW_MAX_AGE_MS) {
-      ruleReviewState = "STALE_REVIEW_REQUIRED";
-      reasons.push("RULE_REVIEW_STALE");
-    } else if (nowMs + FUTURE_CLOCK_TOLERANCE_MS < lastVerifiedMs) {
-      ruleReviewState = "UNVERIFIED";
-      reasons.push("RULE_VERIFICATION_FROM_FUTURE");
-    } else {
-      ruleReviewState = "CURRENT";
-    }
+    ruleReviewState = "CURRENT";
   }
 
   if (new Set(input.evidence.map((item) => item.evidenceId)).size !== input.evidence.length) {
@@ -124,16 +126,23 @@ export function verifyStateCostEvidencePackage(
     const observedAtMs = parsedTime(item.observedAt);
     if (observedAtMs === undefined) {
       reasons.push("INVALID_EVIDENCE_OBSERVED_AT");
-    } else if (observedAtMs > nowMs + FUTURE_CLOCK_TOLERANCE_MS) {
-      reasons.push("EVIDENCE_FROM_FUTURE");
+    } else {
+      if (observedAtMs > nowMs + FUTURE_CLOCK_TOLERANCE_MS) reasons.push("EVIDENCE_FROM_FUTURE");
+      if (
+        item.evidenceClass === "OFFICIAL_GOVERNMENT_SOURCE" &&
+        ruleLastVerifiedMs !== undefined &&
+        observedAtMs < ruleLastVerifiedMs
+      ) {
+        reasons.push("OFFICIAL_EVIDENCE_PREDATES_RULE_VERIFICATION");
+      }
     }
     if (item.evidenceClass === "OFFICIAL_GOVERNMENT_SOURCE" && !item.sourceUrl?.trim()) {
       reasons.push("OFFICIAL_SOURCE_URL_REQUIRED");
     }
   }
 
-  if (supportedJurisdiction) {
-    const allowed = JURISDICTION_RULES[jurisdiction as "OK" | "TX"].officialSources;
+  if (supportedJurisdiction && jurisdictionRule) {
+    const allowed = jurisdictionRule.officialSources;
     if (input.ruleSources.length === 0) reasons.push("OFFICIAL_RULE_SOURCE_REQUIRED");
     for (const source of input.ruleSources) {
       if (!allowed.includes(source)) reasons.push("UNRECOGNIZED_RULE_SOURCE");
@@ -160,9 +169,10 @@ export function verifyStateCostEvidencePackage(
     if (chargeEvidence.evidenceClass !== "OFFICIAL_GOVERNMENT_SOURCE") {
       reasons.push("GOVERNMENT_CHARGE_REQUIRES_OFFICIAL_SOURCE");
     }
-    if (chargeEvidence.sourceUrl && supportedJurisdiction) {
-      const allowed = JURISDICTION_RULES[jurisdiction as "OK" | "TX"].officialSources;
-      if (!allowed.includes(chargeEvidence.sourceUrl)) reasons.push("GOVERNMENT_CHARGE_SOURCE_NOT_ALLOWLISTED");
+    if (chargeEvidence.sourceUrl && jurisdictionRule) {
+      if (!jurisdictionRule.officialSources.includes(chargeEvidence.sourceUrl)) {
+        reasons.push("GOVERNMENT_CHARGE_SOURCE_NOT_ALLOWLISTED");
+      }
     }
     if (charge.verifiedAt !== chargeEvidence.observedAt) {
       reasons.push("GOVERNMENT_CHARGE_VERIFICATION_TIME_MISMATCH");
@@ -176,9 +186,10 @@ export function verifyStateCostEvidencePackage(
       reasons.push("COMPLETENESS_PROVENANCE_UNRESOLVED");
     } else if (completenessEvidence.evidenceClass !== "OFFICIAL_GOVERNMENT_SOURCE") {
       reasons.push("COMPLETENESS_REQUIRES_OFFICIAL_SOURCE");
-    } else if (completenessEvidence.sourceUrl && supportedJurisdiction) {
-      const allowed = JURISDICTION_RULES[jurisdiction as "OK" | "TX"].officialSources;
-      if (!allowed.includes(completenessEvidence.sourceUrl)) reasons.push("COMPLETENESS_SOURCE_NOT_ALLOWLISTED");
+    } else if (completenessEvidence.sourceUrl && jurisdictionRule) {
+      if (!jurisdictionRule.officialSources.includes(completenessEvidence.sourceUrl)) {
+        reasons.push("COMPLETENESS_SOURCE_NOT_ALLOWLISTED");
+      }
     }
   }
 
