@@ -67,6 +67,16 @@ assert.deepEqual(
   ["firstName:PAYMENT_CARD_LIKE_VALUE"],
   "restricted values must not bypass the guard through persisted name fields",
 );
+assert.deepEqual(
+  reasons({ email: "4111111111111111@example.com" }),
+  ["email:PAYMENT_CARD_LIKE_VALUE"],
+  "restricted values must not bypass the guard through persisted email text",
+);
+assert.deepEqual(
+  reasons({ phone: "123-45-6789" }),
+  ["phone:SSN_LIKE_VALUE"],
+  "restricted values must not bypass the guard through persisted phone text",
+);
 
 assert.deepEqual(reasons({ notes: "I do not have a credit card." }), []);
 assert.deepEqual(reasons({ notes: "I do not have a driver's license." }), []);
@@ -79,6 +89,7 @@ assert.deepEqual(reasons({ notes: "card ending in 1111 only" }), []);
 assert.deepEqual(reasons({ budgetRange: "$35,000 - $45,000" }), []);
 assert.deepEqual(reasons({ source: "Website / organic search" }), []);
 assert.deepEqual(reasons({ firstName: "Norris", lastName: "James" }), []);
+assert.deepEqual(reasons({ email: "norris@example.com", phone: "4055550123" }), []);
 assert.deepEqual(
   reasons({ notes: "I have a routing question about reference number 123456789" }),
   [],
@@ -100,7 +111,7 @@ assert.deepEqual(multi, [
   "tradeIn:DRIVER_LICENSE_LIKE_VALUE",
 ]);
 
-function assertSchemaRejects(field: "firstName" | "budgetRange" | "tradeIn" | "notes" | "source", value: string, reason: string) {
+function assertSchemaRejects(field: "firstName" | "email" | "phone" | "budgetRange" | "tradeIn" | "notes" | "source", value: string, reason: string) {
   const result = leadSchema.safeParse({ ...validLead, [field]: value });
   assert.equal(result.success, false, `lead schema must reject restricted data in ${field}`);
   if (result.success) return;
@@ -113,6 +124,8 @@ assertSchemaRejects("notes", "My SSN is 123-45-6789", "SSN_LIKE_VALUE");
 assertSchemaRejects("budgetRange", "SSN 123456789", "SSN_LIKE_VALUE");
 assertSchemaRejects("source", "routing number 123456789", "BANK_ROUTING_LIKE_VALUE");
 assertSchemaRejects("firstName", "4111 1111 1111 1111", "PAYMENT_CARD_LIKE_VALUE");
+assertSchemaRejects("email", "4111111111111111@example.com", "PAYMENT_CARD_LIKE_VALUE");
+assertSchemaRejects("phone", "123-45-6789", "SSN_LIKE_VALUE");
 assertSchemaRejects("tradeIn", "bank account number 123456789012", "BANK_ACCOUNT_LIKE_VALUE");
 
 assert.equal(leadSchema.safeParse(validLead).success, true, "normal lead data must remain accepted");
