@@ -24,8 +24,12 @@ assert(
   "Conversation route must bind machine assertion to conversation gateway audience.",
 );
 assert(
-  conversationRoute.includes("expectedWorkspaceId: parsed.data.workspaceId"),
-  "Conversation route must bind machine assertion workspace to validated event workspace.",
+  conversationRoute.includes("expectedWorkspaceId: NORAUTO_WORKSPACE_ID"),
+  "Conversation route must authenticate against canonical NorAutoMatch workspace before body processing.",
+);
+assert(
+  conversationRoute.includes("parsed.data.workspaceId !== auth.claims.workspaceId"),
+  "Conversation route must reject event workspace drift from authenticated machine scope.",
 );
 assert(
   relayRoute.includes('expectedAudience: "CRM_RELAY"'),
