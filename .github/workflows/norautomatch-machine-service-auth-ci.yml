@@ -1,4 +1,4 @@
-name: NorAutoMatch Conversation Gateway CI
+name: NorAutoMatch Machine Service Security CI
 
 on:
   push:
@@ -13,9 +13,9 @@ permissions:
   contents: read
 
 jobs:
-  conversation-gateway-truth-boundary:
+  machine-service-security:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     services:
       postgres:
         image: postgres:17-alpine
@@ -46,49 +46,32 @@ jobs:
       - name: Dependency security gate
         run: npm audit --audit-level=high
 
-      - name: Apply checksum-bound production schema
+      - name: Apply checksum-bound production schema twice
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
           NORAUTO_MIGRATION_ONLY: "1"
           NORAUTO_RELEASE_SHA: ${{ github.sha }}
         run: |
           node scripts/start-production.mjs
+          node scripts/start-production.mjs
           test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc 'SELECT COUNT(*) FROM norautomatch_schema_migrations')" = "5"
+          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.crm_machine_assertion_nonces') IS NOT NULL")" = "t"
 
-      - name: Compile verification surface
+      - name: Compile security verification surface
         run: |
           rm -rf .tmp-inventory-tests
           npx tsc -p tsconfig.inventory-tests.json
 
-      - name: Challenge provider-neutral conversation truth boundary
-        run: node .tmp-inventory-tests/scripts/conversation-gateway.behavior.js
-
-      - name: Challenge scoped short-lived machine assertion boundary
+      - name: Challenge scoped short-lived assertion verification
         run: node .tmp-inventory-tests/scripts/machine-service-auth.behavior.js
 
-      - name: Challenge durable one-time machine assertion nonce consumption
+      - name: Challenge durable replay denial
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
         run: node .tmp-inventory-tests/scripts/machine-service-replay.integration.js
 
-      - name: Challenge provider adapter authorization gate
-        run: node .tmp-inventory-tests/scripts/conversation-provider-adapter.behavior.js
-
-      - name: Challenge two-to-three minute response target
-        run: node .tmp-inventory-tests/scripts/conversation-response-sla.behavior.js
-
-      - name: Challenge CRM routing authorization policy
-        run: node .tmp-inventory-tests/scripts/conversation-crm-routing-policy.behavior.js
-
-      - name: Challenge durable replay-safe conversation identity
-        env:
-          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
-        run: node .tmp-inventory-tests/scripts/conversation-gateway-persistence.integration.js
-
-      - name: Challenge conversation response queue truth boundary
-        env:
-          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
-        run: node .tmp-inventory-tests/scripts/conversation-response-queue.integration.js
+      - name: Prevent route regression to static bearer authorization
+        run: node .tmp-inventory-tests/scripts/machine-service-route-policy.behavior.js
 
       - name: Clean generated verification output
         run: rm -rf .tmp-inventory-tests

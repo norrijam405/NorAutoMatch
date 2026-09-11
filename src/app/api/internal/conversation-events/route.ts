@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { createPostgresCrmPool } from "@/lib/crm-postgres-adapter";
-import { authorizeConversationGateway } from "@/lib/conversation-gateway-auth";
+import { NORAUTO_WORKSPACE_ID } from "@/lib/crm-persistence";
 import { conversationEventSchema } from "@/lib/conversation-gateway";
 import { persistConversationEvent } from "@/lib/conversation-gateway-persistence";
+import { authorizeMachineServiceAssertion } from "@/lib/machine-service-auth";
+import { consumeMachineAssertionNonce } from "@/lib/machine-service-replay";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,20 +23,22 @@ function noStore(body: Record<string, unknown>, status: number) {
 }
 
 export async function POST(request: Request) {
-  const auth = authorizeConversationGateway({
-    authorizationHeader: request.headers.get("authorization"),
-    configuredToken: process.env.NORAUTO_CONVERSATION_GATEWAY_TOKEN,
-  });
-  if (!auth.authorized) {
-    if (auth.reason === "NOT_CONFIGURED") {
-      return noStore({ message: "Conversation gateway is not configured." }, 503);
-    }
-    return noStore({ message: "Unauthorized." }, 401);
-  }
-
   const connectionString = process.env.NORAUTO_CRM_DATABASE_URL?.trim();
   if (!connectionString) {
     return noStore({ message: "Conversation persistence dependency is not configured." }, 503);
+  }
+
+  const auth = authorizeMachineServiceAssertion({
+    authorizationHeader: request.headers.get("authorization"),
+    configuredSecret: process.env.NORAUTO_CONVERSATION_GATEWAY_ASSERTION_SECRET,
+    expectedAudience: "CONVERSATION_GATEWAY",
+    expectedWorkspaceId: NORAUTO_WORKSPACE_ID,
+  });
+  if (!auth.authorized) {
+    if (auth.reason === "NOT_CONFIGURED") {
+      return noStore({ message: "Conversation machine identity is not configured." }, 503);
+    }
+    return noStore({ message: "Unauthorized." }, 401);
   }
 
   let raw: unknown;
@@ -52,9 +56,26 @@ export async function POST(request: Request) {
       authorityEffect: "NONE",
     }, 400);
   }
+  if (parsed.data.workspaceId !== auth.claims.workspaceId) {
+    return noStore({
+      message: "Conversation event workspace does not match authenticated machine scope.",
+      truthState: "REJECTED_WRONG_WORKSPACE",
+      authorityEffect: "NONE",
+    }, 403);
+  }
 
   gatewayPool ??= createPostgresCrmPool(connectionString);
+
   try {
+    const replay = await consumeMachineAssertionNonce({ pool: gatewayPool, claims: auth.claims });
+    if (!replay.consumed) {
+      return noStore({
+        message: "Machine assertion replay rejected.",
+        truthState: "REJECTED_REPLAY",
+        authorityEffect: "NONE",
+      }, 409);
+    }
+
     const result = await persistConversationEvent({ pool: gatewayPool, event: parsed.data });
     return noStore({
       protocol: "IGNIAQUA_CONVERSATION_INTAKE_RECEIPT_V1",
