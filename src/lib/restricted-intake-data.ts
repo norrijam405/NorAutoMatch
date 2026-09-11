@@ -39,7 +39,10 @@ function containsPaymentCardLikeValue(text: string) {
 }
 
 function containsSsnLikeValue(text: string) {
-  return /(?:^|\D)\d{3}[- ]?\d{2}[- ]?\d{4}(?:\D|$)/.test(text);
+  const explicitlyFormatted = /(?:^|\D)\d{3}[- ]\d{2}[- ]\d{4}(?:\D|$)/.test(text);
+  if (explicitlyFormatted) return true;
+
+  return /\b(?:ssn|social\s+security(?:\s+number)?)\b\s*(?:(?:number|no\.?)\s*)?(?:#|:|is)?\s*\d{9}\b/i.test(text);
 }
 
 function containsContextualDigits(text: string, keyword: RegExp, digitPattern: RegExp) {
