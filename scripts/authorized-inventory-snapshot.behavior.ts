@@ -3,6 +3,7 @@ import {
   reconcileAuthorizedInventorySnapshot,
   type AuthorizedInventorySnapshot,
 } from "../src/lib/authorized-inventory-snapshot";
+import type { LiveInventoryRecord } from "../src/lib/live-inventory";
 
 const observedAt = "2026-09-10T23:45:00.000Z";
 const expectedWorkspaceId = "orr-nissan-west";
@@ -46,10 +47,14 @@ function snapshot(overrides: Partial<AuthorizedInventorySnapshot> = {}): Authori
   };
 }
 
-function expectRejected(input: AuthorizedInventorySnapshot, expectedCode: string) {
+function expectRejected(
+  input: AuthorizedInventorySnapshot,
+  expectedCode: string,
+  previousRecords: LiveInventoryRecord[] = [],
+) {
   assert.throws(
     () => reconcileAuthorizedInventorySnapshot({
-      previousRecords: [],
+      previousRecords,
       snapshot: input,
       expectedWorkspaceId,
       expectedDealerId,
@@ -93,6 +98,43 @@ expectRejected(snapshot({ completeSnapshot: false }), "SNAPSHOT_INCOMPLETE");
 expectRejected(snapshot({ observedAt: "not-a-date" }), "OBSERVED_AT_INVALID");
 expectRejected(snapshot({ records: [{ ...snapshot().records[0], vin: "BADVIN" }] }), "VIN_INVALID");
 expectRejected(snapshot({ records: [snapshot().records[0], snapshot().records[0]] }), "DUPLICATE_VIN");
+
+// A late or replayed delivery cannot roll inventory backward or count the same
+// absence twice. Every accepted provider snapshot must be newer than current state.
+{
+  const accepted = reconcileAuthorizedInventorySnapshot({
+    previousRecords: [],
+    snapshot: snapshot({
+      observedAt: "2026-09-11T00:15:00.000Z",
+      sourceRef: "synthetic://authorized-inventory/current",
+    }),
+    expectedWorkspaceId,
+    expectedDealerId,
+  });
+
+  expectRejected(
+    snapshot({
+      observedAt: "2026-09-11T00:00:00.000Z",
+      sourceRef: "synthetic://authorized-inventory/late-old-copy",
+      records: [{ ...snapshot().records[0], price: 17999 }],
+    }),
+    "STALE_OR_REPLAYED_SNAPSHOT",
+    accepted.records,
+  );
+
+  expectRejected(
+    snapshot({
+      observedAt: "2026-09-11T00:15:00.000Z",
+      sourceRef: "synthetic://authorized-inventory/replayed-same-time",
+      records: [],
+    }),
+    "STALE_OR_REPLAYED_SNAPSHOT",
+    accepted.records,
+  );
+
+  assert.equal(accepted.records[0].price, 19970);
+  assert.equal(accepted.records[0].consecutiveHealthyMisses, 0);
+}
 
 // A snapshot fingerprint must represent the data, not the arbitrary order in
 // which a provider happened to return otherwise-identical vehicle records.

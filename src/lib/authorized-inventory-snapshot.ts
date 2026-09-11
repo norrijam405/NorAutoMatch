@@ -46,6 +46,7 @@ export type AuthorizedInventoryIssue = {
     | "DEALER_MISMATCH"
     | "SNAPSHOT_INCOMPLETE"
     | "OBSERVED_AT_INVALID"
+    | "STALE_OR_REPLAYED_SNAPSHOT"
     | "VIN_INVALID"
     | "DUPLICATE_VIN";
   vin?: string;
@@ -72,8 +73,18 @@ function canonicalDigest(snapshot: AuthorizedInventorySnapshot) {
   return createHash("sha256").update(canonical, "utf8").digest("hex");
 }
 
+function latestKnownObservationMs(previousRecords: LiveInventoryRecord[]) {
+  let latest = Number.NEGATIVE_INFINITY;
+  for (const record of previousRecords) {
+    const fetchedMs = Date.parse(record.fetchedAt);
+    if (Number.isFinite(fetchedMs) && fetchedMs > latest) latest = fetchedMs;
+  }
+  return latest;
+}
+
 function assertSnapshotBoundary(input: {
   snapshot: AuthorizedInventorySnapshot;
+  previousRecords: LiveInventoryRecord[];
   expectedWorkspaceId: string;
   expectedDealerId: number;
 }) {
@@ -107,8 +118,19 @@ function assertSnapshotBoundary(input: {
       message: "Partial provider snapshots cannot be used to infer vehicle removal.",
     });
   }
-  if (!Number.isFinite(Date.parse(snapshot.observedAt))) {
+
+  const observedMs = Date.parse(snapshot.observedAt);
+  if (!Number.isFinite(observedMs)) {
     issues.push({ severity: "ERROR", code: "OBSERVED_AT_INVALID", message: "Inventory snapshot observation time is invalid." });
+  } else {
+    const latestPreviousMs = latestKnownObservationMs(input.previousRecords);
+    if (Number.isFinite(latestPreviousMs) && observedMs <= latestPreviousMs) {
+      issues.push({
+        severity: "ERROR",
+        code: "STALE_OR_REPLAYED_SNAPSHOT",
+        message: "Inventory snapshot is not newer than the latest accepted provider observation and cannot roll state backward or repeat absence evidence.",
+      });
+    }
   }
 
   const vins = new Set<string>();
