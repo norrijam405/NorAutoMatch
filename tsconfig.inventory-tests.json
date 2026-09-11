@@ -41,6 +41,7 @@
     "scripts/request-body-limit.behavior.ts",
     "scripts/restricted-intake-data.behavior.ts",
     "scripts/public-abuse-control.behavior.ts",
+    "scripts/public-abuse-postgres.integration.ts",
     "scripts/crm-follow-up.integration.ts",
     "scripts/crm-follow-up-command.integration.ts",
     "scripts/crm-follow-up-due.integration.ts",
