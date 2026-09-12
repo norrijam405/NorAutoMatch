@@ -98,12 +98,14 @@ async function main() {
   const otherWorkspaceClaims = { ...claims, workspaceId: "other-workspace" };
   assert(!(await isManagerSessionDurablyRevoked({ pool, claims: otherWorkspaceClaims })), "revocation must not cross workspace boundaries");
 
-  const stored = await pool.query<{ nonce_sha256: string }>(
-    `SELECT nonce_sha256 FROM crm_manager_session_revocations WHERE workspace_id = $1`,
+  const stored = await pool.query<{ nonce_sha256: string; subject_id_sha256: string }>(
+    `SELECT nonce_sha256, subject_id_sha256 FROM crm_manager_session_revocations WHERE workspace_id = $1`,
     [claims.workspaceId],
   );
   assert.equal(stored.rows.length, 1, "exactly one append-only revocation row must exist");
   assert.notEqual(stored.rows[0].nonce_sha256, claims.nonce, "raw session nonce must not be persisted");
+  assert.notEqual(stored.rows[0].subject_id_sha256, claims.subjectId, "raw manager subject identifier must not be persisted");
+  assert.equal(stored.rows[0].subject_id_sha256.length, 64, "manager subject must be represented only by a SHA-256 fingerprint");
 
   await assert.rejects(
     () => pool.query(
