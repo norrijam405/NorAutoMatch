@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { Pool } from "pg";
+import { evaluatePublicAbuse } from "../src/lib/public-abuse-control";
 import { PostgresPublicAbuseCounterStore } from "../src/lib/public-abuse-postgres";
 
 async function main() {
@@ -8,7 +9,7 @@ async function main() {
 
   const pool = new Pool({ connectionString, max: 10 });
   try {
-    await pool.query("DELETE FROM public_abuse_buckets WHERE bucket_key IN ($1, $2)", ["integration-public-abuse", "integration-public-abuse-stale"]);
+    await pool.query("DELETE FROM public_abuse_buckets WHERE bucket_key IN ($1, $2, $3)", ["integration-public-abuse", "integration-public-abuse-stale", "integration-public-abuse-rotation"]);
     const store = new PostgresPublicAbuseCounterStore(pool);
     const now = new Date("2026-09-11T23:00:00.000Z");
     const subjectHash = "a".repeat(64);
@@ -51,6 +52,46 @@ async function main() {
     assert.equal(reset.count, 1, "expired windows must reset atomically to one");
     assert.equal(reset.resetAt.toISOString(), new Date(now.getTime() + 1_201_000).toISOString());
 
+    const oldHmacSecret = "public-abuse-old-hmac-secret-abcdefghijklmnopqrstuvwxyz-123456";
+    const newHmacSecret = "public-abuse-new-hmac-secret-abcdefghijklmnopqrstuvwxyz-123456";
+    const rotationSubject = "203.0.113.77";
+    for (let count = 1; count <= 5; count += 1) {
+      const beforeRotation = await evaluatePublicAbuse({
+        store,
+        bucketKey: "integration-public-abuse-rotation",
+        networkSubject: rotationSubject,
+        hmacSecret: oldHmacSecret,
+        now: new Date(now.getTime() + count * 1000),
+        limit: 5,
+        windowSeconds: 600,
+      });
+      assert.equal(beforeRotation.allowed, true);
+      assert.equal(beforeRotation.count, count);
+    }
+
+    const duringRotation = await evaluatePublicAbuse({
+      store,
+      bucketKey: "integration-public-abuse-rotation",
+      networkSubject: rotationSubject,
+      hmacSecret: newHmacSecret,
+      previousHmacSecret: oldHmacSecret,
+      now: new Date(now.getTime() + 6_000),
+      limit: 5,
+      windowSeconds: 600,
+    });
+    assert.equal(duringRotation.allowed, false, "real Postgres rollover must not grant a fresh abuse budget");
+    assert.equal(duringRotation.count, 6, "the stricter old-key Postgres counter must continue governing during rollover");
+
+    const rotationRows = await pool.query<{ request_count: number }>(
+      `SELECT request_count
+         FROM public_abuse_buckets
+        WHERE bucket_key = $1
+        ORDER BY request_count DESC`,
+      ["integration-public-abuse-rotation"],
+    );
+    assert.equal(rotationRows.rowCount, 2, "dual-key rollover must maintain separate pseudonymous current and previous counters");
+    assert.deepEqual(rotationRows.rows.map((row) => Number(row.request_count)).sort((a, b) => a - b), [1, 6]);
+
     await pool.query(
       `INSERT INTO public_abuse_buckets (
          bucket_key, subject_hash, window_started_at, window_expires_at, request_count, updated_at
@@ -92,7 +133,7 @@ async function main() {
     );
     assert.equal(rawLeak.rowCount, 0, "distributed store must not persist raw network identifiers");
 
-    console.log("public abuse postgres integration: PASS");
+    console.log("public abuse postgres integration with HMAC rollover continuity: PASS");
   } finally {
     await pool.end();
   }
