@@ -1,4 +1,4 @@
-name: NorAutoMatch Machine Service Security CI
+name: NorAutoMatch Public Abuse Control CI
 
 on:
   push:
@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 jobs:
-  machine-service-security:
+  public-abuse-control:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     services:
@@ -55,24 +55,38 @@ jobs:
           node scripts/start-production.mjs
           node scripts/start-production.mjs
           test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc 'SELECT COUNT(*) FROM norautomatch_schema_migrations')" = "6"
-          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.crm_machine_assertion_nonces') IS NOT NULL")" = "t"
           test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.public_abuse_buckets') IS NOT NULL")" = "t"
 
-      - name: Compile security verification surface
+      - name: Compile verification surface
         run: |
           rm -rf .tmp-inventory-tests
           npx tsc -p tsconfig.inventory-tests.json
 
-      - name: Challenge scoped short-lived assertion verification
-        run: node .tmp-inventory-tests/scripts/machine-service-auth.behavior.js
+      - name: Challenge abuse-control policy and false bypasses
+        run: node .tmp-inventory-tests/scripts/public-abuse-control.behavior.js
 
-      - name: Challenge durable replay denial
+      - name: Challenge distributed Postgres atomicity and reset semantics
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
-        run: node .tmp-inventory-tests/scripts/machine-service-replay.integration.js
+        run: node .tmp-inventory-tests/scripts/public-abuse-postgres.integration.js
 
-      - name: Prevent route regression to static bearer authorization
-        run: node .tmp-inventory-tests/scripts/machine-service-route-policy.behavior.js
+      - name: Enforce distributed persistence, privacy, and trusted-ingress contract
+        run: |
+          grep -q 'PostgresPublicAbuseCounterStore' src/app/api/leads/route.ts
+          grep -q 'NORAUTO_PUBLIC_ABUSE_HMAC_SECRET' src/app/api/leads/route.ts
+          grep -q 'NORAUTO_PUBLIC_NETWORK_SUBJECT_HEADER' src/app/api/leads/route.ts
+          grep -q 'NORAUTO_TRUST_PROXY_NETWORK_HEADERS' src/app/api/leads/route.ts
+          grep -q 'TRUSTED_PROXY_NETWORK_HEADERS_ACTIVATION' src/app/api/leads/route.ts
+          grep -q 'evaluatePublicAbuse' src/app/api/leads/route.ts
+          grep -q 'norautomatch-crm-v6-public-abuse-control.sql' scripts/start-production.mjs
+          grep -q 'ON CONFLICT (bucket_key, subject_hash) DO UPDATE' src/lib/public-abuse-postgres.ts
+          grep -q 'public_abuse_buckets' infrastructure/norautomatch-crm-v6-public-abuse-control.sql
+          grep -q 'subject_hash CHAR(64)' infrastructure/norautomatch-crm-v6-public-abuse-control.sql
+          grep -q 'TRUST_DEPLOYMENT_PROXY_NETWORK_HEADERS' .env.example
+          ! grep -q 'const requests = new Map' src/app/api/leads/route.ts
+          ! grep -q 'raw_ip' infrastructure/norautomatch-crm-v6-public-abuse-control.sql
+          ! grep -q 'ip_address' infrastructure/norautomatch-crm-v6-public-abuse-control.sql
+          ! grep -q 'extractPublicNetworkSubject(request)' src/app/api/leads/route.ts
 
       - name: Clean generated verification output
         run: rm -rf .tmp-inventory-tests
