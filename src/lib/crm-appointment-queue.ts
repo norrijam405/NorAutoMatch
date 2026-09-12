@@ -33,9 +33,16 @@ export async function readAppointmentConfirmationQueue(input: {
     updated_at: Date;
   }>(
     `SELECT opportunity_id, pipeline, stage, customer, buying_intent, attribution, updated_at
-       FROM crm_opportunities
+       FROM crm_opportunities o
       WHERE workspace_id = $1
         AND stage = 'CONTACTED'
+        AND NOT EXISTS (
+          SELECT 1
+            FROM crm_data_lifecycle l
+           WHERE l.workspace_id = o.workspace_id
+             AND l.opportunity_id = o.opportunity_id
+             AND l.state IN ('PRIMARY_REDACTED_BACKUP_PENDING', 'PRIMARY_REDACTED_BACKUP_EXPIRED')
+        )
       ORDER BY updated_at ASC, opportunity_id ASC
       LIMIT $2`,
     [workspaceId, limit],
