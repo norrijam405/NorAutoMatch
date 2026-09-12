@@ -82,6 +82,11 @@ jobs:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
         run: node .tmp-authz-tests/scripts/manager-session-revocation.integration.js
 
+      - name: Challenge cross-workspace manager read and write isolation
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-authz-tests/scripts/cross-workspace-isolation.integration.js
+
       - name: Enforce shared manager route authorization contract
         run: node .tmp-authz-tests/scripts/manager-route-auth-contract.behavior.js
 
