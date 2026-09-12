@@ -1,11 +1,11 @@
 -- NorAutoMatch CRM Persistence v11 — Durable Manager Session Revocation
 -- Append-only, workspace-scoped revocation evidence for short-lived manager sessions.
--- Raw bearer tokens and raw nonces are intentionally not persisted.
+-- Raw bearer tokens, raw nonces, and raw manager subject identifiers are intentionally not persisted.
 
 CREATE TABLE IF NOT EXISTS crm_manager_session_revocations (
     workspace_id TEXT NOT NULL,
     nonce_sha256 CHAR(64) NOT NULL CHECK (nonce_sha256 ~ '^[0-9a-f]{64}$'),
-    subject_id TEXT NOT NULL,
+    subject_id_sha256 CHAR(64) NOT NULL CHECK (subject_id_sha256 ~ '^[0-9a-f]{64}$'),
     session_expires_at TIMESTAMPTZ NOT NULL,
     revoked_at TIMESTAMPTZ NOT NULL,
     revoked_by TEXT NOT NULL CHECK (revoked_by ~ '^[A-Z][A-Z0-9_:-]{1,127}$'),
@@ -32,5 +32,6 @@ CREATE TRIGGER crm_manager_session_revocations_immutable
 BEFORE UPDATE OR DELETE ON crm_manager_session_revocations
 FOR EACH ROW EXECUTE FUNCTION norautomatch_reject_manager_session_revocation_mutation();
 
-COMMENT ON TABLE crm_manager_session_revocations IS 'Append-only durable manager-session revocation evidence. Stores a SHA-256 nonce fingerprint rather than the raw bearer token or raw nonce.';
+COMMENT ON TABLE crm_manager_session_revocations IS 'Append-only durable manager-session revocation evidence. Stores SHA-256 nonce and subject fingerprints rather than raw bearer/session identity values.';
 COMMENT ON COLUMN crm_manager_session_revocations.nonce_sha256 IS 'SHA-256 fingerprint of the manager session nonce; raw nonce is not persisted.';
+COMMENT ON COLUMN crm_manager_session_revocations.subject_id_sha256 IS 'SHA-256 fingerprint of the manager subject identifier; raw manager subject identity is not persisted.';
