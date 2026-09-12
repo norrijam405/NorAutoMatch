@@ -1,4 +1,4 @@
-# Exact-head verification marker: durable manager revocation v11
+# Exact-head verification marker: durable manager revocation v11 + cross-workspace proof
 name: NorAutoMatch AuthZ Workspace Isolation CI
 
 on:
