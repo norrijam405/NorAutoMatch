@@ -4,6 +4,7 @@ import { evaluateProductionReadiness } from "../src/lib/production-readiness";
 const base = {
   NORAUTO_CRM_DATABASE_URL: "postgresql://user:password@db.example.com:5432/norauto",
   NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: "abuse-hmac-secret-abcdefghijklmnopqrstuvwxyz-123456",
+  NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET: "",
   NORAUTO_RELAY_ASSERTION_SECRET: "relay-assertion-secret-abcdefghijklmnopqrstuvwxyz-123456",
   NORAUTO_RELAY_ASSERTION_PREVIOUS_SECRET: "",
   NORAUTO_CONVERSATION_GATEWAY_ASSERTION_SECRET: "conversation-assertion-secret-abcdefghijklmnopqrstuvwxyz-123456",
@@ -33,11 +34,12 @@ assert.equal(demo.checks.every((check) => check.status === "PASS"), true);
 
 const rollover = evaluateProductionReadiness({
   ...base,
+  NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET: "abuse-hmac-previous-abcdefghijklmnopqrstuvwxyz-123456",
   NORAUTO_RELAY_ASSERTION_PREVIOUS_SECRET: "relay-previous-secret-abcdefghijklmnopqrstuvwxyz-123456",
   NORAUTO_CONVERSATION_GATEWAY_ASSERTION_PREVIOUS_SECRET: "conversation-previous-secret-abcdefghijklmnopqrstuvwxyz-123456",
   NORAUTO_MANAGER_SESSION_PREVIOUS_SECRET: "manager-previous-secret-abcdefghijklmnopqrstuvwxyz-123456",
 });
-assert.equal(rollover.ready, true, "Distinct structurally valid previous keys must support a bounded rollover window.");
+assert.equal(rollover.ready, true, "Distinct structurally valid previous keys must support bounded rollover windows.");
 
 const shadow = evaluateProductionReadiness({ ...base, NORAUTO_INVENTORY_MODE: "live-shadow" });
 assert.equal(shadow.ready, true);
@@ -52,6 +54,8 @@ assert.equal(live.ready, true);
 expectFailure({ NORAUTO_CRM_DATABASE_URL: "postgresql://user:password@localhost:5432/norauto" }, "CRM_DATABASE_URL");
 expectFailure({ NORAUTO_CRM_DATABASE_URL: "https://db.example.com/norauto" }, "CRM_DATABASE_URL");
 expectFailure({ NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: "short" }, "PUBLIC_ABUSE_HMAC_SECRET");
+expectFailure({ NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET: "short" }, "PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET");
+expectFailure({ NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET: base.NORAUTO_PUBLIC_ABUSE_HMAC_SECRET }, "PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET");
 expectFailure({ NORAUTO_RELAY_ASSERTION_SECRET: "short" }, "RELAY_ASSERTION_SECRET");
 expectFailure({ NORAUTO_RELAY_ASSERTION_PREVIOUS_SECRET: "short" }, "RELAY_ASSERTION_PREVIOUS_SECRET");
 expectFailure({ NORAUTO_RELAY_ASSERTION_PREVIOUS_SECRET: base.NORAUTO_RELAY_ASSERTION_SECRET }, "RELAY_ASSERTION_PREVIOUS_SECRET");
@@ -64,6 +68,7 @@ expectFailure({ NORAUTO_MANAGER_SESSION_PREVIOUS_SECRET: base.NORAUTO_MANAGER_SE
 expectFailure({ NORAUTO_MANAGER_SESSION_SECRET: base.NORAUTO_RELAY_ASSERTION_SECRET }, "CREDENTIAL_SEPARATION");
 expectFailure({ NORAUTO_CONVERSATION_GATEWAY_ASSERTION_SECRET: base.NORAUTO_RELAY_ASSERTION_SECRET }, "CREDENTIAL_SEPARATION");
 expectFailure({ NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: base.NORAUTO_MANAGER_SESSION_SECRET }, "CREDENTIAL_SEPARATION");
+expectFailure({ NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET: base.NORAUTO_RELAY_ASSERTION_SECRET }, "CREDENTIAL_SEPARATION");
 expectFailure({ NORAUTO_RELAY_ASSERTION_PREVIOUS_SECRET: base.NORAUTO_MANAGER_SESSION_SECRET }, "CREDENTIAL_SEPARATION");
 expectFailure({ NEXT_PUBLIC_SITE_URL: "http://norautomatch.example.com" }, "SITE_URL");
 expectFailure({ NEXT_PUBLIC_SITE_URL: "https://localhost:3000" }, "SITE_URL");
