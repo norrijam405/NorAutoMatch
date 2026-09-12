@@ -113,7 +113,8 @@ async function run() {
 
   try {
     await pool.query(
-      `TRUNCATE TABLE crm_follow_up_obligations, crm_outbox, crm_manager_review_receipts,
+      `TRUNCATE TABLE crm_data_lifecycle_redaction_receipts, crm_data_lifecycle_conversation_targets,
+       crm_data_lifecycle, crm_follow_up_obligations, crm_outbox, crm_manager_review_receipts,
        crm_manager_handoffs, crm_evidence, crm_opportunities RESTART IDENTITY`,
     );
 
