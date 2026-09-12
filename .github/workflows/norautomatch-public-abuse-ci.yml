@@ -54,7 +54,7 @@ jobs:
         run: |
           node scripts/start-production.mjs
           node scripts/start-production.mjs
-          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc 'SELECT COUNT(*) FROM norautomatch_schema_migrations')" = "7"
+          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc 'SELECT COUNT(*) FROM norautomatch_schema_migrations')" = "8"
           test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc \"SELECT to_regclass('public.public_abuse_buckets') IS NOT NULL\")" = "t"
 
       - name: Compile verification surface
@@ -65,7 +65,7 @@ jobs:
       - name: Challenge abuse-control policy and false bypasses
         run: node .tmp-inventory-tests/scripts/public-abuse-control.behavior.js
 
-      - name: Challenge distributed Postgres atomicity and reset semantics
+      - name: Challenge distributed Postgres atomicity, reset semantics, and explicit-cutoff cleanup
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
         run: node .tmp-inventory-tests/scripts/public-abuse-postgres.integration.js
@@ -79,9 +79,12 @@ jobs:
           grep -q 'TRUSTED_PROXY_NETWORK_HEADERS_ACTIVATION' src/app/api/leads/route.ts
           grep -q 'evaluatePublicAbuse' src/app/api/leads/route.ts
           grep -q 'norautomatch-crm-v6-public-abuse-control.sql' scripts/start-production.mjs
+          grep -q 'norautomatch-crm-v8-abuse-retention.sql' scripts/start-production.mjs
           grep -q 'ON CONFLICT (bucket_key, subject_hash) DO UPDATE' src/lib/public-abuse-postgres.ts
           grep -q 'public_abuse_buckets' infrastructure/norautomatch-crm-v6-public-abuse-control.sql
           grep -q 'subject_hash CHAR(64)' infrastructure/norautomatch-crm-v6-public-abuse-control.sql
+          grep -q 'norautomatch_cleanup_expired_public_abuse_buckets' infrastructure/norautomatch-crm-v8-abuse-retention.sql
+          grep -q 'explicit caller-supplied cutoff' infrastructure/norautomatch-crm-v8-abuse-retention.sql
           grep -q 'TRUST_DEPLOYMENT_PROXY_NETWORK_HEADERS' .env.example
           ! grep -q 'const requests = new Map' src/app/api/leads/route.ts
           ! grep -q 'raw_ip' infrastructure/norautomatch-crm-v6-public-abuse-control.sql
