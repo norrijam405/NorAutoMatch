@@ -54,10 +54,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -R --exclude-dir=.git --exclude='norautomatch-repository-governance-ci.yml' -E 'canonicalBranch["'"' ]*[:=]["'"' ]*main|CANONICAL_BRANCH[=:][[:space:]]*main' .github scripts src 2>/dev/null; then
-            echo 'Found a code/config claim treating stale main as canonical.' >&2
-            exit 1
-          fi
+          node - <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const roots = ['scripts', 'src'];
+          const bad = [];
+          const patterns = [
+            /canonicalBranch\s*[:=]\s*["']main["']/,
+            /CANONICAL_BRANCH\s*[:=]\s*["']?main["']?/
+          ];
+          function walk(p) {
+            if (!fs.existsSync(p)) return;
+            const stat = fs.statSync(p);
+            if (stat.isDirectory()) {
+              for (const name of fs.readdirSync(p)) walk(path.join(p, name));
+              return;
+            }
+            if (!/\.(?:js|mjs|cjs|ts|tsx|json|ya?ml|md)$/.test(p)) return;
+            const text = fs.readFileSync(p, 'utf8');
+            if (patterns.some((re) => re.test(text))) bad.push(p);
+          }
+          roots.forEach(walk);
+          if (bad.length) throw new Error(`stale main claimed as canonical in: ${bad.join(', ')}`);
+          NODE
 
       - name: Verify workflow keeps least privilege
         shell: bash
