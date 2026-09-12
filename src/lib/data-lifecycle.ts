@@ -6,6 +6,8 @@ export type DataLifecycleState =
   | "PRIMARY_REDACTED_BACKUP_EXPIRED";
 
 export type BackupDisposition = "NOT_APPLICABLE" | "PENDING_EXPIRY" | "EXPIRED_OR_PURGED" | "UNKNOWN";
+export type ExternalCopyTruth = "NOT_KNOWN" | "MAY_EXIST" | "SEPARATELY_CONFIRMED_REMOVED";
+export type InitialExternalCopyTruth = Exclude<ExternalCopyTruth, "SEPARATELY_CONFIRMED_REMOVED">;
 
 export type DataLifecycleRecord = {
   protocol: "NORAUTO_DATA_LIFECYCLE_V1";
@@ -21,7 +23,12 @@ export type DataLifecycleRecord = {
   primaryRedactedAt?: string;
   backupDisposition: BackupDisposition;
   backupDispositionRef?: string;
-  externalCopies: "NOT_KNOWN" | "MAY_EXIST" | "SEPARATELY_CONFIRMED_REMOVED";
+  backupDispositionAuthority?: string;
+  backupDispositionObservedAt?: string;
+  externalCopies: ExternalCopyTruth;
+  externalDispositionRef?: string;
+  externalDispositionAuthority?: string;
+  externalDispositionObservedAt?: string;
   authorityEffect: "NONE";
 };
 
@@ -61,7 +68,7 @@ export function requireLifecycleAuthority(value: string, label = "DATA_LIFECYCLE
   return normalized;
 }
 
-function requireIso(value: string, label: string) {
+export function requireLifecycleIso(value: string, label: string) {
   const ms = Date.parse(value);
   if (!Number.isFinite(ms)) throw new Error(`${label}_INVALID_TIMESTAMP`);
   return new Date(ms).toISOString();
@@ -73,8 +80,11 @@ export function createRedactionRequest(input: {
   requestRef: string;
   requestAuthority: string;
   requestedAt: string;
-  externalCopies?: DataLifecycleRecord["externalCopies"];
+  externalCopies?: InitialExternalCopyTruth;
 }): DataLifecycleRecord {
+  if ((input.externalCopies as ExternalCopyTruth | undefined) === "SEPARATELY_CONFIRMED_REMOVED") {
+    throw new Error("DATA_LIFECYCLE_EXTERNAL_REMOVAL_REQUIRES_SEPARATE_EVIDENCE");
+  }
   return {
     protocol: "NORAUTO_DATA_LIFECYCLE_V1",
     workspaceId: requireBounded(input.workspaceId, "DATA_LIFECYCLE_WORKSPACE", 128),
@@ -82,13 +92,15 @@ export function createRedactionRequest(input: {
     state: "REDACTION_REQUESTED",
     requestRef: requireLifecycleEvidenceRef(input.requestRef, "DATA_LIFECYCLE_REQUEST_REF"),
     requestAuthority: requireLifecycleAuthority(input.requestAuthority, "DATA_LIFECYCLE_REQUEST_AUTHORITY"),
-    requestedAt: requireIso(input.requestedAt, "DATA_LIFECYCLE_REQUESTED_AT"),
+    requestedAt: requireLifecycleIso(input.requestedAt, "DATA_LIFECYCLE_REQUESTED_AT"),
     backupDisposition: "UNKNOWN",
     externalCopies: input.externalCopies ?? "NOT_KNOWN",
     authorityEffect: "NONE",
   };
 }
 
+// Legacy pure-state helper retained for compatibility with historical lifecycle evidence.
+// New persisted legal holds are represented independently by the legal-hold ledger.
 export function applyLegalHold(input: {
   record: DataLifecycleRecord;
   legalHoldRef: string;
@@ -103,7 +115,7 @@ export function applyLegalHold(input: {
     state: "LEGAL_HOLD",
     legalHoldRef: requireLifecycleEvidenceRef(input.legalHoldRef, "DATA_LIFECYCLE_HOLD_REF"),
     legalHoldAuthority: requireLifecycleAuthority(input.legalHoldAuthority, "DATA_LIFECYCLE_HOLD_AUTHORITY"),
-    legalHoldObservedAt: requireIso(input.observedAt, "DATA_LIFECYCLE_HOLD_OBSERVED_AT"),
+    legalHoldObservedAt: requireLifecycleIso(input.observedAt, "DATA_LIFECYCLE_HOLD_OBSERVED_AT"),
   };
 }
 
@@ -172,7 +184,7 @@ export function markPrimaryRedacted(input: {
   return {
     ...input.record,
     state: "PRIMARY_REDACTED_BACKUP_PENDING",
-    primaryRedactedAt: requireIso(input.redactedAt, "DATA_LIFECYCLE_PRIMARY_REDACTED_AT"),
+    primaryRedactedAt: requireLifecycleIso(input.redactedAt, "DATA_LIFECYCLE_PRIMARY_REDACTED_AT"),
     backupDisposition: input.backupDisposition ?? "PENDING_EXPIRY",
   };
 }
@@ -180,6 +192,8 @@ export function markPrimaryRedacted(input: {
 export function markBackupResolved(input: {
   record: DataLifecycleRecord;
   dispositionRef: string;
+  dispositionAuthority: string;
+  observedAt: string;
 }): DataLifecycleRecord {
   if (input.record.state !== "PRIMARY_REDACTED_BACKUP_PENDING") {
     throw new Error("DATA_LIFECYCLE_BACKUP_RESOLUTION_REQUIRES_PRIMARY_REDACTION");
@@ -189,5 +203,28 @@ export function markBackupResolved(input: {
     state: "PRIMARY_REDACTED_BACKUP_EXPIRED",
     backupDisposition: "EXPIRED_OR_PURGED",
     backupDispositionRef: requireLifecycleEvidenceRef(input.dispositionRef, "DATA_LIFECYCLE_BACKUP_DISPOSITION_REF"),
+    backupDispositionAuthority: requireLifecycleAuthority(input.dispositionAuthority, "DATA_LIFECYCLE_BACKUP_DISPOSITION_AUTHORITY"),
+    backupDispositionObservedAt: requireLifecycleIso(input.observedAt, "DATA_LIFECYCLE_BACKUP_DISPOSITION_OBSERVED_AT"),
+  };
+}
+
+export function markExternalCopiesRemoved(input: {
+  record: DataLifecycleRecord;
+  dispositionRef: string;
+  dispositionAuthority: string;
+  observedAt: string;
+}): DataLifecycleRecord {
+  if (input.record.state !== "PRIMARY_REDACTED_BACKUP_PENDING" && input.record.state !== "PRIMARY_REDACTED_BACKUP_EXPIRED") {
+    throw new Error("DATA_LIFECYCLE_EXTERNAL_REMOVAL_REQUIRES_PRIMARY_REDACTION");
+  }
+  if (input.record.externalCopies === "SEPARATELY_CONFIRMED_REMOVED") {
+    throw new Error("DATA_LIFECYCLE_EXTERNAL_REMOVAL_ALREADY_CONFIRMED");
+  }
+  return {
+    ...input.record,
+    externalCopies: "SEPARATELY_CONFIRMED_REMOVED",
+    externalDispositionRef: requireLifecycleEvidenceRef(input.dispositionRef, "DATA_LIFECYCLE_EXTERNAL_DISPOSITION_REF"),
+    externalDispositionAuthority: requireLifecycleAuthority(input.dispositionAuthority, "DATA_LIFECYCLE_EXTERNAL_DISPOSITION_AUTHORITY"),
+    externalDispositionObservedAt: requireLifecycleIso(input.observedAt, "DATA_LIFECYCLE_EXTERNAL_DISPOSITION_OBSERVED_AT"),
   };
 }
