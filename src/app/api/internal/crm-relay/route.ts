@@ -35,6 +35,7 @@ export async function POST(request: Request) {
   const auth = authorizeMachineServiceAssertion({
     authorizationHeader: request.headers.get("authorization"),
     configuredSecret: process.env.NORAUTO_RELAY_ASSERTION_SECRET,
+    configuredPreviousSecret: process.env.NORAUTO_RELAY_ASSERTION_PREVIOUS_SECRET,
     expectedAudience: "CRM_RELAY",
     expectedWorkspaceId: NORAUTO_WORKSPACE_ID,
   });

@@ -8,7 +8,8 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-const secret = "machine-service-test-secret-at-least-32-characters";
+const secret = "machine-service-current-secret-at-least-32-characters";
+const previousSecret = "machine-service-previous-secret-at-least-32-characters";
 const now = 1_789_000_000;
 const claims: MachineServiceAssertionClaims = {
   protocol: "NORAUTO_MACHINE_ASSERTION_V1",
@@ -30,6 +31,49 @@ const valid = authorizeMachineServiceAssertion({
 });
 assert(valid.authorized, "Valid scoped machine assertion must authorize before replay consumption.");
 assert(valid.claims.issuerService === claims.issuerService, "Authorized assertion must preserve issuer service identity.");
+
+const oldToken = createMachineServiceAssertionForTrustedIssuer({
+  claims: { ...claims, nonce: "machine-assertion-old-key-0001" },
+  configuredSecret: previousSecret,
+});
+const rolloverAccepted = authorizeMachineServiceAssertion({
+  authorizationHeader: `Bearer ${oldToken}`,
+  configuredSecret: secret,
+  configuredPreviousSecret: previousSecret,
+  expectedAudience: "CONVERSATION_GATEWAY",
+  expectedWorkspaceId: "norautomatch",
+  nowEpochSeconds: now,
+});
+assert(rolloverAccepted.authorized, "Previous machine signing key must verify only during an explicit rollover window.");
+
+const retiredOldKey = authorizeMachineServiceAssertion({
+  authorizationHeader: `Bearer ${oldToken}`,
+  configuredSecret: secret,
+  expectedAudience: "CONVERSATION_GATEWAY",
+  expectedWorkspaceId: "norautomatch",
+  nowEpochSeconds: now,
+});
+assert(!retiredOldKey.authorized && retiredOldKey.reason === "INVALID_SIGNATURE", "Old machine key must stop authorizing immediately after previous-key removal.");
+
+const duplicateKeyConfig = authorizeMachineServiceAssertion({
+  authorizationHeader: `Bearer ${token}`,
+  configuredSecret: secret,
+  configuredPreviousSecret: secret,
+  expectedAudience: "CONVERSATION_GATEWAY",
+  expectedWorkspaceId: "norautomatch",
+  nowEpochSeconds: now,
+});
+assert(!duplicateKeyConfig.authorized && duplicateKeyConfig.reason === "NOT_CONFIGURED", "Current and previous machine signing keys must not be identical.");
+
+const weakPreviousConfig = authorizeMachineServiceAssertion({
+  authorizationHeader: `Bearer ${token}`,
+  configuredSecret: secret,
+  configuredPreviousSecret: "short",
+  expectedAudience: "CONVERSATION_GATEWAY",
+  expectedWorkspaceId: "norautomatch",
+  nowEpochSeconds: now,
+});
+assert(!weakPreviousConfig.authorized && weakPreviousConfig.reason === "NOT_CONFIGURED", "Malformed previous machine signing key must fail closed even when the current key is valid.");
 
 const weakConfig = authorizeMachineServiceAssertion({
   authorizationHeader: `Bearer ${token}`,
@@ -114,4 +158,4 @@ try {
 }
 assert(overlongRejected, "Trusted issuer helper must refuse assertions longer than five minutes.");
 
-console.log("PASS_MACHINE_SERVICE_ASSERTION_BOUNDARY");
+console.log("PASS_MACHINE_SERVICE_ASSERTION_BOUNDARY_WITH_BOUNDED_ROLLOVER");

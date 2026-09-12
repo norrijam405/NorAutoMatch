@@ -41,6 +41,7 @@ function getCrmPersistenceAdapter() {
 function getPublicAbuseGuard(): {
   store: MemoryPublicAbuseCounterStore | PostgresPublicAbuseCounterStore;
   hmacSecret: string;
+  previousHmacSecret?: string;
   networkHeader: PublicNetworkSubjectHeader;
 } | null {
   if (process.env.NODE_ENV !== "production") {
@@ -57,11 +58,13 @@ function getPublicAbuseGuard(): {
 
   const networkHeader = parsePublicNetworkSubjectHeader(process.env.NORAUTO_PUBLIC_NETWORK_SUBJECT_HEADER);
   const hmacSecret = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_SECRET?.trim();
+  const previousHmacSecret = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET?.trim();
   const pool = getCrmPool();
   if (!pool || !networkHeader || !hmacSecret || hmacSecret.length < 32) return null;
+  if (previousHmacSecret && (previousHmacSecret.length < 32 || previousHmacSecret === hmacSecret)) return null;
 
   postgresPublicAbuseStore ??= new PostgresPublicAbuseCounterStore(pool);
-  return { store: postgresPublicAbuseStore, hmacSecret, networkHeader };
+  return { store: postgresPublicAbuseStore, hmacSecret, previousHmacSecret: previousHmacSecret || undefined, networkHeader };
 }
 
 export async function POST(request: Request) {
@@ -86,6 +89,7 @@ export async function POST(request: Request) {
       store: abuseGuard.store,
       networkSubject,
       hmacSecret: abuseGuard.hmacSecret,
+      previousHmacSecret: abuseGuard.previousHmacSecret,
     });
 
     if (!abuseDecision.allowed) {

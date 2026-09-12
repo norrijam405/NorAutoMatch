@@ -11,6 +11,7 @@ import {
 } from "../src/lib/public-abuse-control";
 
 const secret = "0123456789abcdef0123456789abcdef";
+const rotatedSecret = "abcdef0123456789abcdef0123456789";
 
 async function main() {
   assert.equal(TRUSTED_PROXY_NETWORK_HEADERS_ACTIVATION, "TRUST_DEPLOYMENT_PROXY_NETWORK_HEADERS");
@@ -100,6 +101,59 @@ async function main() {
   assert.equal(reset.allowed, true, "an expired fixed window must reset to a new bounded budget");
   assert.equal(reset.count, 1);
 
+  const rotationStore = new MemoryPublicAbuseCounterStore();
+  const rotationSubject = "203.0.113.44";
+  for (let count = 1; count <= PUBLIC_LEAD_ABUSE_LIMIT; count += 1) {
+    const beforeRotation = await evaluatePublicAbuse({
+      store: rotationStore,
+      networkSubject: rotationSubject,
+      hmacSecret: secret,
+      now: new Date(start.getTime() + count * 1000),
+    });
+    assert.equal(beforeRotation.allowed, true);
+  }
+  const duringRotation = await evaluatePublicAbuse({
+    store: rotationStore,
+    networkSubject: rotationSubject,
+    hmacSecret: rotatedSecret,
+    previousHmacSecret: secret,
+    now: new Date(start.getTime() + 6000),
+  });
+  assert.equal(duringRotation.allowed, false, "HMAC rotation must not reset an active abuse budget");
+  assert.equal(duringRotation.count, PUBLIC_LEAD_ABUSE_LIMIT + 1, "the stricter previous-key counter must govern during rollover");
+
+  await assert.rejects(
+    evaluatePublicAbuse({
+      store: rotationStore,
+      networkSubject: rotationSubject,
+      hmacSecret: rotatedSecret,
+      previousHmacSecret: rotatedSecret,
+      now: new Date(start.getTime() + 7000),
+    }),
+    /must differ from the current secret/,
+    "duplicate current/previous abuse keys must fail closed",
+  );
+  await assert.rejects(
+    evaluatePublicAbuse({
+      store: rotationStore,
+      networkSubject: rotationSubject,
+      hmacSecret: rotatedSecret,
+      previousHmacSecret: "short",
+      now: new Date(start.getTime() + 7000),
+    }),
+    /at least 32 characters/,
+    "weak previous abuse key must fail closed",
+  );
+
+  const afterOldWindow = await evaluatePublicAbuse({
+    store: rotationStore,
+    networkSubject: rotationSubject,
+    hmacSecret: rotatedSecret,
+    previousHmacSecret: secret,
+    now: new Date(start.getTime() + (PUBLIC_LEAD_ABUSE_WINDOW_SECONDS + 10) * 1000),
+  });
+  assert.equal(afterOldWindow.allowed, true, "after the full prior window expires, rollover counters may begin a fresh bounded window");
+
   const failingStore = {
     async consume() {
       throw new Error("synthetic distributed store outage");
@@ -116,7 +170,7 @@ async function main() {
     "distributed-store failures must propagate so production callers can fail closed",
   );
 
-  console.log("public abuse control behavior: PASS");
+  console.log("PASS_PUBLIC_ABUSE_CONTROL_WITH_HMAC_ROLLOVER_CONTINUITY");
 }
 
 main().catch((error) => {

@@ -1,7 +1,13 @@
 export type ProductionReadinessCheckId =
   | "CRM_DATABASE_URL"
-  | "RELAY_TRIGGER_TOKEN"
+  | "PUBLIC_ABUSE_HMAC_SECRET"
+  | "PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET"
+  | "RELAY_ASSERTION_SECRET"
+  | "RELAY_ASSERTION_PREVIOUS_SECRET"
+  | "CONVERSATION_GATEWAY_ASSERTION_SECRET"
+  | "CONVERSATION_GATEWAY_ASSERTION_PREVIOUS_SECRET"
   | "MANAGER_SESSION_SECRET"
+  | "MANAGER_SESSION_PREVIOUS_SECRET"
   | "CREDENTIAL_SEPARATION"
   | "SITE_URL"
   | "CRM_WEBHOOK_URL"
@@ -58,19 +64,55 @@ function push(checks: ProductionReadinessCheck[], id: ProductionReadinessCheckId
   checks.push({ id, status: ok ? "PASS" : "FAIL", message: ok ? pass : fail });
 }
 
+function validCurrentSecret(secret: string) {
+  return secret.length >= 32;
+}
+
+function validPreviousSecret(previous: string, current: string) {
+  return previous === "" || (previous.length >= 32 && previous !== current);
+}
+
 export function evaluateProductionReadiness(env: Environment): ProductionReadinessResult {
   const checks: ProductionReadinessCheck[] = [];
 
   const databaseUrl = value(env, "NORAUTO_CRM_DATABASE_URL");
   push(checks, "CRM_DATABASE_URL", checkUrl(databaseUrl, { protocols: ["postgres:", "postgresql:"], rejectLocalhost: true }), "Durable CRM database URL is structurally production-shaped.", "NORAUTO_CRM_DATABASE_URL must be a non-local PostgreSQL URL before production intake.");
 
-  const relayToken = value(env, "NORAUTO_RELAY_TRIGGER_TOKEN");
-  push(checks, "RELAY_TRIGGER_TOKEN", relayToken.length >= 32, "Machine relay credential meets the minimum length boundary.", "NORAUTO_RELAY_TRIGGER_TOKEN must be at least 32 characters.");
-
+  const abuseSecret = value(env, "NORAUTO_PUBLIC_ABUSE_HMAC_SECRET");
+  const abusePrevious = value(env, "NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET");
+  const relaySecret = value(env, "NORAUTO_RELAY_ASSERTION_SECRET");
+  const relayPrevious = value(env, "NORAUTO_RELAY_ASSERTION_PREVIOUS_SECRET");
+  const conversationSecret = value(env, "NORAUTO_CONVERSATION_GATEWAY_ASSERTION_SECRET");
+  const conversationPrevious = value(env, "NORAUTO_CONVERSATION_GATEWAY_ASSERTION_PREVIOUS_SECRET");
   const managerSecret = value(env, "NORAUTO_MANAGER_SESSION_SECRET");
-  push(checks, "MANAGER_SESSION_SECRET", managerSecret.length >= 32, "Manager session verification secret meets the minimum length boundary.", "NORAUTO_MANAGER_SESSION_SECRET must be at least 32 characters.");
+  const managerPrevious = value(env, "NORAUTO_MANAGER_SESSION_PREVIOUS_SECRET");
 
-  push(checks, "CREDENTIAL_SEPARATION", relayToken.length >= 32 && managerSecret.length >= 32 && relayToken !== managerSecret, "Manager and machine-relay credentials are separated.", "Manager session and machine relay credentials must be distinct secrets.");
+  push(checks, "PUBLIC_ABUSE_HMAC_SECRET", validCurrentSecret(abuseSecret), "Public-abuse pseudonymization secret meets the minimum length boundary.", "NORAUTO_PUBLIC_ABUSE_HMAC_SECRET must be at least 32 characters.");
+  push(checks, "PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET", validPreviousSecret(abusePrevious, abuseSecret), abusePrevious ? "Previous public-abuse HMAC key is structurally valid and distinct from the current key." : "No previous public-abuse HMAC key is configured outside a rollover window.", "NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET must be blank or a distinct secret of at least 32 characters.");
+  push(checks, "RELAY_ASSERTION_SECRET", validCurrentSecret(relaySecret), "CRM relay assertion signing secret meets the minimum length boundary.", "NORAUTO_RELAY_ASSERTION_SECRET must be at least 32 characters.");
+  push(checks, "RELAY_ASSERTION_PREVIOUS_SECRET", validPreviousSecret(relayPrevious, relaySecret), relayPrevious ? "Previous relay signing key is structurally valid and distinct from the current key." : "No previous relay signing key is configured outside a rollover window.", "NORAUTO_RELAY_ASSERTION_PREVIOUS_SECRET must be blank or a distinct secret of at least 32 characters.");
+  push(checks, "CONVERSATION_GATEWAY_ASSERTION_SECRET", validCurrentSecret(conversationSecret), "Conversation gateway assertion signing secret meets the minimum length boundary.", "NORAUTO_CONVERSATION_GATEWAY_ASSERTION_SECRET must be at least 32 characters.");
+  push(checks, "CONVERSATION_GATEWAY_ASSERTION_PREVIOUS_SECRET", validPreviousSecret(conversationPrevious, conversationSecret), conversationPrevious ? "Previous conversation signing key is structurally valid and distinct from the current key." : "No previous conversation signing key is configured outside a rollover window.", "NORAUTO_CONVERSATION_GATEWAY_ASSERTION_PREVIOUS_SECRET must be blank or a distinct secret of at least 32 characters.");
+  push(checks, "MANAGER_SESSION_SECRET", validCurrentSecret(managerSecret), "Manager session verification secret meets the minimum length boundary.", "NORAUTO_MANAGER_SESSION_SECRET must be at least 32 characters.");
+  push(checks, "MANAGER_SESSION_PREVIOUS_SECRET", validPreviousSecret(managerPrevious, managerSecret), managerPrevious ? "Previous manager signing key is structurally valid and distinct from the current key." : "No previous manager signing key is configured outside a rollover window.", "NORAUTO_MANAGER_SESSION_PREVIOUS_SECRET must be blank or a distinct secret of at least 32 characters.");
+
+  const secretValues = [
+    abuseSecret,
+    abusePrevious,
+    relaySecret,
+    relayPrevious,
+    conversationSecret,
+    conversationPrevious,
+    managerSecret,
+    managerPrevious,
+  ].filter(Boolean);
+  const allSecretsWellFormed = [abuseSecret, relaySecret, conversationSecret, managerSecret].every(validCurrentSecret) &&
+    validPreviousSecret(abusePrevious, abuseSecret) &&
+    validPreviousSecret(relayPrevious, relaySecret) &&
+    validPreviousSecret(conversationPrevious, conversationSecret) &&
+    validPreviousSecret(managerPrevious, managerSecret);
+  const secretsAreDistinct = new Set(secretValues).size === secretValues.length;
+  push(checks, "CREDENTIAL_SEPARATION", allSecretsWellFormed && secretsAreDistinct, "Security-domain current and rollover secrets are purpose-separated.", "Abuse-control, relay, conversation, manager, and rollover secrets must be distinct and structurally valid.");
 
   const siteUrl = value(env, "NEXT_PUBLIC_SITE_URL");
   push(checks, "SITE_URL", checkUrl(siteUrl, { protocols: ["https:"], rejectLocalhost: true }), "Public site URL is HTTPS and non-local.", "NEXT_PUBLIC_SITE_URL must be a non-local HTTPS URL for production.");
