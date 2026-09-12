@@ -127,6 +127,38 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Lifecycle state is monotonic. Privacy/legal boundaries cannot be silently downgraded by a future caller.
+CREATE OR REPLACE FUNCTION norautomatch_enforce_data_lifecycle_transition()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.state = OLD.state THEN
+        RETURN NEW;
+    END IF;
+
+    IF OLD.state = 'ACTIVE'
+       AND NEW.state IN ('REDACTION_REQUESTED', 'LEGAL_HOLD') THEN
+        RETURN NEW;
+    END IF;
+
+    IF OLD.state = 'REDACTION_REQUESTED'
+       AND NEW.state IN ('LEGAL_HOLD', 'PRIMARY_REDACTED_BACKUP_PENDING') THEN
+        RETURN NEW;
+    END IF;
+
+    IF OLD.state = 'PRIMARY_REDACTED_BACKUP_PENDING'
+       AND NEW.state = 'PRIMARY_REDACTED_BACKUP_EXPIRED' THEN
+        RETURN NEW;
+    END IF;
+
+    RAISE EXCEPTION 'DATA_LIFECYCLE_INVALID_STATE_TRANSITION:%->%', OLD.state, NEW.state;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS crm_data_lifecycle_state_transition_guard ON crm_data_lifecycle;
+CREATE TRIGGER crm_data_lifecycle_state_transition_guard
+BEFORE UPDATE ON crm_data_lifecycle
+FOR EACH ROW EXECUTE FUNCTION norautomatch_enforce_data_lifecycle_transition();
+
 CREATE OR REPLACE FUNCTION norautomatch_touch_data_lifecycle_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
