@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { NORAUTO_WORKSPACE_ID } from "@/lib/crm-persistence";
 import { createPostgresCrmPool } from "@/lib/crm-postgres-adapter";
 import { executeAppointmentConfirmationCommand } from "@/lib/crm-sales-progression-command";
-import { authorizeManagerSession } from "@/lib/manager-session-auth";
+import { authorizeManagerRequest } from "@/lib/manager-route-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,11 +26,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 export async function POST(request: Request) {
-  const auth = authorizeManagerSession({
-    authorizationHeader: request.headers.get("authorization"),
-    configuredSecret: process.env.NORAUTO_MANAGER_SESSION_SECRET,
-    expectedWorkspaceId: NORAUTO_WORKSPACE_ID,
-  });
+  const auth = await authorizeManagerRequest(request);
   if (!auth.authorized) {
     if (auth.reason === "NOT_CONFIGURED") return noStore({ message: "Manager identity verification is not configured." }, 503);
     return noStore({ message: "Unauthorized." }, 401);
