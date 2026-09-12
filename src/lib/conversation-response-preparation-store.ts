@@ -10,7 +10,7 @@ type PreparationRow = {
   normalized_payload: unknown;
   routing_decision: "CONTACTABLE" | "HUMAN_REVIEW_REQUIRED" | "NOT_CONTACTABLE";
   routing_reasons: unknown;
-  processing_state: "RECEIVED" | "ROUTED" | "DEAD_LETTER";
+  processing_state: "RECEIVED" | "ROUTED" | "DEAD_LETTER" | "REDACTED";
 };
 
 function parseReasons(value: unknown): string[] {
@@ -37,7 +37,7 @@ export async function readResponsePreparationPacket(input: {
 
   const row = result.rows[0];
   if (!row) return null;
-  if (row.processing_state === "DEAD_LETTER") return null;
+  if (row.processing_state === "DEAD_LETTER" || row.processing_state === "REDACTED") return null;
 
   const event = conversationEventSchema.parse(row.normalized_payload);
   if (
