@@ -66,7 +66,7 @@ jobs:
       - name: Challenge evidence-bound data lifecycle policy
         run: node .tmp-inventory-tests/scripts/data-lifecycle.behavior.js
 
-      - name: Challenge real Postgres redaction, legal-hold, and backup truth boundaries
+      - name: Challenge real Postgres redaction, legal-hold, backup, and concurrency truth boundaries
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
         run: node .tmp-inventory-tests/scripts/data-lifecycle-postgres.integration.js
@@ -77,6 +77,8 @@ jobs:
           grep -F 'BLOCKED_BY_LEGAL_HOLD' src/lib/data-lifecycle.ts
           grep -F 'PRIMARY_REDACTION_DOES_NOT_PROVE_BACKUP_OR_EXTERNAL_DELETION' src/lib/data-lifecycle.ts
           grep -F 'operationalSuppressionRequired: true' src/lib/data-lifecycle.ts
+          grep -F "WHERE crm_data_lifecycle.state = 'ACTIVE'" src/lib/data-lifecycle-postgres.ts
+          grep -F 'DATA_LIFECYCLE_REQUEST_REFUSED_FROM_' src/lib/data-lifecycle-postgres.ts
           grep -F 'norautomatch-crm-v7-data-lifecycle.sql' scripts/start-production.mjs
           grep -F 'norautomatch-crm-v8-abuse-retention.sql' scripts/start-production.mjs
           grep -F 'EXPLICIT_TARGETS_REDACTED_SCOPE_NOT_PROVEN_COMPLETE' infrastructure/norautomatch-crm-v7-data-lifecycle.sql
