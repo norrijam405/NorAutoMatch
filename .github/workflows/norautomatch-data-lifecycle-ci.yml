@@ -1,0 +1,64 @@
+name: NorAutoMatch Data Lifecycle CI
+
+on:
+  push:
+    branches:
+      - "reactivation/**"
+  pull_request:
+    branches:
+      - main
+      - "reactivation/**"
+
+permissions:
+  contents: read
+
+jobs:
+  data-lifecycle-truth-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+
+      - name: Compile verification surface
+        run: |
+          rm -rf .tmp-inventory-tests
+          npx tsc -p tsconfig.inventory-tests.json
+
+      - name: Challenge evidence-bound data lifecycle policy
+        run: node .tmp-inventory-tests/scripts/data-lifecycle.behavior.js
+
+      - name: Source contract checks
+        run: |
+          grep -F 'PRIMARY_REDACTED_BACKUP_PENDING' src/lib/data-lifecycle.ts
+          grep -F 'BLOCKED_BY_LEGAL_HOLD' src/lib/data-lifecycle.ts
+          grep -F 'PRIMARY_REDACTION_DOES_NOT_PROVE_BACKUP_OR_EXTERNAL_DELETION' src/lib/data-lifecycle.ts
+          grep -F 'operationalSuppressionRequired: true' src/lib/data-lifecycle.ts
+          if grep -R -n -E 'backup.*deleted.*primary|primary.*deleted.*backup' src/lib/data-lifecycle.ts; then
+            echo 'Lifecycle policy contains an unsafe primary-vs-backup deletion conflation.' >&2
+            exit 1
+          fi
+
+      - name: Clean generated verification output
+        run: rm -rf .tmp-inventory-tests
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
