@@ -15,7 +15,21 @@ permissions:
 jobs:
   data-lifecycle-truth-boundary:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,6 +46,18 @@ jobs:
       - name: Dependency security gate
         run: npm audit --audit-level=high
 
+      - name: Apply checksum-bound production schema twice
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          node scripts/start-production.mjs
+          node scripts/start-production.mjs
+          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc 'SELECT COUNT(*) FROM norautomatch_schema_migrations')" = "7"
+          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc \"SELECT to_regclass('public.crm_data_lifecycle') IS NOT NULL\")" = "t"
+          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc \"SELECT to_regclass('public.crm_data_lifecycle_redaction_receipts') IS NOT NULL\")" = "t"
+
       - name: Compile verification surface
         run: |
           rm -rf .tmp-inventory-tests
@@ -40,12 +66,21 @@ jobs:
       - name: Challenge evidence-bound data lifecycle policy
         run: node .tmp-inventory-tests/scripts/data-lifecycle.behavior.js
 
+      - name: Challenge real Postgres redaction, legal-hold, and backup truth boundaries
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/data-lifecycle-postgres.integration.js
+
       - name: Source contract checks
         run: |
           grep -F 'PRIMARY_REDACTED_BACKUP_PENDING' src/lib/data-lifecycle.ts
           grep -F 'BLOCKED_BY_LEGAL_HOLD' src/lib/data-lifecycle.ts
           grep -F 'PRIMARY_REDACTION_DOES_NOT_PROVE_BACKUP_OR_EXTERNAL_DELETION' src/lib/data-lifecycle.ts
           grep -F 'operationalSuppressionRequired: true' src/lib/data-lifecycle.ts
+          grep -F 'norautomatch-crm-v7-data-lifecycle.sql' scripts/start-production.mjs
+          grep -F 'EXPLICIT_TARGETS_REDACTED_SCOPE_NOT_PROVEN_COMPLETE' infrastructure/norautomatch-crm-v7-data-lifecycle.sql
+          grep -F 'DATA_LIFECYCLE_BLOCKED_BY_LEGAL_HOLD' infrastructure/norautomatch-crm-v7-data-lifecycle.sql
+          grep -F 'PRIMARY_REDACTION' infrastructure/norautomatch-crm-v7-data-lifecycle.sql
           if grep -R -n -E 'backup.*deleted.*primary|primary.*deleted.*backup' src/lib/data-lifecycle.ts; then
             echo 'Lifecycle policy contains an unsafe primary-vs-backup deletion conflation.' >&2
             exit 1
