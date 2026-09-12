@@ -1,0 +1,109 @@
+name: NorAutoMatch AuthZ Workspace Isolation CI
+
+on:
+  push:
+    branches:
+      - "reactivation/**"
+  pull_request:
+    branches:
+      - main
+      - "reactivation/**"
+
+permissions:
+  contents: read
+
+jobs:
+  authz-workspace-isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+
+      - name: Apply checksum-bound production schema twice
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          node scripts/start-production.mjs
+          node scripts/start-production.mjs
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '11'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.crm_manager_session_revocations') IS NOT NULL" | grep -qx 't'
+
+      - name: Compile AuthZ verification surface
+        run: |
+          rm -rf .tmp-authz-tests
+          npx tsc -p tsconfig.authz-tests.json
+
+      - name: Challenge manager session signature and workspace boundary
+        run: node .tmp-authz-tests/scripts/manager-session-auth.behavior.js
+
+      - name: Challenge machine assertion audience and workspace boundary
+        run: node .tmp-authz-tests/scripts/machine-service-auth.behavior.js
+
+      - name: Challenge machine assertion durable replay boundary
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-authz-tests/scripts/machine-service-replay.integration.js
+
+      - name: Challenge machine route authorization policy
+        run: node .tmp-authz-tests/scripts/machine-service-route-policy.behavior.js
+
+      - name: Challenge durable manager session revocation
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-authz-tests/scripts/manager-session-revocation.integration.js
+
+      - name: Enforce shared manager route authorization contract
+        run: node .tmp-authz-tests/scripts/manager-route-auth-contract.behavior.js
+
+      - name: Source security contract
+        run: |
+          grep -F 'norautomatch-crm-v11-manager-session-revocation.sql' scripts/start-production.mjs
+          grep -F 'crm_manager_session_revocations' infrastructure/norautomatch-crm-v11-manager-session-revocation.sql
+          grep -F 'nonce_sha256' infrastructure/norautomatch-crm-v11-manager-session-revocation.sql
+          grep -F 'authorizeManagerRequest' src/lib/manager-route-auth.ts
+          grep -F 'isManagerSessionDurablyRevoked' src/lib/manager-session-revocation.ts
+          if grep -F 'nonce TEXT' infrastructure/norautomatch-crm-v11-manager-session-revocation.sql; then
+            echo 'Durable manager revocation must not persist the raw nonce.' >&2
+            exit 1
+          fi
+
+      - name: Clean generated verification output
+        run: rm -rf .tmp-authz-tests
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
