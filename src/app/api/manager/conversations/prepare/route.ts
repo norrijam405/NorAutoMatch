@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { NORAUTO_WORKSPACE_ID } from "@/lib/crm-persistence";
 import { createPostgresCrmPool } from "@/lib/crm-postgres-adapter";
-import { authorizeManagerSession } from "@/lib/manager-session-auth";
+import { authorizeManagerRequest } from "@/lib/manager-route-auth";
 import { createResponseDraft } from "@/lib/conversation-response-draft";
 import { createEnrichedResponseDraft } from "@/lib/conversation-response-enrichment";
 import { createResponseEvidencePassport } from "@/lib/evidence-passport";
@@ -24,14 +23,6 @@ function noStore(body: Record<string, unknown>, status: number) {
   });
 }
 
-function authorize(request: Request) {
-  return authorizeManagerSession({
-    authorizationHeader: request.headers.get("authorization"),
-    configuredSecret: process.env.NORAUTO_MANAGER_SESSION_SECRET,
-    expectedWorkspaceId: NORAUTO_WORKSPACE_ID,
-  });
-}
-
 function readLookup(request: Request) {
   const url = new URL(request.url);
   const provider = url.searchParams.get("provider")?.trim();
@@ -48,7 +39,7 @@ function getPool() {
 }
 
 export async function GET(request: Request) {
-  const auth = authorize(request);
+  const auth = await authorizeManagerRequest(request);
   if (!auth.authorized) {
     if (auth.reason === "NOT_CONFIGURED") return noStore({ message: "Manager identity verification is not configured." }, 503);
     return noStore({ message: "Unauthorized." }, 401);
@@ -83,7 +74,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = authorize(request);
+  const auth = await authorizeManagerRequest(request);
   if (!auth.authorized) {
     if (auth.reason === "NOT_CONFIGURED") return noStore({ message: "Manager identity verification is not configured." }, 503);
     return noStore({ message: "Unauthorized." }, 401);
