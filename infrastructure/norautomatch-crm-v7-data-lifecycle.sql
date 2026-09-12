@@ -145,6 +145,80 @@ CREATE TRIGGER crm_data_lifecycle_receipt_immutable
 BEFORE UPDATE OR DELETE ON crm_data_lifecycle_redaction_receipts
 FOR EACH ROW EXECUTE FUNCTION norautomatch_reject_immutable_mutation();
 
+-- A redacted opportunity is operationally terminal without manufacturing SOLD/LOST truth.
+CREATE OR REPLACE FUNCTION norautomatch_reject_operational_mutation_after_redaction()
+RETURNS TRIGGER AS $$
+DECLARE
+    target_workspace TEXT;
+    target_opportunity TEXT;
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        target_workspace := OLD.workspace_id;
+    ELSE
+        target_workspace := NEW.workspace_id;
+    END IF;
+
+    IF TG_TABLE_NAME = 'crm_outbox' THEN
+        IF TG_OP = 'DELETE' THEN
+            target_opportunity := OLD.aggregate_id;
+        ELSE
+            target_opportunity := NEW.aggregate_id;
+        END IF;
+    ELSE
+        IF TG_OP = 'DELETE' THEN
+            target_opportunity := OLD.opportunity_id;
+        ELSE
+            target_opportunity := NEW.opportunity_id;
+        END IF;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+          FROM crm_data_lifecycle l
+         WHERE l.workspace_id = target_workspace
+           AND l.opportunity_id = target_opportunity
+           AND l.state IN ('PRIMARY_REDACTED_BACKUP_PENDING', 'PRIMARY_REDACTED_BACKUP_EXPIRED')
+    ) THEN
+        RAISE EXCEPTION 'DATA_LIFECYCLE_OPERATION_SUPPRESSED';
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS crm_opportunity_lifecycle_guard ON crm_opportunities;
+CREATE TRIGGER crm_opportunity_lifecycle_guard
+BEFORE UPDATE ON crm_opportunities
+FOR EACH ROW EXECUTE FUNCTION norautomatch_reject_operational_mutation_after_redaction();
+
+DROP TRIGGER IF EXISTS crm_evidence_lifecycle_guard ON crm_evidence;
+CREATE TRIGGER crm_evidence_lifecycle_guard
+BEFORE INSERT ON crm_evidence
+FOR EACH ROW EXECUTE FUNCTION norautomatch_reject_operational_mutation_after_redaction();
+
+DROP TRIGGER IF EXISTS crm_manager_handoff_lifecycle_guard ON crm_manager_handoffs;
+CREATE TRIGGER crm_manager_handoff_lifecycle_guard
+BEFORE INSERT ON crm_manager_handoffs
+FOR EACH ROW EXECUTE FUNCTION norautomatch_reject_operational_mutation_after_redaction();
+
+DROP TRIGGER IF EXISTS crm_manager_receipt_lifecycle_guard ON crm_manager_review_receipts;
+CREATE TRIGGER crm_manager_receipt_lifecycle_guard
+BEFORE INSERT ON crm_manager_review_receipts
+FOR EACH ROW EXECUTE FUNCTION norautomatch_reject_operational_mutation_after_redaction();
+
+DROP TRIGGER IF EXISTS crm_outbox_lifecycle_guard ON crm_outbox;
+CREATE TRIGGER crm_outbox_lifecycle_guard
+BEFORE INSERT OR UPDATE ON crm_outbox
+FOR EACH ROW EXECUTE FUNCTION norautomatch_reject_operational_mutation_after_redaction();
+
+DROP TRIGGER IF EXISTS crm_follow_up_lifecycle_guard ON crm_follow_up_obligations;
+CREATE TRIGGER crm_follow_up_lifecycle_guard
+BEFORE INSERT OR UPDATE ON crm_follow_up_obligations
+FOR EACH ROW EXECUTE FUNCTION norautomatch_reject_operational_mutation_after_redaction();
+
 CREATE OR REPLACE FUNCTION norautomatch_apply_primary_redaction(
     p_workspace_id TEXT,
     p_opportunity_id TEXT,
