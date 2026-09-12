@@ -171,7 +171,6 @@ async function proveLegalHoldWinsConcurrentFirstInsertRace() {
       requestedAt: "2026-09-12T03:40:01Z",
     });
 
-    // Give the second connection time to reach the unique-key conflict and block behind the uncommitted hold.
     await new Promise((resolve) => setTimeout(resolve, 150));
     await holdClient.query("COMMIT");
 
@@ -372,9 +371,12 @@ async function main() {
     workspaceId,
     opportunityId,
     dispositionRef: "backup-policy:expired-2026-10-12",
+    dispositionAuthority: "AUTHORIZED_BACKUP_DISPOSITION",
+    observedAt: "2026-10-12T00:00:00Z",
   });
   assert.equal(resolved.state, "PRIMARY_REDACTED_BACKUP_EXPIRED");
   assert.equal(resolved.backupDisposition, "EXPIRED_OR_PURGED");
+  assert.equal(resolved.backupDispositionAuthority, "AUTHORIZED_BACKUP_DISPOSITION");
 
   const immutableReceipt = await pool.query(`SELECT receipt_id FROM crm_data_lifecycle_redaction_receipts WHERE workspace_id = $1 AND opportunity_id = $2`, [workspaceId, opportunityId]);
   assert.equal(immutableReceipt.rowCount, 1);
