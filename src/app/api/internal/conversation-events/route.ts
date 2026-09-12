@@ -33,6 +33,7 @@ export async function POST(request: Request) {
   const auth = authorizeMachineServiceAssertion({
     authorizationHeader: request.headers.get("authorization"),
     configuredSecret: process.env.NORAUTO_CONVERSATION_GATEWAY_ASSERTION_SECRET,
+    configuredPreviousSecret: process.env.NORAUTO_CONVERSATION_GATEWAY_ASSERTION_PREVIOUS_SECRET,
     expectedAudience: "CONVERSATION_GATEWAY",
     expectedWorkspaceId: NORAUTO_WORKSPACE_ID,
   });
