@@ -15,6 +15,7 @@ const migrations = [
   "infrastructure/norautomatch-crm-v4-conversation-events.sql",
   "infrastructure/norautomatch-crm-v5-machine-assertion-replay.sql",
   "infrastructure/norautomatch-crm-v6-public-abuse-control.sql",
+  "infrastructure/norautomatch-crm-v7-data-lifecycle.sql",
 ];
 
 function sha256(text) {
