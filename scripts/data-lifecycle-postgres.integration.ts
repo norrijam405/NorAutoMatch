@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { persistConversationEvent } from "../src/lib/conversation-gateway-persistence";
 import type { ConversationEvent } from "../src/lib/conversation-gateway";
 import { readResponsePreparationPacket } from "../src/lib/conversation-response-preparation-store";
-import { claimCrmOutboxBatch } from "../src/lib/crm-outbox-relay";
+import { claimCrmOutboxBatch, deliverClaimedCrmOutboxEvent } from "../src/lib/crm-outbox-relay";
 import { readFollowUpQueue } from "../src/lib/crm-follow-up";
 import { readPendingManagerQueue } from "../src/lib/crm-manager-queue";
 import {
@@ -174,6 +174,10 @@ async function main() {
     targetRef: "privacy-request:integration-001:conversation-target",
   });
 
+  const preRedactionClaims = await claimCrmOutboxBatch({ pool, limit: 1, leaseSeconds: 30 });
+  assert.equal(preRedactionClaims.length, 1, "pre-redaction race fixture must hold one claimed event");
+  assert.equal(preRedactionClaims[0].aggregateId, opportunityId);
+
   const receipt = await executePrimaryRedaction({
     pool,
     workspaceId,
@@ -185,6 +189,19 @@ async function main() {
   assert.equal(receipt.backupTruth, "PENDING_SEPARATE_DISPOSITION");
   assert.equal(receipt.externalCopyTruth, "MAY_EXIST");
   assert.equal(receipt.authorityEffect, "NONE");
+
+  let staleClaimNetworkCalls = 0;
+  const staleClaimOutcome = await deliverClaimedCrmOutboxEvent({
+    pool,
+    event: preRedactionClaims[0],
+    targetUrl: "https://example.invalid/redacted-lead",
+    fetchImpl: (async () => {
+      staleClaimNetworkCalls += 1;
+      return new Response(null, { status: 204 });
+    }) as typeof fetch,
+  });
+  assert.equal(staleClaimOutcome.status, "SUPPRESSED");
+  assert.equal(staleClaimNetworkCalls, 0, "stale pre-redaction claim must never reach the network after redaction wins");
 
   const opportunity = await pool.query(`SELECT customer, buying_intent, attribution FROM crm_opportunities WHERE workspace_id = $1 AND opportunity_id = $2`, [workspaceId, opportunityId]);
   const opportunityText = JSON.stringify(opportunity.rows[0]);
