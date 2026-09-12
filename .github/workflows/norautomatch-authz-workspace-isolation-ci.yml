@@ -89,10 +89,15 @@ jobs:
           grep -F 'norautomatch-crm-v11-manager-session-revocation.sql' scripts/start-production.mjs
           grep -F 'crm_manager_session_revocations' infrastructure/norautomatch-crm-v11-manager-session-revocation.sql
           grep -F 'nonce_sha256' infrastructure/norautomatch-crm-v11-manager-session-revocation.sql
+          grep -F 'subject_id_sha256' infrastructure/norautomatch-crm-v11-manager-session-revocation.sql
           grep -F 'authorizeManagerRequest' src/lib/manager-route-auth.ts
           grep -F 'isManagerSessionDurablyRevoked' src/lib/manager-session-revocation.ts
           if grep -F 'nonce TEXT' infrastructure/norautomatch-crm-v11-manager-session-revocation.sql; then
             echo 'Durable manager revocation must not persist the raw nonce.' >&2
+            exit 1
+          fi
+          if grep -F 'subject_id TEXT' infrastructure/norautomatch-crm-v11-manager-session-revocation.sql; then
+            echo 'Durable manager revocation must not persist the raw manager subject identifier.' >&2
             exit 1
           fi
 
