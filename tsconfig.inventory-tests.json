@@ -44,6 +44,7 @@
     "scripts/public-abuse-postgres.integration.ts",
     "scripts/data-lifecycle.behavior.ts",
     "scripts/data-lifecycle-postgres.integration.ts",
+    "scripts/data-lifecycle-audit-hardening.integration.ts",
     "scripts/crm-follow-up.integration.ts",
     "scripts/crm-follow-up-command.integration.ts",
     "scripts/crm-follow-up-due.integration.ts",
