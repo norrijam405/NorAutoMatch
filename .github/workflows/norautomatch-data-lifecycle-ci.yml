@@ -54,7 +54,7 @@ jobs:
         run: |
           node scripts/start-production.mjs
           node scripts/start-production.mjs
-          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc 'SELECT COUNT(*) FROM norautomatch_schema_migrations')" = "7"
+          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc 'SELECT COUNT(*) FROM norautomatch_schema_migrations')" = "8"
           test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc \"SELECT to_regclass('public.crm_data_lifecycle') IS NOT NULL\")" = "t"
           test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc \"SELECT to_regclass('public.crm_data_lifecycle_redaction_receipts') IS NOT NULL\")" = "t"
 
@@ -78,9 +78,14 @@ jobs:
           grep -F 'PRIMARY_REDACTION_DOES_NOT_PROVE_BACKUP_OR_EXTERNAL_DELETION' src/lib/data-lifecycle.ts
           grep -F 'operationalSuppressionRequired: true' src/lib/data-lifecycle.ts
           grep -F 'norautomatch-crm-v7-data-lifecycle.sql' scripts/start-production.mjs
+          grep -F 'norautomatch-crm-v8-abuse-retention.sql' scripts/start-production.mjs
           grep -F 'EXPLICIT_TARGETS_REDACTED_SCOPE_NOT_PROVEN_COMPLETE' infrastructure/norautomatch-crm-v7-data-lifecycle.sql
           grep -F 'DATA_LIFECYCLE_BLOCKED_BY_LEGAL_HOLD' infrastructure/norautomatch-crm-v7-data-lifecycle.sql
-          grep -F 'PRIMARY_REDACTION' infrastructure/norautomatch-crm-v7-data-lifecycle.sql
+          grep -F 'DATA_LIFECYCLE_OPERATION_SUPPRESSED' infrastructure/norautomatch-crm-v7-data-lifecycle.sql
+          grep -F "'SUPPRESSED'" infrastructure/norautomatch-crm-v7-data-lifecycle.sql
+          grep -F "'REDACTED'" infrastructure/norautomatch-crm-v7-data-lifecycle.sql
+          grep -F 'norautomatch_reject_operational_mutation_after_redaction' infrastructure/norautomatch-crm-v7-data-lifecycle.sql
+          grep -F 'norautomatch_cleanup_expired_public_abuse_buckets' infrastructure/norautomatch-crm-v8-abuse-retention.sql
           if grep -R -n -E 'backup.*deleted.*primary|primary.*deleted.*backup' src/lib/data-lifecycle.ts; then
             echo 'Lifecycle policy contains an unsafe primary-vs-backup deletion conflation.' >&2
             exit 1
