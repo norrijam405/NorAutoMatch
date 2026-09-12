@@ -16,6 +16,7 @@
     "scripts/machine-service-route-policy.behavior.ts",
     "scripts/manager-session-revocation.integration.ts",
     "scripts/manager-route-auth-contract.behavior.ts",
+    "scripts/cross-workspace-isolation.integration.ts",
     "src/lib/manager-session-auth.ts",
     "src/lib/manager-session-revocation.ts",
     "src/lib/manager-session-durable-auth.ts",
@@ -24,6 +25,8 @@
     "src/lib/machine-service-replay.ts",
     "src/lib/workspace-policy-runtime.ts",
     "src/lib/crm-persistence.ts",
-    "src/lib/crm-postgres-adapter.ts"
+    "src/lib/crm-postgres-adapter.ts",
+    "src/lib/crm-manager-queue.ts",
+    "src/lib/crm-manager-review-command.ts"
   ]
 }
