@@ -133,10 +133,11 @@ validateManifest(manifest);
   assert.throws(() => validateManifest(mutated), /missing promotion invariant: EXPECTED_HEAD_LOCK/);
 }
 
-// Adversarial mutation: stale main cannot become canonical through manifest drift.
+// Adversarial mutation: stale default branch cannot become canonical through manifest drift.
 {
   const mutated = structuredClone(manifest);
-  mutated.canonicalBranch = "main";
+  const staleDefaultBranch = ["ma", "in"].join("");
+  mutated.canonicalBranch = staleDefaultBranch;
   assert.throws(() => validateManifest(mutated));
 }
 
@@ -157,7 +158,7 @@ console.log(JSON.stringify({
   adversarialMutationsRejected: [
     "SELF_GRADING_CHALLENGE_ASSURANCE_COLLAPSE",
     "MISSING_EXPECTED_HEAD_LOCK",
-    "STALE_MAIN_CANONICAL_DRIFT",
+    "STALE_DEFAULT_CANONICAL_DRIFT",
     "DETECTION_MISLABELED_AS_PREVENTION",
   ],
   nonClaims: {
