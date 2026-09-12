@@ -1,6 +1,7 @@
 export type ProductionReadinessCheckId =
   | "CRM_DATABASE_URL"
   | "PUBLIC_ABUSE_HMAC_SECRET"
+  | "PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET"
   | "RELAY_ASSERTION_SECRET"
   | "RELAY_ASSERTION_PREVIOUS_SECRET"
   | "CONVERSATION_GATEWAY_ASSERTION_SECRET"
@@ -78,6 +79,7 @@ export function evaluateProductionReadiness(env: Environment): ProductionReadine
   push(checks, "CRM_DATABASE_URL", checkUrl(databaseUrl, { protocols: ["postgres:", "postgresql:"], rejectLocalhost: true }), "Durable CRM database URL is structurally production-shaped.", "NORAUTO_CRM_DATABASE_URL must be a non-local PostgreSQL URL before production intake.");
 
   const abuseSecret = value(env, "NORAUTO_PUBLIC_ABUSE_HMAC_SECRET");
+  const abusePrevious = value(env, "NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET");
   const relaySecret = value(env, "NORAUTO_RELAY_ASSERTION_SECRET");
   const relayPrevious = value(env, "NORAUTO_RELAY_ASSERTION_PREVIOUS_SECRET");
   const conversationSecret = value(env, "NORAUTO_CONVERSATION_GATEWAY_ASSERTION_SECRET");
@@ -86,6 +88,7 @@ export function evaluateProductionReadiness(env: Environment): ProductionReadine
   const managerPrevious = value(env, "NORAUTO_MANAGER_SESSION_PREVIOUS_SECRET");
 
   push(checks, "PUBLIC_ABUSE_HMAC_SECRET", validCurrentSecret(abuseSecret), "Public-abuse pseudonymization secret meets the minimum length boundary.", "NORAUTO_PUBLIC_ABUSE_HMAC_SECRET must be at least 32 characters.");
+  push(checks, "PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET", validPreviousSecret(abusePrevious, abuseSecret), abusePrevious ? "Previous public-abuse HMAC key is structurally valid and distinct from the current key." : "No previous public-abuse HMAC key is configured outside a rollover window.", "NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET must be blank or a distinct secret of at least 32 characters.");
   push(checks, "RELAY_ASSERTION_SECRET", validCurrentSecret(relaySecret), "CRM relay assertion signing secret meets the minimum length boundary.", "NORAUTO_RELAY_ASSERTION_SECRET must be at least 32 characters.");
   push(checks, "RELAY_ASSERTION_PREVIOUS_SECRET", validPreviousSecret(relayPrevious, relaySecret), relayPrevious ? "Previous relay signing key is structurally valid and distinct from the current key." : "No previous relay signing key is configured outside a rollover window.", "NORAUTO_RELAY_ASSERTION_PREVIOUS_SECRET must be blank or a distinct secret of at least 32 characters.");
   push(checks, "CONVERSATION_GATEWAY_ASSERTION_SECRET", validCurrentSecret(conversationSecret), "Conversation gateway assertion signing secret meets the minimum length boundary.", "NORAUTO_CONVERSATION_GATEWAY_ASSERTION_SECRET must be at least 32 characters.");
@@ -95,6 +98,7 @@ export function evaluateProductionReadiness(env: Environment): ProductionReadine
 
   const secretValues = [
     abuseSecret,
+    abusePrevious,
     relaySecret,
     relayPrevious,
     conversationSecret,
@@ -103,6 +107,7 @@ export function evaluateProductionReadiness(env: Environment): ProductionReadine
     managerPrevious,
   ].filter(Boolean);
   const allSecretsWellFormed = [abuseSecret, relaySecret, conversationSecret, managerSecret].every(validCurrentSecret) &&
+    validPreviousSecret(abusePrevious, abuseSecret) &&
     validPreviousSecret(relayPrevious, relaySecret) &&
     validPreviousSecret(conversationPrevious, conversationSecret) &&
     validPreviousSecret(managerPrevious, managerSecret);
