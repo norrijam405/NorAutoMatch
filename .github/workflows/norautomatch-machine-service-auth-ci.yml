@@ -54,10 +54,11 @@ jobs:
         run: |
           node scripts/start-production.mjs
           node scripts/start-production.mjs
-          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '9'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '10'
           docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.crm_machine_assertion_nonces') IS NOT NULL" | grep -qx 't'
           docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.public_abuse_buckets') IS NOT NULL" | grep -qx 't'
           docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.crm_data_lifecycle') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.crm_data_lifecycle_legal_holds') IS NOT NULL" | grep -qx 't'
 
       - name: Compile security verification surface
         run: |
