@@ -93,6 +93,13 @@ ALTER TABLE crm_conversation_events
     ADD CONSTRAINT crm_conversation_events_processing_state_check
     CHECK (processing_state IN ('RECEIVED', 'ROUTED', 'DEAD_LETTER', 'REDACTED'));
 
+-- Undelivered CRM outbox work must become terminally non-deliverable after primary redaction.
+ALTER TABLE crm_outbox
+    DROP CONSTRAINT IF EXISTS crm_outbox_delivery_state_check;
+ALTER TABLE crm_outbox
+    ADD CONSTRAINT crm_outbox_delivery_state_check
+    CHECK (delivery_state IN ('PENDING', 'PROCESSING', 'DELIVERED', 'FAILED', 'SUPPRESSED'));
+
 -- Preserve evidence immutability while permitting one narrowly-defined privacy sanitization of manager handoff PII.
 CREATE OR REPLACE FUNCTION norautomatch_reject_immutable_mutation()
 RETURNS TRIGGER AS $$
@@ -191,6 +198,11 @@ BEGIN
 
     UPDATE crm_outbox
        SET payload = '{"redacted":true,"reason":"DATA_LIFECYCLE_PRIMARY_REDACTION"}'::jsonb,
+           delivery_state = CASE WHEN delivery_state = 'DELIVERED' THEN 'DELIVERED' ELSE 'SUPPRESSED' END,
+           claim_token = NULL,
+           claimed_at = NULL,
+           claim_expires_at = NULL,
+           next_attempt_at = NULL,
            last_error = NULL
      WHERE workspace_id = p_workspace_id
        AND aggregate_id = p_opportunity_id;
