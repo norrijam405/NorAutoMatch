@@ -1,0 +1,64 @@
+name: NorAutoMatch Universal Promotion Conformance CI
+
+on:
+  push:
+    branches:
+      - "candidate/**"
+      - "reactivation/**"
+  pull_request:
+    branches:
+      - "reactivation/**"
+
+permissions:
+  contents: read
+
+jobs:
+  universal-promotion-conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+
+      - name: Compile universal promotion conformance verifier
+        run: |
+          rm -rf .tmp-universal-promotion-conformance
+          npx tsc -p tsconfig.universal-promotion-conformance.json
+
+      - name: Challenge promotion and assurance conformance
+        run: node .tmp-universal-promotion-conformance/scripts/universal-promotion-conformance.behavior.js
+
+      - name: Source contract guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f institutional/universal-promotion-conformance-v0.1.json
+          grep -F 'IGNIAQUA_UNIVERSAL_PROMOTION_CONFORMANCE_V0_1' institutional/universal-promotion-conformance-v0.1.json
+          grep -F 'BLOCK_DIRECT_CANONICAL_WRITE' institutional/universal-promotion-conformance-v0.1.json
+          grep -F 'cross_workspace_isolation' scripts/paired-challenge-campaign.behavior.ts
+          grep -F 'ROADMAP_PROMOTION_WRONG_BASE' .github/workflows/norautomatch-repository-governance-ci.yml
+          grep -F 'contents: read' .github/workflows/norautomatch-universal-promotion-conformance-ci.yml
+
+      - name: Clean generated verification output
+        run: rm -rf .tmp-universal-promotion-conformance
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
