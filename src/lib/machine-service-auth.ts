@@ -43,6 +43,11 @@ function sign(encodedPayload: string, secret: string) {
   return createHmac("sha256", secret).update(encodedPayload, "utf8").digest();
 }
 
+function secureSignatureMatch(supplied: Buffer, encodedPayload: string, secret: string) {
+  const expected = sign(encodedPayload, secret);
+  return supplied.length === expected.length && timingSafeEqual(supplied, expected);
+}
+
 function readBearer(header: string | null | undefined) {
   if (!header) return undefined;
   const match = /^Bearer\s+(.+)$/i.exec(header.trim());
@@ -75,12 +80,18 @@ function parseClaims(encodedPayload: string): MachineServiceAssertionClaims | un
 export function authorizeMachineServiceAssertion(input: {
   authorizationHeader: string | null | undefined;
   configuredSecret: string | undefined;
+  configuredPreviousSecret?: string | undefined;
   expectedAudience: MachineServiceAudience;
   expectedWorkspaceId: string;
   nowEpochSeconds?: number;
 }): MachineServiceAuthResult {
   const secret = configuredSecret(input.configuredSecret);
   if (!secret) return { authorized: false, reason: "NOT_CONFIGURED" };
+
+  const previousRaw = input.configuredPreviousSecret;
+  const previousSecret = previousRaw?.trim() ? configuredSecret(previousRaw) : undefined;
+  if (previousRaw?.trim() && !previousSecret) return { authorized: false, reason: "NOT_CONFIGURED" };
+  if (previousSecret && previousSecret === secret) return { authorized: false, reason: "NOT_CONFIGURED" };
 
   const token = readBearer(input.authorizationHeader);
   if (!token) return { authorized: false, reason: "MISSING_TOKEN" };
@@ -95,8 +106,11 @@ export function authorizeMachineServiceAssertion(input: {
     return { authorized: false, reason: "MALFORMED_TOKEN" };
   }
 
-  const expectedSignature = sign(parts[0], secret);
-  if (suppliedSignature.length !== expectedSignature.length || !timingSafeEqual(suppliedSignature, expectedSignature)) {
+  const currentMatch = secureSignatureMatch(suppliedSignature, parts[0], secret);
+  const previousMatch = previousSecret
+    ? secureSignatureMatch(suppliedSignature, parts[0], previousSecret)
+    : false;
+  if (!currentMatch && !previousMatch) {
     return { authorized: false, reason: "INVALID_SIGNATURE" };
   }
 
@@ -118,6 +132,7 @@ export function authorizeMachineServiceAssertion(input: {
 }
 
 // Issuance belongs behind a trusted machine identity boundary. There is intentionally no public issuer route.
+// New assertions are always signed with the current secret. The previous secret is verification-only during rollover.
 export function createMachineServiceAssertionForTrustedIssuer(input: {
   claims: MachineServiceAssertionClaims;
   configuredSecret: string;
