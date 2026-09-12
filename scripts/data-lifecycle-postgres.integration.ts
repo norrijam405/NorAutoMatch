@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
 import { Pool } from "pg";
+import { persistConversationEvent } from "../src/lib/conversation-gateway-persistence";
+import type { ConversationEvent } from "../src/lib/conversation-gateway";
+import { readResponsePreparationPacket } from "../src/lib/conversation-response-preparation-store";
+import { claimCrmOutboxBatch } from "../src/lib/crm-outbox-relay";
+import { readFollowUpQueue } from "../src/lib/crm-follow-up";
+import { readPendingManagerQueue } from "../src/lib/crm-manager-queue";
 import {
   attachConversationRedactionTarget,
   executePrimaryRedaction,
@@ -24,7 +30,7 @@ const pii = {
   notes: "Call after 6pm about trade VIN-like details",
 };
 
-function eventPayload(eventId: string, conversationId: string) {
+function eventPayload(eventId: string, conversationId: string): ConversationEvent {
   return {
     protocol: "IGNIAQUA_CONVERSATION_EVENT_V1",
     workspaceId,
@@ -115,26 +121,15 @@ async function seedOpportunity(id: string, latestHandoffId: string, idempotencyD
 }
 
 async function main() {
-  await pool.query("BEGIN");
-  try {
-    await pool.query(`DELETE FROM crm_data_lifecycle_redaction_receipts WHERE workspace_id = $1`, [workspaceId]).catch(() => undefined);
-    await pool.query(`DELETE FROM crm_data_lifecycle_conversation_targets WHERE workspace_id = $1`, [workspaceId]).catch(() => undefined);
-    await pool.query(`DELETE FROM crm_data_lifecycle WHERE workspace_id = $1`, [workspaceId]).catch(() => undefined);
-    await pool.query(`DELETE FROM crm_conversation_events WHERE workspace_id = $1`, [workspaceId]);
-    await pool.query(`DELETE FROM crm_outbox WHERE workspace_id = $1`, [workspaceId]);
-    await pool.query(`DELETE FROM crm_manager_handoffs WHERE workspace_id = $1`, [workspaceId]).catch(() => undefined);
-    await pool.query(`DELETE FROM crm_follow_up_obligations WHERE workspace_id = $1`, [workspaceId]);
-    await pool.query(`DELETE FROM crm_manager_review_receipts WHERE workspace_id = $1`, [workspaceId]).catch(() => undefined);
-    await pool.query(`DELETE FROM crm_evidence WHERE workspace_id = $1`, [workspaceId]).catch(() => undefined);
-    await pool.query(`DELETE FROM crm_opportunities WHERE workspace_id = $1`, [workspaceId]);
-    await pool.query("COMMIT");
-  } catch (error) {
-    await pool.query("ROLLBACK");
-    throw error;
-  }
-
   await seedOpportunity(opportunityId, handoffId, "1");
   await seedOpportunity(heldOpportunityId, heldHandoffId, "2");
+
+  await pool.query(
+    `INSERT INTO crm_follow_up_obligations (
+       workspace_id, opportunity_id, obligation_type, due_at
+     ) VALUES ($1, $2, 'FIRST_CONTACT', '2026-09-12T03:15:00Z')`,
+    [workspaceId, opportunityId],
+  );
 
   await pool.query(
     `INSERT INTO crm_outbox (
@@ -201,16 +196,48 @@ async function main() {
   const handoff = await pool.query(`SELECT desk_prep FROM crm_manager_handoffs WHERE workspace_id = $1 AND opportunity_id = $2`, [workspaceId, opportunityId]);
   assert.deepEqual(handoff.rows[0].desk_prep, { protocol: "NORAUTO_DESK_PREP_V1", redacted: true });
 
-  const outbox = await pool.query(`SELECT payload FROM crm_outbox WHERE workspace_id = $1 AND aggregate_id = $2`, [workspaceId, opportunityId]);
+  const outbox = await pool.query(`SELECT payload, delivery_state FROM crm_outbox WHERE workspace_id = $1 AND aggregate_id = $2`, [workspaceId, opportunityId]);
   assert.deepEqual(outbox.rows[0].payload, { redacted: true, reason: "DATA_LIFECYCLE_PRIMARY_REDACTION" });
+  assert.equal(outbox.rows[0].delivery_state, "SUPPRESSED");
+  assert.equal((await claimCrmOutboxBatch({ pool, limit: 10 })).length, 0);
 
   const targeted = await pool.query(`SELECT normalized_payload, processing_state FROM crm_conversation_events WHERE workspace_id = $1 AND event_id = $2`, [workspaceId, targetedEventId]);
   assert.equal(targeted.rows[0].processing_state, "REDACTED");
   assert(!JSON.stringify(targeted.rows[0].normalized_payload).includes(pii.email));
+  assert.equal(
+    await readResponsePreparationPacket({ pool, workspaceId, provider: "integration-provider", eventId: targetedEventId }),
+    null,
+  );
+
+  const replay = await persistConversationEvent({
+    pool,
+    event: eventPayload(targetedEventId, "conversation-targeted"),
+  });
+  assert.equal(replay.status, "DEDUPLICATED");
+  assert.equal(replay.processingState, "REDACTED");
+  assert.equal(replay.routingDecision, "NOT_CONTACTABLE");
+  const targetedAfterReplay = await pool.query(`SELECT normalized_payload FROM crm_conversation_events WHERE workspace_id = $1 AND event_id = $2`, [workspaceId, targetedEventId]);
+  assert(!JSON.stringify(targetedAfterReplay.rows[0].normalized_payload).includes(pii.email));
 
   const unlinked = await pool.query(`SELECT normalized_payload, processing_state FROM crm_conversation_events WHERE workspace_id = $1 AND event_id = $2`, [workspaceId, unlinkedEventId]);
   assert.equal(unlinked.rows[0].processing_state, "RECEIVED");
   assert(JSON.stringify(unlinked.rows[0].normalized_payload).includes(pii.email));
+
+  assert.equal((await readPendingManagerQueue({ pool, workspaceId })).some((item) => item.opportunityId === opportunityId), false);
+  assert.equal((await readFollowUpQueue({ pool, workspaceId, now: "2026-09-12T03:30:00Z" })).some((item) => item.opportunityId === opportunityId), false);
+
+  await assert.rejects(
+    pool.query(`UPDATE crm_opportunities SET stage = 'CONTACT_PENDING' WHERE workspace_id = $1 AND opportunity_id = $2`, [workspaceId, opportunityId]),
+    /DATA_LIFECYCLE_OPERATION_SUPPRESSED/,
+  );
+  await assert.rejects(
+    pool.query(
+      `INSERT INTO crm_evidence (workspace_id, opportunity_id, kind, evidence_ref, authority, observed_at, payload)
+       VALUES ($1, $2, 'CONTACT_ATTEMPT', 'post-redaction-attempt', 'NORAUTO_SYSTEM', '2026-09-12T03:30:00Z', '{}'::jsonb)`,
+      [workspaceId, opportunityId],
+    ),
+    /DATA_LIFECYCLE_OPERATION_SUPPRESSED/,
+  );
 
   await placeLegalHold({
     pool,
