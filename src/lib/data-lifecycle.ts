@@ -35,10 +35,29 @@ export type DataLifecycleDecision = {
   authorityEffect: "NONE";
 };
 
+const LIFECYCLE_EVIDENCE_REF_PATTERN = /^[A-Za-z][A-Za-z0-9._-]{1,63}:[A-Za-z0-9._/-]*[A-Za-z][A-Za-z0-9._:/-]*$/;
+const LIFECYCLE_AUTHORITY_PATTERN = /^[A-Z][A-Z0-9_:-]{2,127}$/;
+
 function requireBounded(value: string, label: string, max = 512) {
   const normalized = value.trim();
   if (!normalized) throw new Error(`${label}_REQUIRED`);
   if (normalized.length > max) throw new Error(`${label}_TOO_LONG`);
+  return normalized;
+}
+
+export function requireLifecycleEvidenceRef(value: string, label = "DATA_LIFECYCLE_EVIDENCE_REF") {
+  const normalized = requireBounded(value, label, 256);
+  if (!LIFECYCLE_EVIDENCE_REF_PATTERN.test(normalized)) {
+    throw new Error(`${label}_INVALID_IDENTIFIER`);
+  }
+  return normalized;
+}
+
+export function requireLifecycleAuthority(value: string, label = "DATA_LIFECYCLE_AUTHORITY") {
+  const normalized = requireBounded(value, label, 128);
+  if (!LIFECYCLE_AUTHORITY_PATTERN.test(normalized)) {
+    throw new Error(`${label}_INVALID_IDENTIFIER`);
+  }
   return normalized;
 }
 
@@ -61,8 +80,8 @@ export function createRedactionRequest(input: {
     workspaceId: requireBounded(input.workspaceId, "DATA_LIFECYCLE_WORKSPACE", 128),
     opportunityId: requireBounded(input.opportunityId, "DATA_LIFECYCLE_OPPORTUNITY", 128),
     state: "REDACTION_REQUESTED",
-    requestRef: requireBounded(input.requestRef, "DATA_LIFECYCLE_REQUEST_REF"),
-    requestAuthority: requireBounded(input.requestAuthority, "DATA_LIFECYCLE_REQUEST_AUTHORITY", 256),
+    requestRef: requireLifecycleEvidenceRef(input.requestRef, "DATA_LIFECYCLE_REQUEST_REF"),
+    requestAuthority: requireLifecycleAuthority(input.requestAuthority, "DATA_LIFECYCLE_REQUEST_AUTHORITY"),
     requestedAt: requireIso(input.requestedAt, "DATA_LIFECYCLE_REQUESTED_AT"),
     backupDisposition: "UNKNOWN",
     externalCopies: input.externalCopies ?? "NOT_KNOWN",
@@ -82,8 +101,8 @@ export function applyLegalHold(input: {
   return {
     ...input.record,
     state: "LEGAL_HOLD",
-    legalHoldRef: requireBounded(input.legalHoldRef, "DATA_LIFECYCLE_HOLD_REF"),
-    legalHoldAuthority: requireBounded(input.legalHoldAuthority, "DATA_LIFECYCLE_HOLD_AUTHORITY", 256),
+    legalHoldRef: requireLifecycleEvidenceRef(input.legalHoldRef, "DATA_LIFECYCLE_HOLD_REF"),
+    legalHoldAuthority: requireLifecycleAuthority(input.legalHoldAuthority, "DATA_LIFECYCLE_HOLD_AUTHORITY"),
     legalHoldObservedAt: requireIso(input.observedAt, "DATA_LIFECYCLE_HOLD_OBSERVED_AT"),
   };
 }
@@ -169,6 +188,6 @@ export function markBackupResolved(input: {
     ...input.record,
     state: "PRIMARY_REDACTED_BACKUP_EXPIRED",
     backupDisposition: "EXPIRED_OR_PURGED",
-    backupDispositionRef: requireBounded(input.dispositionRef, "DATA_LIFECYCLE_BACKUP_DISPOSITION_REF"),
+    backupDispositionRef: requireLifecycleEvidenceRef(input.dispositionRef, "DATA_LIFECYCLE_BACKUP_DISPOSITION_REF"),
   };
 }
