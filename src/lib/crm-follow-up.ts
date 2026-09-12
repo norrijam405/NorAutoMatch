@@ -80,6 +80,13 @@ export async function readFollowUpQueue(input: {
       WHERE f.workspace_id = $1
         AND f.satisfied_at IS NULL
         AND o.stage NOT IN ('CONTACTED', 'APPOINTMENT_SET', 'SOLD', 'LOST')
+        AND NOT EXISTS (
+          SELECT 1
+            FROM crm_data_lifecycle l
+           WHERE l.workspace_id = o.workspace_id
+             AND l.opportunity_id = o.opportunity_id
+             AND l.state IN ('PRIMARY_REDACTED_BACKUP_PENDING', 'PRIMARY_REDACTED_BACKUP_EXPIRED')
+        )
       ORDER BY f.due_at ASC, o.created_at ASC, o.opportunity_id ASC
       LIMIT $2`,
     [workspaceId, limit],

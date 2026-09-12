@@ -79,6 +79,13 @@ export async function readPendingManagerQueue(input: {
      WHERE o.workspace_id = $1
        AND o.desk_state = 'MANAGER_REVIEW_PENDING'
        AND o.stage NOT IN ('SOLD', 'LOST')
+       AND NOT EXISTS (
+         SELECT 1
+           FROM crm_data_lifecycle l
+          WHERE l.workspace_id = o.workspace_id
+            AND l.opportunity_id = o.opportunity_id
+            AND l.state IN ('PRIMARY_REDACTED_BACKUP_PENDING', 'PRIMARY_REDACTED_BACKUP_EXPIRED')
+       )
      ORDER BY o.created_at ASC, o.opportunity_id ASC
      LIMIT $2`,
     [workspaceId, limit],

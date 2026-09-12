@@ -58,7 +58,7 @@ jobs:
         run: |
           node scripts/start-production.mjs
           node scripts/start-production.mjs
-          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc 'SELECT COUNT(*) FROM norautomatch_schema_migrations')" = "6"
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '10'
           cat infrastructure/norautomatch-crm-v1.behavior.sql | docker exec -i ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U norauto -d norauto_ci
 
       - name: Compile NorAutoMatch verification surface

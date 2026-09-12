@@ -33,19 +33,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
       - name: Install locked dependencies
         run: npm ci
-
       - name: Dependency security gate
         run: npm audit --audit-level=high
-
       - name: Apply checksum-bound production schema twice
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
@@ -54,22 +50,18 @@ jobs:
         run: |
           node scripts/start-production.mjs
           node scripts/start-production.mjs
-          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc 'SELECT COUNT(*) FROM norautomatch_schema_migrations')" = "6"
-          test "$(docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.public_abuse_buckets') IS NOT NULL")" = "t"
-
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '10'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.public_abuse_buckets') IS NOT NULL" | grep -qx 't'
       - name: Compile verification surface
         run: |
           rm -rf .tmp-inventory-tests
           npx tsc -p tsconfig.inventory-tests.json
-
       - name: Challenge abuse-control policy and false bypasses
         run: node .tmp-inventory-tests/scripts/public-abuse-control.behavior.js
-
-      - name: Challenge distributed Postgres atomicity and reset semantics
+      - name: Challenge distributed Postgres atomicity, reset semantics, and explicit-cutoff cleanup
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
         run: node .tmp-inventory-tests/scripts/public-abuse-postgres.integration.js
-
       - name: Enforce distributed persistence, privacy, and trusted-ingress contract
         run: |
           grep -q 'PostgresPublicAbuseCounterStore' src/app/api/leads/route.ts
@@ -79,23 +71,22 @@ jobs:
           grep -q 'TRUSTED_PROXY_NETWORK_HEADERS_ACTIVATION' src/app/api/leads/route.ts
           grep -q 'evaluatePublicAbuse' src/app/api/leads/route.ts
           grep -q 'norautomatch-crm-v6-public-abuse-control.sql' scripts/start-production.mjs
+          grep -q 'norautomatch-crm-v8-abuse-retention.sql' scripts/start-production.mjs
           grep -q 'ON CONFLICT (bucket_key, subject_hash) DO UPDATE' src/lib/public-abuse-postgres.ts
           grep -q 'public_abuse_buckets' infrastructure/norautomatch-crm-v6-public-abuse-control.sql
           grep -q 'subject_hash CHAR(64)' infrastructure/norautomatch-crm-v6-public-abuse-control.sql
+          grep -q 'norautomatch_cleanup_expired_public_abuse_buckets' infrastructure/norautomatch-crm-v8-abuse-retention.sql
+          grep -q 'explicit caller-supplied cutoff' infrastructure/norautomatch-crm-v8-abuse-retention.sql
           grep -q 'TRUST_DEPLOYMENT_PROXY_NETWORK_HEADERS' .env.example
           ! grep -q 'const requests = new Map' src/app/api/leads/route.ts
           ! grep -q 'raw_ip' infrastructure/norautomatch-crm-v6-public-abuse-control.sql
           ! grep -q 'ip_address' infrastructure/norautomatch-crm-v6-public-abuse-control.sql
           ! grep -q 'extractPublicNetworkSubject(request)' src/app/api/leads/route.ts
-
       - name: Clean generated verification output
         run: rm -rf .tmp-inventory-tests
-
       - name: Typecheck
         run: npm run typecheck
-
       - name: Lint
         run: npm run lint
-
       - name: Production build
         run: npm run build

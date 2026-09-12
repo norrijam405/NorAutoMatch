@@ -43,7 +43,8 @@ export type CrmRelayDeliveryPayload = {
 export type CrmRelayOutcome =
   | { eventId: string; status: "DELIVERED"; attempt: number }
   | { eventId: string; status: "RETRY_SCHEDULED"; attempt: number; nextAttemptAt: string }
-  | { eventId: string; status: "PARKED"; attempt: number };
+  | { eventId: string; status: "PARKED"; attempt: number }
+  | { eventId: string; status: "SUPPRESSED"; attempt: number };
 
 function safeError(error: unknown) {
   const text = error instanceof Error ? error.message : String(error);
@@ -147,8 +148,8 @@ export async function claimCrmOutboxBatch(input: {
   }
 }
 
-async function loadDeliveryPayload(pool: Pool, event: ClaimedCrmOutboxEvent): Promise<CrmRelayDeliveryPayload> {
-  const result = await pool.query<{
+async function loadDeliveryPayload(client: PoolClient, event: ClaimedCrmOutboxEvent): Promise<CrmRelayDeliveryPayload> {
+  const result = await client.query<{
     opportunity_id: string;
     pipeline: CrmOpportunity["pipeline"];
     stage: string;
@@ -209,8 +210,30 @@ async function loadDeliveryPayload(pool: Pool, event: ClaimedCrmOutboxEvent): Pr
   };
 }
 
-async function markDelivered(pool: Pool, event: ClaimedCrmOutboxEvent) {
-  const result = await pool.query(
+async function lockClaimForDelivery(client: PoolClient, event: ClaimedCrmOutboxEvent) {
+  const result = await client.query<{
+    delivery_state: string;
+    claim_token: string | null;
+    attempts: number;
+  }>(
+    `SELECT delivery_state, claim_token::text, attempts
+       FROM crm_outbox
+      WHERE event_id = $1
+      FOR UPDATE`,
+    [event.eventId],
+  );
+  const row = result.rows[0];
+  if (!row) throw new Error("CRM relay claimed event no longer exists.");
+  if (row.delivery_state === "SUPPRESSED") return "SUPPRESSED" as const;
+  if (row.delivery_state !== "PROCESSING" || row.claim_token !== event.claimToken) {
+    throw new Error("CRM relay lost its claim before delivery authorization.");
+  }
+  if (row.attempts !== event.attempts) throw new Error("CRM relay attempt identity drifted before delivery.");
+  return "DELIVERABLE" as const;
+}
+
+async function markDelivered(client: PoolClient, event: ClaimedCrmOutboxEvent) {
+  const result = await client.query(
     `UPDATE crm_outbox
      SET delivery_state = 'DELIVERED', delivered_at = CURRENT_TIMESTAMP,
          claim_token = NULL, claimed_at = NULL, claim_expires_at = NULL,
@@ -221,12 +244,12 @@ async function markDelivered(pool: Pool, event: ClaimedCrmOutboxEvent) {
   if (result.rowCount !== 1) throw new Error("CRM relay lost its claim before recording delivery.");
 }
 
-async function markFailure(pool: Pool, event: ClaimedCrmOutboxEvent, error: unknown): Promise<CrmRelayOutcome> {
+async function markFailure(client: PoolClient, event: ClaimedCrmOutboxEvent, error: unknown): Promise<CrmRelayOutcome> {
   const retryDecision = decideCrmRelayRetry({ attempt: event.attempts, maxAttempts: event.maxAttempts });
   const nextAttemptAt = retryDecision.state === "PARKED"
     ? null
     : new Date(Date.now() + retryDecision.delayMs).toISOString();
-  const result = await pool.query(
+  const result = await client.query(
     `UPDATE crm_outbox
      SET delivery_state = 'FAILED',
          claim_token = NULL, claimed_at = NULL, claim_expires_at = NULL,
@@ -252,9 +275,17 @@ export async function deliverClaimedCrmOutboxEvent(input: {
   const url = requireDeliveryUrl(input.targetUrl, input.allowInsecureLocalhost ?? false);
   const timeoutMs = Math.max(250, Math.min(input.timeoutMs ?? 8_000, 30_000));
   const fetchImpl = input.fetchImpl ?? fetch;
+  const client = await input.pool.connect();
 
   try {
-    const payload = await loadDeliveryPayload(input.pool, input.event);
+    await client.query("BEGIN");
+    const authorization = await lockClaimForDelivery(client, input.event);
+    if (authorization === "SUPPRESSED") {
+      await client.query("COMMIT");
+      return { eventId: input.event.eventId, status: "SUPPRESSED", attempt: input.event.attempts };
+    }
+
+    const payload = await loadDeliveryPayload(client, input.event);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -276,10 +307,29 @@ export async function deliverClaimedCrmOutboxEvent(input: {
       clearTimeout(timeout);
     }
 
-    await markDelivered(input.pool, input.event);
+    await markDelivered(client, input.event);
+    await client.query("COMMIT");
     return { eventId: input.event.eventId, status: "DELIVERED", attempt: input.event.attempts };
   } catch (error) {
-    return markFailure(input.pool, input.event, error);
+    try {
+      const state = await client.query<{ delivery_state: string; claim_token: string | null }>(
+        `SELECT delivery_state, claim_token::text FROM crm_outbox WHERE event_id = $1`,
+        [input.event.eventId],
+      );
+      const row = state.rows[0];
+      if (row?.delivery_state === "PROCESSING" && row.claim_token === input.event.claimToken) {
+        const outcome = await markFailure(client, input.event, error);
+        await client.query("COMMIT");
+        return outcome;
+      }
+      await client.query("ROLLBACK");
+    } catch (recoveryError) {
+      try { await client.query("ROLLBACK"); } catch { /* preserve both errors below */ }
+      throw new AggregateError([error, recoveryError], "CRM relay delivery failed and durable failure recording also failed.");
+    }
+    throw error;
+  } finally {
+    client.release();
   }
 }
 

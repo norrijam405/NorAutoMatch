@@ -1,0 +1,124 @@
+# Exact-head verification marker: lifecycle legal hold dispositions v10
+name: NorAutoMatch Data Lifecycle CI
+
+on:
+  push:
+    branches:
+      - "reactivation/**"
+  pull_request:
+    branches:
+      - main
+      - "reactivation/**"
+
+permissions:
+  contents: read
+
+jobs:
+  data-lifecycle-truth-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+
+      - name: Apply checksum-bound production schema twice
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          node scripts/start-production.mjs
+          node scripts/start-production.mjs
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '10'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.crm_data_lifecycle') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.crm_data_lifecycle_redaction_receipts') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.crm_data_lifecycle_legal_holds') IS NOT NULL" | grep -qx 't'
+
+      - name: Compile verification surface
+        run: |
+          rm -rf .tmp-inventory-tests
+          npx tsc -p tsconfig.inventory-tests.json
+
+      - name: Challenge evidence-bound data lifecycle policy
+        run: node .tmp-inventory-tests/scripts/data-lifecycle.behavior.js
+
+      - name: Challenge real Postgres redaction, legacy legal-hold, backup, and concurrency truth boundaries
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/data-lifecycle-postgres.integration.js
+
+      - name: Challenge write-once lifecycle evidence and identifier hygiene
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/data-lifecycle-audit-hardening.integration.js
+
+      - name: Challenge legal hold before and after redaction plus separate dispositions
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/data-lifecycle-legal-hold-disposition.integration.js
+
+      - name: Source contract checks
+        run: |
+          grep -F 'PRIMARY_REDACTED_BACKUP_PENDING' src/lib/data-lifecycle.ts
+          grep -F 'PRIMARY_REDACTION_DOES_NOT_PROVE_BACKUP_OR_EXTERNAL_DELETION' src/lib/data-lifecycle.ts
+          grep -F 'DATA_LIFECYCLE_EXTERNAL_REMOVAL_REQUIRES_SEPARATE_EVIDENCE' src/lib/data-lifecycle.ts
+          grep -F 'requireLifecycleEvidenceRef' src/lib/data-lifecycle.ts
+          grep -F 'requireLifecycleAuthority' src/lib/data-lifecycle.ts
+          grep -F 'releaseLegalHold' src/lib/data-lifecycle-postgres.ts
+          grep -F 'confirmExternalCopiesRemoved' src/lib/data-lifecycle-postgres.ts
+          grep -F 'DATA_LIFECYCLE_BACKUP_BLOCKED_BY_LEGAL_HOLD' src/lib/data-lifecycle-postgres.ts
+          grep -F 'DATA_LIFECYCLE_EXTERNAL_DISPOSITION_BLOCKED_BY_LEGAL_HOLD' src/lib/data-lifecycle-postgres.ts
+          grep -F 'norautomatch-crm-v7-data-lifecycle.sql' scripts/start-production.mjs
+          grep -F 'norautomatch-crm-v8-abuse-retention.sql' scripts/start-production.mjs
+          grep -F 'norautomatch-crm-v9-lifecycle-audit-hardening.sql' scripts/start-production.mjs
+          grep -F 'norautomatch-crm-v10-legal-hold-dispositions.sql' scripts/start-production.mjs
+          grep -F 'EXPLICIT_TARGETS_REDACTED_SCOPE_NOT_PROVEN_COMPLETE' infrastructure/norautomatch-crm-v7-data-lifecycle.sql
+          grep -F 'DATA_LIFECYCLE_OPERATION_SUPPRESSED' infrastructure/norautomatch-crm-v7-data-lifecycle.sql
+          grep -F 'DATA_LIFECYCLE_EVIDENCE_IMMUTABLE' infrastructure/norautomatch-crm-v9-lifecycle-audit-hardening.sql
+          grep -F 'crm_data_lifecycle_legal_holds' infrastructure/norautomatch-crm-v10-legal-hold-dispositions.sql
+          grep -F 'DATA_LIFECYCLE_LEGAL_HOLD_IMMUTABLE' infrastructure/norautomatch-crm-v10-legal-hold-dispositions.sql
+          grep -F 'backup_disposition_authority' infrastructure/norautomatch-crm-v10-legal-hold-dispositions.sql
+          grep -F 'external_disposition_authority' infrastructure/norautomatch-crm-v10-legal-hold-dispositions.sql
+          grep -F 'norautomatch_cleanup_expired_public_abuse_buckets' infrastructure/norautomatch-crm-v8-abuse-retention.sql
+          if grep -R -n -E 'backup.*deleted.*primary|primary.*deleted.*backup' src/lib/data-lifecycle.ts; then
+            echo 'Lifecycle policy contains an unsafe primary-vs-backup deletion conflation.' >&2
+            exit 1
+          fi
+
+      - name: Clean generated verification output
+        run: rm -rf .tmp-inventory-tests
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
