@@ -4,6 +4,7 @@ import {
   createRedactionRequest,
   evaluateDataLifecycle,
   markBackupResolved,
+  markExternalCopiesRemoved,
   markPrimaryRedacted,
   type DataLifecycleRecord,
 } from "../src/lib/data-lifecycle";
@@ -25,6 +26,18 @@ assert.equal(requestDecision.decision, "REDACT_PRIMARY");
 assert.equal(requestDecision.operationalSuppressionRequired, true);
 assert.equal(requestDecision.backupTruth, "PENDING_SEPARATE_DISPOSITION");
 assert.equal(requestDecision.externalCopyTruth, "MAY_EXIST");
+
+assert.throws(
+  () => createRedactionRequest({
+    workspaceId: "norautomatch",
+    opportunityId: "namo_0123456789abcdef01234567",
+    requestRef: "privacy-request:test-invalid-external",
+    requestAuthority: "AUTHORIZED_PRIVACY_PROCESS",
+    requestedAt: "2026-09-11T23:00:00Z",
+    externalCopies: "SEPARATELY_CONFIRMED_REMOVED" as never,
+  }),
+  /EXTERNAL_REMOVAL_REQUIRES_SEPARATE_EVIDENCE/,
+);
 
 const held = applyLegalHold({
   record: requested,
@@ -60,12 +73,24 @@ assert.throws(
   /CANNOT_RESTORE_REDACTED_PII/,
 );
 
-const backupResolved = markBackupResolved({
+const externalResolved = markExternalCopiesRemoved({
   record: redacted,
+  dispositionRef: "external-removal:test-001",
+  dispositionAuthority: "AUTHORIZED_EXTERNAL_DISPOSITION",
+  observedAt: "2026-09-11T23:04:30Z",
+});
+assert.equal(externalResolved.externalCopies, "SEPARATELY_CONFIRMED_REMOVED");
+assert.equal(externalResolved.externalDispositionAuthority, "AUTHORIZED_EXTERNAL_DISPOSITION");
+
+const backupResolved = markBackupResolved({
+  record: externalResolved,
   dispositionRef: "backup-expiry:test-001",
+  dispositionAuthority: "AUTHORIZED_BACKUP_DISPOSITION",
+  observedAt: "2026-09-11T23:05:00Z",
 });
 assert.equal(backupResolved.state, "PRIMARY_REDACTED_BACKUP_EXPIRED");
 assert.equal(backupResolved.backupDisposition, "EXPIRED_OR_PURGED");
+assert.equal(backupResolved.backupDispositionAuthority, "AUTHORIZED_BACKUP_DISPOSITION");
 assert.equal(evaluateDataLifecycle(backupResolved).backupTruth, "SEPARATELY_RESOLVED");
 
 const active: DataLifecycleRecord = {
@@ -98,6 +123,15 @@ assert.throws(
     requestedAt: "not-a-time",
   }),
   /INVALID_TIMESTAMP/,
+);
+assert.throws(
+  () => markExternalCopiesRemoved({
+    record: active,
+    dispositionRef: "external-removal:too-early",
+    dispositionAuthority: "AUTHORIZED_EXTERNAL_DISPOSITION",
+    observedAt: "2026-09-11T23:06:00Z",
+  }),
+  /EXTERNAL_REMOVAL_REQUIRES_PRIMARY_REDACTION/,
 );
 
 const malformedHold: DataLifecycleRecord = {
