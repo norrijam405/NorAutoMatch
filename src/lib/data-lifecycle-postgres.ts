@@ -4,6 +4,7 @@ import {
   createRedactionRequest,
   evaluateDataLifecycle,
   markBackupResolved,
+  requireLifecycleEvidenceRef,
   type DataLifecycleRecord,
 } from "./data-lifecycle";
 
@@ -186,6 +187,17 @@ export async function placeLegalHold(input: {
       legalHoldAuthority: input.legalHoldAuthority,
       observedAt: input.observedAt,
     });
+
+    if (current?.state === "LEGAL_HOLD") {
+      const exactReplay =
+        current.legalHoldRef === held.legalHoldRef &&
+        current.legalHoldAuthority === held.legalHoldAuthority &&
+        current.legalHoldObservedAt === held.legalHoldObservedAt;
+      if (!exactReplay) throw new Error("DATA_LIFECYCLE_LEGAL_HOLD_EVIDENCE_CONFLICT");
+      await client.query("COMMIT");
+      return current;
+    }
+
     const result = await client.query<LifecycleDbRow>(
       `INSERT INTO crm_data_lifecycle (
           workspace_id, opportunity_id, state,
@@ -232,6 +244,7 @@ export async function attachConversationRedactionTarget(input: {
   eventId: string;
   targetRef: string;
 }) {
+  const targetRef = requireLifecycleEvidenceRef(input.targetRef, "DATA_LIFECYCLE_TARGET_REF");
   const result = await input.pool.query(
     `INSERT INTO crm_data_lifecycle_conversation_targets (
         workspace_id, opportunity_id, provider, event_id, target_ref
@@ -247,7 +260,7 @@ export async function attachConversationRedactionTarget(input: {
       input.opportunityId.trim(),
       input.provider.trim(),
       input.eventId.trim(),
-      input.targetRef.trim(),
+      targetRef,
     ],
   );
   if (result.rowCount !== 1) throw new Error("DATA_LIFECYCLE_CONVERSATION_TARGET_NOT_ATTACHED");
