@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { executeManagerReviewCommand } from "@/lib/crm-manager-review-command";
-import { authorizeManagerSession } from "@/lib/manager-session-auth";
+import { authorizeManagerRequest } from "@/lib/manager-route-auth";
 import { createPostgresCrmPool } from "@/lib/crm-postgres-adapter";
-import { NORAUTO_WORKSPACE_ID } from "@/lib/crm-persistence";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,11 +36,7 @@ function parseBody(value: unknown) {
 }
 
 export async function POST(request: Request) {
-  const auth = authorizeManagerSession({
-    authorizationHeader: request.headers.get("authorization"),
-    configuredSecret: process.env.NORAUTO_MANAGER_SESSION_SECRET,
-    expectedWorkspaceId: NORAUTO_WORKSPACE_ID,
-  });
+  const auth = await authorizeManagerRequest(request);
 
   if (!auth.authorized) {
     if (auth.reason === "NOT_CONFIGURED") {
