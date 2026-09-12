@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { Pool } from "pg";
-import type { ManagerSessionClaims, ManagerSessionAuthResult } from "../src/lib/manager-session-auth";
+import {
+  createManagerSessionTokenForTrustedIssuer,
+  type ManagerSessionClaims,
+  type ManagerSessionAuthResult,
+} from "../src/lib/manager-session-auth";
+import { authorizeManagerRequest } from "../src/lib/manager-route-auth";
 import { enforceDurableManagerSessionRevocation } from "../src/lib/manager-session-durable-auth";
 import { isManagerSessionDurablyRevoked, recordManagerSessionRevocation } from "../src/lib/manager-session-revocation";
 
@@ -8,6 +13,7 @@ const connectionString = process.env.NORAUTO_CRM_DATABASE_URL?.trim();
 if (!connectionString) throw new Error("NORAUTO_CRM_DATABASE_URL is required for manager revocation integration.");
 
 const pool = new Pool({ connectionString });
+const now = Math.floor(Date.now() / 1000);
 const claims: ManagerSessionClaims = {
   protocol: "NORAUTO_MANAGER_SESSION_V1",
   subjectId: "manager:integration-001",
@@ -15,9 +21,9 @@ const claims: ManagerSessionClaims = {
   role: "MANAGER",
   verifier: "integration-verifier",
   evidenceRef: "manager-session:integration-001",
-  issuedAt: 1789185600,
-  expiresAt: 1789189200,
-  nonce: "manager-revocation-nonce-001",
+  issuedAt: now - 5,
+  expiresAt: now + 30 * 60,
+  nonce: `manager-revocation-nonce-${now}`,
 };
 const authorized: ManagerSessionAuthResult = {
   authorized: true,
@@ -30,17 +36,29 @@ const authorized: ManagerSessionAuthResult = {
     evidenceRef: claims.evidenceRef,
   },
 };
+const revokedAt = new Date(now * 1000).toISOString();
 
 async function main() {
-  await pool.query(`DELETE FROM crm_manager_session_revocations WHERE false`);
+  const managerSecret = "manager-session-integration-secret-" + "x".repeat(32);
+  process.env.NORAUTO_MANAGER_SESSION_SECRET = managerSecret;
+  process.env.NORAUTO_CRM_DATABASE_URL = connectionString;
+  delete process.env.NORAUTO_MANAGER_SESSION_PREVIOUS_SECRET;
+  delete process.env.NORAUTO_MANAGER_REVOKED_SESSION_NONCES;
+
+  const token = createManagerSessionTokenForTrustedIssuer({ claims, configuredSecret: managerSecret });
+  const request = new Request("http://127.0.0.1/manager-test", {
+    headers: { authorization: `Bearer ${token}` },
+  });
 
   const before = await enforceDurableManagerSessionRevocation({ pool, auth: authorized });
   assert(before.authorized, "unrevoked manager session must remain authorized after durable check");
+  const routeBefore = await authorizeManagerRequest(request);
+  assert(routeBefore.authorized, "shared manager route guard must allow a valid unrevoked session");
 
   const recorded = await recordManagerSessionRevocation({
     pool,
     claims,
-    revokedAt: "2026-09-12T06:10:00.000Z",
+    revokedAt,
     revokedBy: "SECURITY_OPERATOR",
     evidenceRef: "manager-revocation:integration-001",
     reasonCode: "SECURITY_TEST",
@@ -51,11 +69,13 @@ async function main() {
   assert(await isManagerSessionDurablyRevoked({ pool, claims }), "recorded session must be durably revoked");
   const after = await enforceDurableManagerSessionRevocation({ pool, auth: authorized });
   assert(!after.authorized && after.reason === "REVOKED", "durably revoked session must be denied");
+  const routeAfter = await authorizeManagerRequest(request);
+  assert(!routeAfter.authorized && routeAfter.reason === "REVOKED", "shared manager route guard must deny the same signed token after durable revocation");
 
   const exactReplay = await recordManagerSessionRevocation({
     pool,
     claims,
-    revokedAt: "2026-09-12T06:10:00.000Z",
+    revokedAt,
     revokedBy: "SECURITY_OPERATOR",
     evidenceRef: "manager-revocation:integration-001",
     reasonCode: "SECURITY_TEST",
@@ -66,7 +86,7 @@ async function main() {
     () => recordManagerSessionRevocation({
       pool,
       claims,
-      revokedAt: "2026-09-12T06:10:00.000Z",
+      revokedAt,
       revokedBy: "SECURITY_OPERATOR",
       evidenceRef: "manager-revocation:changed-evidence",
       reasonCode: "SECURITY_TEST",
@@ -102,7 +122,7 @@ async function main() {
     "direct SQL must not delete revocation evidence",
   );
 
-  console.log("PASS_MANAGER_SESSION_DURABLE_REVOCATION");
+  console.log("PASS_MANAGER_SESSION_DURABLE_REVOCATION_AND_ROUTE_GUARD");
 }
 
 main().finally(() => pool.end());
