@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 import { conversationEventSchema, evaluateConversationRouting, type ConversationEvent } from "./conversation-gateway";
 
-export type ConversationProcessingState = "RECEIVED" | "ROUTED" | "DEAD_LETTER";
+export type ConversationProcessingState = "RECEIVED" | "ROUTED" | "DEAD_LETTER" | "REDACTED";
 
 export type PersistConversationEventResult = {
   status: "COMMITTED" | "DEDUPLICATED";
@@ -24,7 +24,7 @@ function canonicalize(value: unknown): string {
 }
 
 function requireProcessingState(value: string): ConversationProcessingState {
-  if (value === "RECEIVED" || value === "ROUTED" || value === "DEAD_LETTER") return value;
+  if (value === "RECEIVED" || value === "ROUTED" || value === "DEAD_LETTER" || value === "REDACTED") return value;
   throw new Error("CONVERSATION_PROCESSING_STATE_DRIFT");
 }
 
@@ -41,7 +41,7 @@ export async function persistConversationEvent(input: {
     await client.query("BEGIN");
     const existing = await client.query<{
       conversation_id: string;
-      normalized_payload: ConversationEvent;
+      normalized_payload: unknown;
       routing_decision: PersistConversationEventResult["routingDecision"];
       processing_state: string;
     }>(
@@ -54,10 +54,24 @@ export async function persistConversationEvent(input: {
 
     if (existing.rowCount === 1) {
       const row = existing.rows[0];
-      if (!row || canonicalize(row.normalized_payload) !== canonicalPayload) {
+      if (!row) throw new Error("CONVERSATION_EVENT_IDENTITY_COLLISION");
+      const processingState = requireProcessingState(row.processing_state);
+      if (processingState === "REDACTED") {
+        await client.query("COMMIT");
+        return {
+          status: "DEDUPLICATED",
+          workspaceId: event.workspaceId,
+          provider: event.provider,
+          eventId: event.eventId,
+          conversationId: row.conversation_id,
+          routingDecision: "NOT_CONTACTABLE",
+          processingState: "REDACTED",
+          authorityEffect: "NONE",
+        };
+      }
+      if (canonicalize(row.normalized_payload) !== canonicalPayload) {
         throw new Error("CONVERSATION_EVENT_IDENTITY_COLLISION");
       }
-      const processingState = requireProcessingState(row.processing_state);
       await client.query("COMMIT");
       return {
         status: "DEDUPLICATED",
