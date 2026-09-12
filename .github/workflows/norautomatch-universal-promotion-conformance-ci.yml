@@ -38,7 +38,7 @@ jobs:
           npx tsc -p tsconfig.universal-promotion-conformance.json
 
       - name: Challenge promotion and assurance conformance
-        run: node .tmp-universal-promotion-conformance/scripts/universal-promotion-conformance.behavior.js
+        run: node .tmp-universal-promotion-conformance/universal-promotion-conformance.behavior.js
 
       - name: Source contract guard
         shell: bash
