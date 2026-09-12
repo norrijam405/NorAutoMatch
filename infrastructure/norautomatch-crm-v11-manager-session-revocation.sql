@@ -8,9 +8,18 @@ CREATE TABLE IF NOT EXISTS crm_manager_session_revocations (
     subject_id_sha256 CHAR(64) NOT NULL CHECK (subject_id_sha256 ~ '^[0-9a-f]{64}$'),
     session_expires_at TIMESTAMPTZ NOT NULL,
     revoked_at TIMESTAMPTZ NOT NULL,
-    revoked_by TEXT NOT NULL CHECK (revoked_by ~ '^[A-Z][A-Z0-9_:-]{1,127}$'),
-    evidence_ref TEXT NOT NULL CHECK (evidence_ref ~ '^[A-Za-z0-9][A-Za-z0-9._:/-]{2,511}$'),
-    reason_code TEXT NOT NULL CHECK (reason_code ~ '^[A-Z][A-Z0-9_:-]{1,127}$'),
+    revoked_by TEXT NOT NULL CHECK (
+        char_length(revoked_by) BETWEEN 2 AND 128
+        AND revoked_by ~ '^[A-Z][A-Z0-9_:-]+$'
+    ),
+    evidence_ref TEXT NOT NULL CHECK (
+        char_length(evidence_ref) BETWEEN 3 AND 512
+        AND evidence_ref ~ '^[A-Za-z0-9][A-Za-z0-9._:/-]+$'
+    ),
+    reason_code TEXT NOT NULL CHECK (
+        char_length(reason_code) BETWEEN 2 AND 128
+        AND reason_code ~ '^[A-Z][A-Z0-9_:-]+$'
+    ),
     CHECK (session_expires_at > revoked_at),
     PRIMARY KEY (workspace_id, nonce_sha256)
 );
