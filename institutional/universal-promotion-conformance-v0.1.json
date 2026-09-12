@@ -1,0 +1,41 @@
+{
+  "schema": "IGNIAQUA_UNIVERSAL_PROMOTION_CONFORMANCE_V0_1",
+  "contractRef": "IgniAqua-Institutional-Vault/04_ARCHITECTURE/UNIVERSAL_PROMOTION_AND_CHALLENGE_CONTRACT_v0.1.md",
+  "status": "PROVING_GROUND_IMPLEMENTATION",
+  "authorityEffect": "NONE",
+  "product": "NorAutoMatch",
+  "canonicalBranch": "reactivation/2026-09-08",
+  "requiredStages": {
+    "challenge": {
+      "workflow": ".github/workflows/norautomatch-paired-challenge-ci.yml",
+      "behavior": "scripts/paired-challenge-campaign.behavior.ts"
+    },
+    "independentAssurance": {
+      "workflow": ".github/workflows/norautomatch-torque-independent-assurance-ci.yml",
+      "behavior": "scripts/torque-independent-assurance.behavior.ts"
+    },
+    "canonicalPromotionControl": {
+      "workflow": ".github/workflows/norautomatch-repository-governance-ci.yml",
+      "governanceContract": ".github/norautomatch-governance.json"
+    }
+  },
+  "requiredPromotionInvariants": [
+    "EXACT_CANDIDATE_IDENTITY",
+    "CANONICAL_BASE_IDENTITY",
+    "CANDIDATE_GATE",
+    "CHALLENGE_GATE",
+    "INDEPENDENT_ASSURANCE_GATE",
+    "PULL_REQUEST_GATE",
+    "EXPECTED_HEAD_LOCK",
+    "CANONICAL_POST_MERGE_GATE",
+    "BAD_STATE_ACCOUNTING",
+    "FAILURE_PRESERVATION",
+    "AUTHORITY_EFFECT_EXPLICIT"
+  ],
+  "knownLimitations": [
+    "This manifest proves only NorAutoMatch proving-ground conformance, not company-wide enforcement.",
+    "GitHub expected-head merge locking is exercised by the promotion process and recorded in proving receipts; this manifest cannot itself mutate GitHub merge behavior.",
+    "Functional separation is machine-checked at workflow/evidence-surface level; human/model identity independence is not asserted by this manifest.",
+    "The Institutional Vault does not yet have its own CI runner."
+  ]
+}
