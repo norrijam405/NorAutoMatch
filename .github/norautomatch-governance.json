@@ -1,0 +1,18 @@
+{
+  "schema": "NORAUTOMATCH_REPOSITORY_GOVERNANCE_V1",
+  "canonicalBranch": "reactivation/2026-09-08",
+  "staleDefaultBranch": "main",
+  "promotion": {
+    "requireExactHeadSha": true,
+    "requireCanonicalBase": true,
+    "requireCandidatePushGate": true,
+    "requirePullRequestGate": true,
+    "requireCanonicalPostMergeGate": true
+  },
+  "authorityEffect": "NONE",
+  "notes": [
+    "The repository default branch is not authoritative for current NorAutoMatch development state.",
+    "Do not retarget or promote roadmap work to main unless a separately evidenced governance migration explicitly changes this file.",
+    "Do not move main as a shortcut: external deployment consumers may track that branch and deployment impact is not proven safe."
+  ]
+}
