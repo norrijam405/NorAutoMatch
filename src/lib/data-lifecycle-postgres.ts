@@ -75,6 +75,18 @@ async function readLifecycleForUpdate(client: PoolClient, workspaceId: string, o
   return result.rows[0] ? mapLifecycleRow(result.rows[0]) : null;
 }
 
+async function readLifecycle(input: { pool: Pool; workspaceId: string; opportunityId: string }) {
+  const result = await input.pool.query<LifecycleDbRow>(
+    `SELECT workspace_id, opportunity_id, state, request_ref, request_authority, requested_at,
+            legal_hold_ref, legal_hold_authority, legal_hold_observed_at, primary_redacted_at,
+            backup_disposition, backup_disposition_ref, external_copies
+       FROM crm_data_lifecycle
+      WHERE workspace_id = $1 AND opportunity_id = $2`,
+    [input.workspaceId, input.opportunityId],
+  );
+  return result.rows[0] ? mapLifecycleRow(result.rows[0]) : null;
+}
+
 export async function requestPrimaryRedaction(input: {
   pool: Pool;
   workspaceId: string;
@@ -105,6 +117,7 @@ export async function requestPrimaryRedaction(input: {
           request_authority = EXCLUDED.request_authority,
           requested_at = EXCLUDED.requested_at,
           external_copies = EXCLUDED.external_copies
+       WHERE crm_data_lifecycle.state = 'ACTIVE'
        RETURNING workspace_id, opportunity_id, state, request_ref, request_authority, requested_at,
                  legal_hold_ref, legal_hold_authority, legal_hold_observed_at, primary_redacted_at,
                  backup_disposition, backup_disposition_ref, external_copies`,
@@ -117,13 +130,29 @@ export async function requestPrimaryRedaction(input: {
         requested.externalCopies,
       ],
     );
+
+    if (result.rowCount !== 1 || !result.rows[0]) {
+      await client.query("ROLLBACK");
+      const current = await readLifecycle({
+        pool: input.pool,
+        workspaceId: requested.workspaceId,
+        opportunityId: requested.opportunityId,
+      });
+      if (!current) throw new Error("DATA_LIFECYCLE_REQUEST_CONFLICT_STATE_MISSING");
+      throw new Error(`DATA_LIFECYCLE_REQUEST_REFUSED_FROM_${current.state}`);
+    }
+
     await client.query("COMMIT");
     const record = mapLifecycleRow(result.rows[0]);
     const decision = evaluateDataLifecycle(record);
     if (decision.decision !== "REDACT_PRIMARY") throw new Error("DATA_LIFECYCLE_REQUEST_PERSISTENCE_DRIFT");
     return record;
   } catch (error) {
-    await client.query("ROLLBACK");
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // Preserve the original lifecycle error; a prior explicit rollback may already have closed the transaction.
+    }
     throw error;
   } finally {
     client.release();
@@ -168,6 +197,7 @@ export async function placeLegalHold(input: {
           legal_hold_ref = EXCLUDED.legal_hold_ref,
           legal_hold_authority = EXCLUDED.legal_hold_authority,
           legal_hold_observed_at = EXCLUDED.legal_hold_observed_at
+       WHERE crm_data_lifecycle.state NOT IN ('PRIMARY_REDACTED_BACKUP_PENDING', 'PRIMARY_REDACTED_BACKUP_EXPIRED')
        RETURNING workspace_id, opportunity_id, state, request_ref, request_authority, requested_at,
                  legal_hold_ref, legal_hold_authority, legal_hold_observed_at, primary_redacted_at,
                  backup_disposition, backup_disposition_ref, external_copies`,
@@ -181,10 +211,13 @@ export async function placeLegalHold(input: {
         held.externalCopies,
       ],
     );
+    if (result.rowCount !== 1 || !result.rows[0]) {
+      throw new Error("DATA_LIFECYCLE_LEGAL_HOLD_CANNOT_RESTORE_REDACTED_PII");
+    }
     await client.query("COMMIT");
     return mapLifecycleRow(result.rows[0]);
   } catch (error) {
-    await client.query("ROLLBACK");
+    try { await client.query("ROLLBACK"); } catch { /* preserve original error */ }
     throw error;
   } finally {
     client.release();
@@ -289,7 +322,7 @@ export async function resolveBackupDisposition(input: {
     await client.query("COMMIT");
     return mapLifecycleRow(result.rows[0]);
   } catch (error) {
-    await client.query("ROLLBACK");
+    try { await client.query("ROLLBACK"); } catch { /* preserve original error */ }
     throw error;
   } finally {
     client.release();
