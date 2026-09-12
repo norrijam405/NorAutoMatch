@@ -53,7 +53,7 @@ jobs:
           NORAUTO_RELEASE_SHA: ${{ github.sha }}
         run: |
           node scripts/start-production.mjs
-          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '10'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '11'
 
       - name: Compile verification surface
         run: |

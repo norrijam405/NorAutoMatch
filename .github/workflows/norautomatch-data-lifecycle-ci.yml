@@ -55,10 +55,11 @@ jobs:
         run: |
           node scripts/start-production.mjs
           node scripts/start-production.mjs
-          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '10'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '11'
           docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.crm_data_lifecycle') IS NOT NULL" | grep -qx 't'
           docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.crm_data_lifecycle_redaction_receipts') IS NOT NULL" | grep -qx 't'
           docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.crm_data_lifecycle_legal_holds') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.crm_manager_session_revocations') IS NOT NULL" | grep -qx 't'
 
       - name: Compile verification surface
         run: |
@@ -98,6 +99,7 @@ jobs:
           grep -F 'norautomatch-crm-v8-abuse-retention.sql' scripts/start-production.mjs
           grep -F 'norautomatch-crm-v9-lifecycle-audit-hardening.sql' scripts/start-production.mjs
           grep -F 'norautomatch-crm-v10-legal-hold-dispositions.sql' scripts/start-production.mjs
+          grep -F 'norautomatch-crm-v11-manager-session-revocation.sql' scripts/start-production.mjs
           grep -F 'EXPLICIT_TARGETS_REDACTED_SCOPE_NOT_PROVEN_COMPLETE' infrastructure/norautomatch-crm-v7-data-lifecycle.sql
           grep -F 'DATA_LIFECYCLE_OPERATION_SUPPRESSED' infrastructure/norautomatch-crm-v7-data-lifecycle.sql
           grep -F 'DATA_LIFECYCLE_EVIDENCE_IMMUTABLE' infrastructure/norautomatch-crm-v9-lifecycle-audit-hardening.sql

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFollowUpQueue } from "@/lib/crm-follow-up";
-import { NORAUTO_WORKSPACE_ID } from "@/lib/crm-persistence";
 import { createPostgresCrmPool } from "@/lib/crm-postgres-adapter";
-import { authorizeManagerSession } from "@/lib/manager-session-auth";
+import { authorizeManagerRequest } from "@/lib/manager-route-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,11 +27,7 @@ function parseLimit(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const auth = authorizeManagerSession({
-    authorizationHeader: request.headers.get("authorization"),
-    configuredSecret: process.env.NORAUTO_MANAGER_SESSION_SECRET,
-    expectedWorkspaceId: NORAUTO_WORKSPACE_ID,
-  });
+  const auth = await authorizeManagerRequest(request);
 
   if (!auth.authorized) {
     if (auth.reason === "NOT_CONFIGURED") {
