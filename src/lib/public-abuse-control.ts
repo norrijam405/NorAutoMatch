@@ -35,6 +35,12 @@ function normalizeNetworkSubject(value: string) {
   return value.trim().slice(0, 128);
 }
 
+function normalizeHmacSecret(secret: string, label: string) {
+  const normalized = secret.trim();
+  if (normalized.length < 32) throw new Error(`${label} must be at least 32 characters.`);
+  return normalized;
+}
+
 export function parsePublicNetworkSubjectHeader(value: string | undefined | null): PublicNetworkSubjectHeader | null {
   const normalized = value?.trim().toLowerCase();
   if (normalized === "x-forwarded-for" || normalized === "x-real-ip") return normalized;
@@ -57,10 +63,7 @@ export function hashPublicAbuseSubject(subject: string, secret: string) {
   const normalizedSubject = normalizeNetworkSubject(subject);
   if (!normalizedSubject) throw new Error("Public abuse network subject is required.");
 
-  const normalizedSecret = secret.trim();
-  if (normalizedSecret.length < 32) {
-    throw new Error("Public abuse HMAC secret must be at least 32 characters.");
-  }
+  const normalizedSecret = normalizeHmacSecret(secret, "Public abuse HMAC secret");
 
   return createHmac("sha256", normalizedSecret)
     .update(`norautomatch:public-abuse:v1:${normalizedSubject}`)
@@ -71,6 +74,7 @@ export async function evaluatePublicAbuse(input: {
   store: PublicAbuseCounterStore;
   networkSubject: string;
   hmacSecret: string;
+  previousHmacSecret?: string;
   now?: Date;
   bucketKey?: string;
   limit?: number;
@@ -86,16 +90,38 @@ export async function evaluatePublicAbuse(input: {
     throw new Error("Public abuse window must be a positive integer number of seconds.");
   }
 
-  const subjectHash = hashPublicAbuseSubject(input.networkSubject, input.hmacSecret);
-  const result = await input.store.consume({ bucketKey, subjectHash, now, windowSeconds });
-  const remaining = Math.max(0, limit - result.count);
+  const currentSecret = normalizeHmacSecret(input.hmacSecret, "Public abuse HMAC secret");
+  const previousRaw = input.previousHmacSecret?.trim() ?? "";
+  const previousSecret = previousRaw
+    ? normalizeHmacSecret(previousRaw, "Previous public abuse HMAC secret")
+    : undefined;
+  if (previousSecret && previousSecret === currentSecret) {
+    throw new Error("Previous public abuse HMAC secret must differ from the current secret.");
+  }
+
+  const currentHash = hashPublicAbuseSubject(input.networkSubject, currentSecret);
+  const current = await input.store.consume({ bucketKey, subjectHash: currentHash, now, windowSeconds });
+
+  let effective = current;
+  if (previousSecret) {
+    const previousHash = hashPublicAbuseSubject(input.networkSubject, previousSecret);
+    const previous = await input.store.consume({ bucketKey, subjectHash: previousHash, now, windowSeconds });
+    if (
+      previous.count > effective.count ||
+      (previous.count === effective.count && previous.resetAt.getTime() > effective.resetAt.getTime())
+    ) {
+      effective = previous;
+    }
+  }
+
+  const remaining = Math.max(0, limit - effective.count);
 
   return {
-    allowed: result.count <= limit,
-    count: result.count,
+    allowed: effective.count <= limit,
+    count: effective.count,
     limit,
     remaining,
-    resetAt: result.resetAt.toISOString(),
+    resetAt: effective.resetAt.toISOString(),
   };
 }
 
