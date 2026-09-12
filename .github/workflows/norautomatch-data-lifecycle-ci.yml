@@ -1,3 +1,4 @@
+# Exact-head verification marker: lifecycle audit hardening v9
 name: NorAutoMatch Data Lifecycle CI
 
 on:
