@@ -21,6 +21,7 @@ const pool = new Pool({ connectionString, max: 4 });
 const workspaceId = "lifecycle-integration";
 const opportunityId = "namo_aaaaaaaaaaaaaaaaaaaaaaaa";
 const heldOpportunityId = "namo_bbbbbbbbbbbbbbbbbbbbbbbb";
+const raceOpportunityId = "namo_cccccccccccccccccccccccc";
 const handoffId = "namh_cccccccccccccccccccccccc";
 const heldHandoffId = "namh_dddddddddddddddddddddddd";
 const pii = {
@@ -117,6 +118,94 @@ async function seedOpportunity(id: string, latestHandoffId: string, idempotencyD
         lenderSelection: "NOT_AUTHORIZED",
       }),
     ],
+  );
+}
+
+async function seedRaceOpportunity() {
+  await pool.query(
+    `INSERT INTO crm_opportunities (
+      opportunity_id, workspace_id, intake_idempotency_key, pipeline, stage, desk_state,
+      customer, buying_intent, inventory_evidence, attribution, latest_handoff_id,
+      created_at, updated_at
+    ) VALUES (
+      $1, $2, $3, 'Standard Retail', 'NEW', 'NOT_PREPARED',
+      $4::jsonb, $5::jsonb, '{}'::jsonb, '{}'::jsonb, 'namh_eeeeeeeeeeeeeeeeeeeeeeee',
+      '2026-09-12T03:00:00Z', '2026-09-12T03:00:00Z'
+    )`,
+    [
+      raceOpportunityId,
+      workspaceId,
+      "6".repeat(64),
+      JSON.stringify({ firstName: "Hold", lastName: "Race", email: "hold.race@example.test", phone: "+14055550188", consent: true }),
+      JSON.stringify({ budgetRange: "$20k-$30k", paymentMethod: "FINANCE", notes: "race fixture" }),
+    ],
+  );
+}
+
+async function proveLegalHoldWinsConcurrentFirstInsertRace() {
+  await seedRaceOpportunity();
+  const holdClient = await pool.connect();
+  try {
+    await holdClient.query("BEGIN");
+    await holdClient.query(
+      `INSERT INTO crm_data_lifecycle (
+         workspace_id, opportunity_id, state,
+         legal_hold_ref, legal_hold_authority, legal_hold_observed_at,
+         backup_disposition, external_copies, authority_effect
+       ) VALUES ($1, $2, 'LEGAL_HOLD', $3, $4, $5::timestamptz, 'UNKNOWN', 'NOT_KNOWN', 'NONE')`,
+      [
+        workspaceId,
+        raceOpportunityId,
+        "legal-hold:race-001",
+        "COUNSEL_DIRECTION",
+        "2026-09-12T03:40:00Z",
+      ],
+    );
+
+    const redactionAttempt = requestPrimaryRedaction({
+      pool,
+      workspaceId,
+      opportunityId: raceOpportunityId,
+      requestRef: "privacy-request:race-001",
+      requestAuthority: "VERIFIED_CUSTOMER_REQUEST",
+      requestedAt: "2026-09-12T03:40:01Z",
+    });
+
+    // Give the second connection time to reach the unique-key conflict and block behind the uncommitted hold.
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    await holdClient.query("COMMIT");
+
+    await assert.rejects(redactionAttempt, /DATA_LIFECYCLE_REQUEST_REFUSED_FROM_LEGAL_HOLD/);
+  } catch (error) {
+    try { await holdClient.query("ROLLBACK"); } catch { /* transaction may already be committed */ }
+    throw error;
+  } finally {
+    holdClient.release();
+  }
+
+  const finalState = await pool.query<{
+    state: string;
+    legal_hold_ref: string | null;
+    request_ref: string | null;
+  }>(
+    `SELECT state, legal_hold_ref, request_ref
+       FROM crm_data_lifecycle
+      WHERE workspace_id = $1 AND opportunity_id = $2`,
+    [workspaceId, raceOpportunityId],
+  );
+  assert.equal(finalState.rowCount, 1);
+  assert.equal(finalState.rows[0].state, "LEGAL_HOLD");
+  assert.equal(finalState.rows[0].legal_hold_ref, "legal-hold:race-001");
+  assert.equal(finalState.rows[0].request_ref, null, "concurrent redaction must not overwrite or attach request state to the legal hold");
+
+  await assert.rejects(
+    executePrimaryRedaction({
+      pool,
+      workspaceId,
+      opportunityId: raceOpportunityId,
+      redactedAt: "2026-09-12T03:41:00Z",
+    }),
+    /DATA_LIFECYCLE_BLOCKED_BY_LEGAL_HOLD/,
   );
 }
 
@@ -275,6 +364,8 @@ async function main() {
   );
   const held = await pool.query(`SELECT customer FROM crm_opportunities WHERE workspace_id = $1 AND opportunity_id = $2`, [workspaceId, heldOpportunityId]);
   assert(JSON.stringify(held.rows[0].customer).includes(pii.email));
+
+  await proveLegalHoldWinsConcurrentFirstInsertRace();
 
   const resolved = await resolveBackupDisposition({
     pool,
