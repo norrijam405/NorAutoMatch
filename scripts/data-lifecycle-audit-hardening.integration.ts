@@ -65,7 +65,8 @@ async function main() {
     legalHoldAuthority: "COUNSEL_DIRECTION",
     observedAt: "2026-09-12T04:32:00Z",
   });
-  assert.equal(hold.state, "LEGAL_HOLD");
+  assert.equal(hold.status, "PLACED");
+  assert.equal(hold.holdRef, "legal-hold:audit-001");
 
   const exactReplay = await placeLegalHold({
     pool,
@@ -75,15 +76,16 @@ async function main() {
     legalHoldAuthority: "COUNSEL_DIRECTION",
     observedAt: "2026-09-12T04:32:00Z",
   });
-  assert.equal(exactReplay.legalHoldRef, "legal-hold:audit-001");
+  assert.equal(exactReplay.status, "DEDUPLICATED");
+  assert.equal(exactReplay.holdRef, "legal-hold:audit-001");
 
   await assert.rejects(
     placeLegalHold({
       pool,
       workspaceId,
       opportunityId: heldOpportunityId,
-      legalHoldRef: "legal-hold:audit-002",
-      legalHoldAuthority: "COUNSEL_DIRECTION",
+      legalHoldRef: "legal-hold:audit-001",
+      legalHoldAuthority: "OTHER_COUNSEL",
       observedAt: "2026-09-12T04:32:00Z",
     }),
     /DATA_LIFECYCLE_LEGAL_HOLD_EVIDENCE_CONFLICT/,
@@ -91,12 +93,12 @@ async function main() {
 
   await assert.rejects(
     pool.query(
-      `UPDATE crm_data_lifecycle
-          SET legal_hold_ref = 'legal-hold:tampered'
-        WHERE workspace_id = $1 AND opportunity_id = $2`,
+      `UPDATE crm_data_lifecycle_legal_holds
+          SET hold_authority = 'OTHER_AUTHORITY'
+        WHERE workspace_id = $1 AND opportunity_id = $2 AND hold_ref = 'legal-hold:audit-001'`,
       [workspaceId, heldOpportunityId],
     ),
-    /DATA_LIFECYCLE_EVIDENCE_IMMUTABLE:legal_hold_ref/,
+    /DATA_LIFECYCLE_LEGAL_HOLD_IDENTITY_IMMUTABLE/,
   );
 
   await assert.rejects(
@@ -146,16 +148,18 @@ async function main() {
   );
 
   const persistedHold = await pool.query<{
-    legal_hold_ref: string;
-    legal_hold_authority: string;
+    hold_ref: string;
+    hold_authority: string;
+    released_at: Date | null;
   }>(
-    `SELECT legal_hold_ref, legal_hold_authority
-       FROM crm_data_lifecycle
+    `SELECT hold_ref, hold_authority, released_at
+       FROM crm_data_lifecycle_legal_holds
       WHERE workspace_id = $1 AND opportunity_id = $2`,
     [workspaceId, heldOpportunityId],
   );
-  assert.equal(persistedHold.rows[0].legal_hold_ref, "legal-hold:audit-001");
-  assert.equal(persistedHold.rows[0].legal_hold_authority, "COUNSEL_DIRECTION");
+  assert.equal(persistedHold.rows[0].hold_ref, "legal-hold:audit-001");
+  assert.equal(persistedHold.rows[0].hold_authority, "COUNSEL_DIRECTION");
+  assert.equal(persistedHold.rows[0].released_at, null);
 
   console.log("data lifecycle audit hardening integration: PASS");
 }
