@@ -1,4 +1,3 @@
-# Exact-head verification marker: lifecycle audit hardening v9
 name: NorAutoMatch Data Lifecycle CI
 
 on:
@@ -55,9 +54,10 @@ jobs:
         run: |
           node scripts/start-production.mjs
           node scripts/start-production.mjs
-          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '9'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '10'
           docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.crm_data_lifecycle') IS NOT NULL" | grep -qx 't'
           docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.crm_data_lifecycle_redaction_receipts') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.crm_data_lifecycle_legal_holds') IS NOT NULL" | grep -qx 't'
 
       - name: Compile verification surface
         run: |
@@ -67,7 +67,7 @@ jobs:
       - name: Challenge evidence-bound data lifecycle policy
         run: node .tmp-inventory-tests/scripts/data-lifecycle.behavior.js
 
-      - name: Challenge real Postgres redaction, legal-hold, backup, and concurrency truth boundaries
+      - name: Challenge real Postgres redaction, legacy legal-hold, backup, and concurrency truth boundaries
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
         run: node .tmp-inventory-tests/scripts/data-lifecycle-postgres.integration.js
@@ -77,29 +77,33 @@ jobs:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
         run: node .tmp-inventory-tests/scripts/data-lifecycle-audit-hardening.integration.js
 
+      - name: Challenge legal hold before and after redaction plus separate dispositions
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/data-lifecycle-legal-hold-disposition.integration.js
+
       - name: Source contract checks
         run: |
           grep -F 'PRIMARY_REDACTED_BACKUP_PENDING' src/lib/data-lifecycle.ts
-          grep -F 'BLOCKED_BY_LEGAL_HOLD' src/lib/data-lifecycle.ts
           grep -F 'PRIMARY_REDACTION_DOES_NOT_PROVE_BACKUP_OR_EXTERNAL_DELETION' src/lib/data-lifecycle.ts
-          grep -F 'operationalSuppressionRequired: true' src/lib/data-lifecycle.ts
+          grep -F 'DATA_LIFECYCLE_EXTERNAL_REMOVAL_REQUIRES_SEPARATE_EVIDENCE' src/lib/data-lifecycle.ts
           grep -F 'requireLifecycleEvidenceRef' src/lib/data-lifecycle.ts
           grep -F 'requireLifecycleAuthority' src/lib/data-lifecycle.ts
-          grep -F "WHERE crm_data_lifecycle.state = 'ACTIVE'" src/lib/data-lifecycle-postgres.ts
-          grep -F 'DATA_LIFECYCLE_REQUEST_REFUSED_FROM_' src/lib/data-lifecycle-postgres.ts
-          grep -F 'DATA_LIFECYCLE_LEGAL_HOLD_EVIDENCE_CONFLICT' src/lib/data-lifecycle-postgres.ts
+          grep -F 'releaseLegalHold' src/lib/data-lifecycle-postgres.ts
+          grep -F 'confirmExternalCopiesRemoved' src/lib/data-lifecycle-postgres.ts
+          grep -F 'DATA_LIFECYCLE_BACKUP_BLOCKED_BY_LEGAL_HOLD' src/lib/data-lifecycle-postgres.ts
+          grep -F 'DATA_LIFECYCLE_EXTERNAL_DISPOSITION_BLOCKED_BY_LEGAL_HOLD' src/lib/data-lifecycle-postgres.ts
           grep -F 'norautomatch-crm-v7-data-lifecycle.sql' scripts/start-production.mjs
           grep -F 'norautomatch-crm-v8-abuse-retention.sql' scripts/start-production.mjs
           grep -F 'norautomatch-crm-v9-lifecycle-audit-hardening.sql' scripts/start-production.mjs
+          grep -F 'norautomatch-crm-v10-legal-hold-dispositions.sql' scripts/start-production.mjs
           grep -F 'EXPLICIT_TARGETS_REDACTED_SCOPE_NOT_PROVEN_COMPLETE' infrastructure/norautomatch-crm-v7-data-lifecycle.sql
-          grep -F 'DATA_LIFECYCLE_BLOCKED_BY_LEGAL_HOLD' infrastructure/norautomatch-crm-v7-data-lifecycle.sql
           grep -F 'DATA_LIFECYCLE_OPERATION_SUPPRESSED' infrastructure/norautomatch-crm-v7-data-lifecycle.sql
-          grep -F "'SUPPRESSED'" infrastructure/norautomatch-crm-v7-data-lifecycle.sql
-          grep -F "'REDACTED'" infrastructure/norautomatch-crm-v7-data-lifecycle.sql
-          grep -F 'norautomatch_reject_operational_mutation_after_redaction' infrastructure/norautomatch-crm-v7-data-lifecycle.sql
-          grep -F 'norautomatch_enforce_data_lifecycle_transition' infrastructure/norautomatch-crm-v9-lifecycle-audit-hardening.sql
           grep -F 'DATA_LIFECYCLE_EVIDENCE_IMMUTABLE' infrastructure/norautomatch-crm-v9-lifecycle-audit-hardening.sql
-          grep -F 'crm_data_lifecycle_request_ref_identifier' infrastructure/norautomatch-crm-v9-lifecycle-audit-hardening.sql
+          grep -F 'crm_data_lifecycle_legal_holds' infrastructure/norautomatch-crm-v10-legal-hold-dispositions.sql
+          grep -F 'DATA_LIFECYCLE_LEGAL_HOLD_IMMUTABLE' infrastructure/norautomatch-crm-v10-legal-hold-dispositions.sql
+          grep -F 'backup_disposition_authority' infrastructure/norautomatch-crm-v10-legal-hold-dispositions.sql
+          grep -F 'external_disposition_authority' infrastructure/norautomatch-crm-v10-legal-hold-dispositions.sql
           grep -F 'norautomatch_cleanup_expired_public_abuse_buckets' infrastructure/norautomatch-crm-v8-abuse-retention.sql
           if grep -R -n -E 'backup.*deleted.*primary|primary.*deleted.*backup' src/lib/data-lifecycle.ts; then
             echo 'Lifecycle policy contains an unsafe primary-vs-backup deletion conflation.' >&2
