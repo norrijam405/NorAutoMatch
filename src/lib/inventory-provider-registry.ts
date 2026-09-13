@@ -20,6 +20,7 @@ export type InventoryProviderPriority = {
  *
  * Customer-facing UI should use customerVisibleLabel unless a provider-specific
  * disclosure is required for the transaction or explicitly authorized.
+ * Provider identity is operational provenance, not ordinary marketing copy.
  *
  * Inventory access, referral permission, and compensation permission are
  * separate capabilities. No field implies another.
@@ -39,7 +40,7 @@ export const inventoryProviderPriority: InventoryProviderPriority[] = [
     referralAuthorized: false,
     compensationAuthorized: false,
     active: true,
-    notes: "Inventory use confirmed by the operator. Preserve source provenance internally while keeping ordinary discovery UI provider-neutral. Referral and compensation permissions remain separately gated.",
+    notes: "Inventory use confirmed by the operator. Preserve exact source provenance internally while keeping ordinary discovery UI provider-neutral. Source identity may still be disclosed when needed for a specific vehicle transaction, legal/compliance requirement, or authorized handoff. Referral and compensation permissions remain separately gated.",
   },
 ];
 
