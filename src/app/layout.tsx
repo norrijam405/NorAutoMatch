@@ -7,14 +7,14 @@ import { Footer } from "@/components/site/footer";
 export const metadata: Metadata = {
   metadataBase: new URL(brand.baseUrl),
   title: {
-    default: "NorAuto Match | Payment-First Car Matching in OKC",
+    default: "NorAuto Match | Car Shopping Without the Pressure",
     template: "%s | NorAuto Match",
   },
   description:
-    "Independent, salesperson-operated vehicle matching for Oklahoma City drivers, with final vehicle sales completed through Orr Nissan West or another approved licensed selling dealership.",
+    "Independent vehicle matching for Oklahoma City drivers. Start with your budget, compare what fits, and move toward a verified vehicle match without the pressure.",
   openGraph: {
-    title: "NorAuto Match | Tell me the number. I’ll find the car.",
-    description: "Payment-first vehicle matching with a direct salesperson in the Oklahoma City metro.",
+    title: "NorAuto Match | Car Shopping Without the Pressure",
+    description: "Payment-first vehicle matching built to make car shopping clearer, calmer, and easier to narrow down.",
     type: "website",
     locale: "en_US",
     images: [{ url: "/images/hero-okc.jpg", width: 1536, height: 1024, alt: "NorAuto Match in Oklahoma City" }],
@@ -37,13 +37,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       url: brand.baseUrl,
     },
     provider: {
-      "@type": "Person",
-      name: "NorAuto Match salesperson",
-      affiliation: {
-        "@type": "AutoDealer",
-        name: brand.dealer.name,
-        url: brand.dealer.url,
-      },
+      "@type": "Organization",
+      name: brand.name,
+      url: brand.baseUrl,
     },
   };
 
