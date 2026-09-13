@@ -57,8 +57,8 @@ export function VerifiedLiveMatcher({ catalog }: Props) {
             <div className="flex items-start gap-3">
               <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-400/10 text-emerald-300"><ShieldCheck size={19} /></span>
               <div>
-                <p className="text-sm font-black text-emerald-200">Verified live Orr Nissan West inventory</p>
-                <p className="mt-1 text-xs leading-5 text-slate-400">Only fresh, matcher-eligible, non-transit units from the bounded dealer 2175 snapshot are shown here.</p>
+                <p className="text-sm font-black text-emerald-200">Verified live inventory</p>
+                <p className="mt-1 text-xs leading-5 text-slate-400">Only fresh, matcher-eligible, non-transit units from the currently authorized inventory source are shown here.</p>
               </div>
             </div>
             <div className="text-xs text-slate-500 sm:text-right">
@@ -70,8 +70,8 @@ export function VerifiedLiveMatcher({ catalog }: Props) {
 
         <div className="mx-auto mt-10 max-w-3xl text-center">
           <p className="eyebrow">Live payment-first matcher</p>
-          <h2 className="mt-4 text-4xl font-black tracking-[-.035em] text-white sm:text-5xl">Start with your number.<br className="hidden sm:block" /> Match against the verified row.</h2>
-          <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-slate-400">The vehicle list can change as the dealership changes. Price and availability are revalidated server-side again when your shortlist becomes a lead.</p>
+          <h2 className="mt-4 text-4xl font-black tracking-[-.035em] text-white sm:text-5xl">Start with your number.<br className="hidden sm:block" /> Match against verified inventory.</h2>
+          <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-slate-400">The available vehicle list can change as the authorized inventory changes. Price and availability are revalidated server-side again when your shortlist becomes a lead.</p>
         </div>
 
         <div className="mt-10 grid gap-6 xl:grid-cols-[.82fr_1.18fr]">
@@ -113,13 +113,13 @@ export function VerifiedLiveMatcher({ catalog }: Props) {
                 payment={estimatePayment(current.price, downPayment, termMonths)}
                 onPass={() => setRejected((ids) => [...ids, current.id])}
                 onShortlist={() => setShortlisted((ids) => [...ids, current.id])}
-              /> : <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-amber-400/20 bg-amber-400/[.05] p-8 text-center"><p className="eyebrow">Sourcing route</p><h3 className="mt-3 text-3xl font-black text-white">No verified active match in this lane.</h3><p className="mt-4 max-w-lg leading-7 text-slate-400">That does not mean there is no deal. Send the target and I can work the vehicle-sourcing path.</p><button onClick={() => setLeadOpen(true)} className="btn-primary mt-7">Start vehicle sourcing <ArrowRight size={17} /></button></div>}
+              /> : <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-amber-400/20 bg-amber-400/[.05] p-8 text-center"><p className="eyebrow">Sourcing route</p><h3 className="mt-3 text-3xl font-black text-white">No verified inventory match right now.</h3><p className="mt-4 max-w-lg leading-7 text-slate-400">That does not mean the search is over. Send the target and I can keep working the authorized sourcing path.</p><button onClick={() => setLeadOpen(true)} className="btn-primary mt-7">Keep looking for me <ArrowRight size={17} /></button></div>}
             </div>
           </div>
         </div>
 
         <div className="mt-12">
-          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><p className="eyebrow">Verified live catalog</p><h3 className="mt-2 text-3xl font-black text-white">Every currently eligible unit</h3></div><p className="text-xs text-slate-500">In-transit, stale, malformed, inactive and unverified units are excluded upstream.</p></div>
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><p className="eyebrow">Verified live catalog</p><h3 className="mt-2 text-3xl font-black text-white">Currently eligible vehicles</h3></div><p className="text-xs text-slate-500">In-transit, stale, malformed, inactive and unverified units are excluded upstream.</p></div>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {vehicles.slice(0, 60).map((vehicle) => <LiveCatalogCard key={vehicle.id} vehicle={vehicle} payment={estimatePayment(vehicle.price, downPayment, termMonths)} shortlisted={shortlisted.includes(vehicle.id)} onAsk={() => { if (!shortlisted.includes(vehicle.id)) setShortlisted((ids) => [...ids, vehicle.id]); setLeadOpen(true); }} />)}
           </div>
