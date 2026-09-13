@@ -14,7 +14,7 @@ export default function HomePage() {
         <div className="absolute inset-0 grid-noise opacity-30" />
         <div className="shell relative flex min-h-[760px] items-center py-20 sm:min-h-[820px]">
           <div className="max-w-3xl pt-4">
-            <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-xs font-bold text-amber-200 backdrop-blur"><span className="size-2 animate-pulse-soft rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399]" /> Your direct shopping line at Orr Nissan West</div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-xs font-bold text-amber-200 backdrop-blur"><span className="size-2 animate-pulse-soft rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399]" /> Your direct line to a verified vehicle match</div>
             <h1 className="mt-7 text-[clamp(3.4rem,8.5vw,7.4rem)] font-black leading-[.86] tracking-[-.065em] text-white">Tell me<br />the <span className="text-amber-300">number.</span></h1>
             <p className="mt-7 max-w-xl text-xl font-medium leading-8 text-slate-200 sm:text-2xl">I’ll find the car. Payment-first matching, direct communication, and a cleaner path from search to driveway.</p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -23,7 +23,7 @@ export default function HomePage() {
             </div>
             <div className="mt-10 grid max-w-2xl gap-3 sm:grid-cols-3">
               <Proof icon={<Gauge size={17} />} title="Payment first" text="Start with the monthly." />
-              <Proof icon={<SearchCheck size={17} />} title="Network search" text="Not stuck with one row." />
+              <Proof icon={<SearchCheck size={17} />} title="Verified inventory" text="Current authorized source only." />
               <Proof icon={<MessageSquareText size={17} />} title="One direct line" text="You get me, not a queue." />
             </div>
           </div>
@@ -60,8 +60,8 @@ export default function HomePage() {
             <div className="grid gap-4">
               <Step number="01" icon={<Gauge />} title="Set the lane" text="Give me the target payment, down payment or trade equity, and the term you are comfortable with." />
               <Step number="02" icon={<CarFront />} title="Match—or pass" text="See which vehicles fit the math. Shortlist the right ones and kill the noise without a sales desk hovering." />
-              <Step number="03" icon={<Sparkles />} title="Open the approved network" text="If the current row is wrong, the search does not end. Your request routes to vehicle sourcing through Orr Nissan West and its approved inventory channels." />
-              <Step number="04" icon={<ShieldCheck />} title="Verify and desk it" text="We confirm the actual unit, selling price, taxes, fees, financing, and delivery through Orr Nissan West or the approved licensed selling dealership." />
+              <Step number="03" icon={<Sparkles />} title="Open the approved network" text="If the current verified row is wrong, the search does not end. Your request moves into the authorized sourcing path without pretending unverified inventory is available." />
+              <Step number="04" icon={<ShieldCheck />} title="Verify and desk it" text="We confirm the actual unit, selling price, taxes, fees, financing, and delivery through the authorized licensed selling dealership before treating anything as final." />
             </div>
           </div>
         </div>
@@ -75,7 +75,7 @@ export default function HomePage() {
               <span className="mx-auto grid size-14 place-items-center rounded-2xl border border-amber-400/25 bg-amber-400/10 text-amber-300"><BadgeCheck size={27} /></span>
               <p className="eyebrow mt-6">One search. One person.</p>
               <h2 className="mt-4 text-4xl font-black tracking-[-.04em] text-white sm:text-5xl">Still looking at 14 tabs?</h2>
-              <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-300">Send the monthly number and the three things the vehicle has to do. I’ll tell you what fits—or start the hunt.</p>
+              <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-300">Send the monthly number and the three things the vehicle has to do. I’ll tell you what fits—or keep the search moving.</p>
               <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row"><a href="#matcher" className="btn-primary">Run the matcher <ArrowRight size={17} /></a><a href={brand.textHref} className="btn-secondary">Text me instead</a></div>
             </div>
           </div>
