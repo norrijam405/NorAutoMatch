@@ -117,7 +117,7 @@ async function main() {
     stdio: "inherit",
     env: {
       ...process.env,
-      HOSTNAME: process.env.HOSTNAME?.trim() || "0.0.0.0",
+      HOSTNAME: process.env.NORAUTO_BIND_HOST?.trim() || "0.0.0.0",
     },
   });
 
