@@ -4,6 +4,8 @@ export type InventoryProviderPriority = {
   priority: number;
   role: "PRIMARY" | "AUTHORIZED_PARTNER" | "REFERRAL_ONLY";
   inventoryAuthorized: boolean;
+  authorizationBasis: "USER_CONFIRMED_PERMISSION" | "DOCUMENTED_PARTNER_AGREEMENT" | "UNKNOWN";
+  authorizationConfirmedAt?: string;
   customerVisibleInventory: boolean;
   customerVisibleLabel: string;
   customerVisibleSourceName: boolean;
@@ -29,13 +31,15 @@ export const inventoryProviderPriority: InventoryProviderPriority[] = [
     priority: 1,
     role: "PRIMARY",
     inventoryAuthorized: true,
+    authorizationBasis: "USER_CONFIRMED_PERMISSION",
+    authorizationConfirmedAt: "2026-09-12",
     customerVisibleInventory: true,
     customerVisibleLabel: "Verified inventory",
     customerVisibleSourceName: false,
     referralAuthorized: false,
     compensationAuthorized: false,
     active: true,
-    notes: "Current authorized inventory source. Preserve source provenance internally while keeping ordinary discovery UI provider-neutral.",
+    notes: "Inventory use confirmed by the operator. Preserve source provenance internally while keeping ordinary discovery UI provider-neutral. Referral and compensation permissions remain separately gated.",
   },
 ];
 
