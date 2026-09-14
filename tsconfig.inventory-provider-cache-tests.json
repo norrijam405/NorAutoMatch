@@ -14,6 +14,7 @@
     "src/lib/inventory-provider-contract.ts",
     "src/lib/inventory-provider-cache-store.ts",
     "src/lib/inventory-provider-cache-reader.ts",
+    "src/lib/inventory-provider-sync.ts",
     "src/lib/orr-inventory-provider-adapter.ts",
     "src/lib/inventory-snapshot-diff.ts",
     "src/lib/orr-public-algolia.ts",
