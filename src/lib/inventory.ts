@@ -14,10 +14,15 @@ export type Vehicle = {
   exteriorColor?: string;
   interiorColor?: string;
   features?: string[];
+  transmission?: string;
+  engine?: string;
+  fuelType?: string;
+  cityMpg?: number;
+  highwayMpg?: number;
 };
 
-// Demonstration inventory for the matcher experience. Replace with an approved
-// dealer feed before production launch. Photos are representative AI imagery.
+// Demonstration inventory for non-live development only. Production/customer-visible
+// inventory is supplied through the verified dealer inventory bridge.
 export const inventory: Vehicle[] = [
   {
     id: "rogue-sv",
