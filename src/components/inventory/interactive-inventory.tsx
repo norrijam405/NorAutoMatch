@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeftRight, Check, Filter, Heart, Search, Shuffle, Sparkles, X } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, Check, Filter, Heart, Search, Shuffle, Sparkles, X } from "lucide-react";
 import type { Vehicle } from "@/lib/inventory";
+import { searchInventory, vehicleHasFeature, type InventorySearchMatch } from "@/lib/inventory-search";
 import { cn } from "@/lib/cn";
 import { FinanceInterestModal } from "@/components/finance/finance-interest-modal";
 
@@ -14,19 +15,19 @@ type Props = {
 type SmartFilter = {
   id: string;
   label: string;
-  terms: string[];
 };
 
 const smartFilters: SmartFilter[] = [
-  { id: "awd", label: "AWD / 4WD", terms: ["awd", "4wd", "4x4", "all wheel drive", "four wheel drive"] },
-  { id: "carplay", label: "CarPlay", terms: ["carplay", "apple carplay"] },
-  { id: "heated-seats", label: "Heated seats", terms: ["heated seat", "heated front seat"] },
-  { id: "leather", label: "Leather", terms: ["leather", "leatherette"] },
-  { id: "sunroof", label: "Sunroof", terms: ["sunroof", "moonroof", "panoramic roof"] },
-  { id: "third-row", label: "3rd row", terms: ["third row", "3rd row", "7 passenger", "8 passenger"] },
+  { id: "awd", label: "AWD / 4WD" },
+  { id: "carplay", label: "CarPlay" },
+  { id: "heated-seats", label: "Heated seats" },
+  { id: "leather", label: "Leather" },
+  { id: "sunroof", label: "Sunroof" },
+  { id: "third-row", label: "3rd row" },
 ];
 
 const PAGE_SIZE = 12;
+const CLOSE_MATCH_LIMIT = 6;
 
 export function InteractiveInventory({ vehicles, fetchedAt }: Props) {
   const [query, setQuery] = useState("");
@@ -39,24 +40,22 @@ export function InteractiveInventory({ vehicles, fetchedAt }: Props) {
   const [financeVehicle, setFinanceVehicle] = useState<Vehicle | null>(null);
 
   const bodyTypes = useMemo(() => ["All", ...new Set(vehicles.map((vehicle) => vehicle.type))], [vehicles]);
-  const availableSmartFilters = useMemo(() => smartFilters.filter((filter) => vehicles.some((vehicle) => smartFilterMatches(vehicle, filter))), [vehicles]);
+  const availableSmartFilters = useMemo(() => smartFilters.filter((filter) => vehicles.some((vehicle) => smartFilterMatches(vehicle, filter.id))), [vehicles]);
 
-  const filtered = useMemo(() => {
-    const tokens = tokenizeQuery(query);
-    return vehicles.filter((vehicle) => {
-      if (bodyType !== "All" && vehicle.type !== bodyType) return false;
-      const searchText = vehicleSearchText(vehicle);
-      if (tokens.length > 0 && !tokens.every((token) => searchText.includes(token))) return false;
-      return activeSmartFilters.every((id) => {
-        const filter = smartFilters.find((candidate) => candidate.id === id);
-        return filter ? smartFilterMatches(vehicle, filter) : true;
-      });
-    });
-  }, [vehicles, query, bodyType, activeSmartFilters]);
+  const filterEligibleVehicles = useMemo(() => vehicles.filter((vehicle) => {
+    if (bodyType !== "All" && vehicle.type !== bodyType) return false;
+    return activeSmartFilters.every((id) => smartFilterMatches(vehicle, id));
+  }), [vehicles, bodyType, activeSmartFilters]);
+
+  const searchResult = useMemo(() => searchInventory(filterEligibleVehicles, query), [filterEligibleVehicles, query]);
+  const queryActive = query.trim().length > 0;
+  const exactMatches = queryActive ? searchResult.exact : searchResult.exact;
+  const closeMatches = queryActive ? searchResult.close.slice(0, CLOSE_MATCH_LIMIT) : [];
+  const visibleExactMatches = exactMatches.slice(0, visibleCount);
+  const primaryVehicles = exactMatches.map((match) => match.vehicle);
 
   useEffect(() => setVisibleCount(PAGE_SIZE), [query, bodyType, activeSmartFilters]);
 
-  const visibleVehicles = filtered.slice(0, visibleCount);
   const seededDeck = useMemo(() => {
     if (!swipeSeed) return [];
     const seed = vehicles.find((vehicle) => vehicle.id === swipeSeed);
@@ -96,7 +95,7 @@ export function InteractiveInventory({ vehicles, fetchedAt }: Props) {
           <div>
             <p className="text-[10px] font-black uppercase tracking-[.3em] text-emerald-300">Verified inventory playground</p>
             <h1 className="mt-3 text-4xl font-black leading-[.88] tracking-[-.055em] text-white sm:text-6xl">SHOP IT.<br /><span className="text-red-500">PLAY WITH IT.</span></h1>
-            <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">Type what you actually want — <strong className="text-slate-200">“red Rogue AWD”</strong>, <strong className="text-slate-200">“CarPlay SUV”</strong>, or <strong className="text-slate-200">“black Frontier 4x4”</strong>. NorAuto searches verified vehicle identity, colors, drivetrain, condition, and source-provided features together.</p>
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">Type what you actually want — <strong className="text-slate-200">“gun metal Rogue”</strong>, <strong className="text-slate-200">“CarPlay SUV”</strong>, or <strong className="text-slate-200">“red Rogue AWD”</strong>. Recognized model, color, drivetrain, condition, and source-provided feature constraints are treated as requirements, not suggestions.</p>
           </div>
           <div className="text-xs text-slate-500 lg:text-right">
             <p>{vehicles.length} verified eligible units</p>
@@ -107,10 +106,13 @@ export function InteractiveInventory({ vehicles, fetchedAt }: Props) {
         <div className="mt-6">
           <label className="flex min-h-14 items-center gap-3 rounded-2xl border border-amber-300/25 bg-black/35 px-4 focus-within:border-amber-300/70">
             <Search size={19} className="shrink-0 text-amber-300" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try: red Rogue AWD with CarPlay" className="w-full bg-transparent text-base text-white outline-none placeholder:text-slate-600" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try: gun metal Rogue AWD with CarPlay" className="w-full bg-transparent text-base text-white outline-none placeholder:text-slate-600" />
             {query && <button onClick={() => setQuery("")} className="grid size-9 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-white/5 hover:text-white" aria-label="Clear search"><X size={16} /></button>}
           </label>
-          <p className="mt-2 text-[11px] leading-5 text-slate-600">Search only matches attributes supplied by the verified inventory source. Missing feature data is never invented.</p>
+          <p className="mt-2 text-[11px] leading-5 text-slate-600">Feature matches come only from source-provided feature evidence. If a close match differs, NorAuto says exactly what is missing instead of silently breaking your request.</p>
+          {queryActive && searchResult.parsed.constraints.length > 0 && <div className="mt-3 flex flex-wrap gap-2">
+            {searchResult.parsed.constraints.map((constraint, index) => <span key={`${constraint.kind}-${constraint.value}-${index}`} className="rounded-full border border-emerald-400/20 bg-emerald-400/[.06] px-2.5 py-1 text-[10px] font-bold text-emerald-200">Required: {constraint.label}</span>)}
+          </div>}
         </div>
 
         <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
@@ -134,91 +136,74 @@ export function InteractiveInventory({ vehicles, fetchedAt }: Props) {
           <div className="mx-auto text-4xl font-black italic text-red-500">VS</div>
           <BattleSide vehicle={battleVehicles[1]} />
         </div>
-        <p className="relative mt-5 text-sm leading-6 text-slate-400">This is a fit comparison, not a universal winner. The next layer will score the battle against the shopper&apos;s actual Match DNA.</p>
+        <p className="relative mt-5 text-sm leading-6 text-slate-400">This is a fit comparison, not a universal winner. NorAuto only uses facts present in the verified vehicle evidence and will keep unknown lifestyle dimensions explicit.</p>
       </section>}
 
       {swipeSeed && seededDeck.length > 0 && <SwipeMiniGame deck={seededDeck} onClose={() => setSwipeSeed(null)} onKeep={(id) => { if (!shortlist.includes(id)) setShortlist((current) => [...current, id]); }} />}
 
       <section>
         <div className="flex items-end justify-between gap-4">
-          <div><p className="text-[10px] font-black uppercase tracking-[.3em] text-amber-300">Full verified catalog</p><h2 className="mt-2 text-3xl font-black text-white">{filtered.length} vehicle{filtered.length === 1 ? "" : "s"} in this view</h2><p className="mt-2 text-xs text-slate-600">Showing {Math.min(visibleVehicles.length, filtered.length)} now so mobile never becomes an endless wall of cards.</p></div>
-          <button onClick={() => { const random = filtered[Math.floor(Math.random() * Math.max(filtered.length, 1))]; if (random) setSwipeSeed(random.id); }} className="hidden min-h-11 items-center gap-2 rounded-full border border-white/10 px-4 text-xs font-black text-slate-300 sm:inline-flex"><Shuffle size={15} /> Surprise me</button>
+          <div><p className="text-[10px] font-black uppercase tracking-[.3em] text-amber-300">{queryActive ? "Exact matches" : "Full verified catalog"}</p><h2 className="mt-2 text-3xl font-black text-white">{exactMatches.length} vehicle{exactMatches.length === 1 ? "" : "s"} {queryActive ? "meet every recognized requirement" : "in this view"}</h2><p className="mt-2 text-xs text-slate-600">Showing {Math.min(visibleExactMatches.length, exactMatches.length)} now so mobile never becomes an endless wall of cards.</p></div>
+          <button onClick={() => { const random = primaryVehicles[Math.floor(Math.random() * Math.max(primaryVehicles.length, 1))]; if (random) setSwipeSeed(random.id); }} className="hidden min-h-11 items-center gap-2 rounded-full border border-white/10 px-4 text-xs font-black text-slate-300 sm:inline-flex"><Shuffle size={15} /> Surprise me</button>
         </div>
 
-        {filtered.length === 0 ? <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[.025] p-7 text-center sm:p-10"><p className="text-2xl font-black text-white">No verified unit matches all of that yet.</p><p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-400">That can mean the exact combination is not in the verified source right now — or the source does not provide one of the requested feature fields. NorAuto will not pretend a feature exists.</p><button onClick={clearSearch} className="mt-6 rounded-full bg-amber-300 px-6 py-3 text-sm font-black text-black">Clear search</button></div> : <>
+        {exactMatches.length === 0 ? <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[.025] p-7 text-center sm:p-10"><p className="text-2xl font-black text-white">No verified unit matches every recognized requirement.</p><p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-400">NorAuto did not weaken your model, color, drivetrain, or feature request to manufacture a result. Check the labeled close matches below, or clear a requirement yourself.</p>{closeMatches.length === 0 && <button onClick={clearSearch} className="mt-6 rounded-full bg-amber-300 px-6 py-3 text-sm font-black text-black">Clear search</button>}</div> : <>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {visibleVehicles.map((vehicle) => <InventoryPlayCard
-              key={vehicle.id}
-              vehicle={vehicle}
-              shortlisted={shortlist.includes(vehicle.id)}
-              battling={battle.includes(vehicle.id)}
-              onShortlist={() => toggleShortlist(vehicle.id)}
-              onBattle={() => toggleBattle(vehicle.id)}
-              onSwipe={() => setSwipeSeed(vehicle.id)}
-              onFinance={() => setFinanceVehicle(vehicle)}
+            {visibleExactMatches.map((match) => <InventoryPlayCard
+              key={match.vehicle.id}
+              vehicle={match.vehicle}
+              shortlisted={shortlist.includes(match.vehicle.id)}
+              battling={battle.includes(match.vehicle.id)}
+              onShortlist={() => toggleShortlist(match.vehicle.id)}
+              onBattle={() => toggleBattle(match.vehicle.id)}
+              onSwipe={() => setSwipeSeed(match.vehicle.id)}
+              onFinance={() => setFinanceVehicle(match.vehicle)}
             />)}
           </div>
-          {visibleCount < filtered.length && <div className="mt-7 flex justify-center"><button onClick={() => setVisibleCount((count) => count + PAGE_SIZE)} className="min-h-12 rounded-full border border-amber-300/30 bg-amber-300/[.06] px-7 text-sm font-black text-amber-200">Show {Math.min(PAGE_SIZE, filtered.length - visibleCount)} more</button></div>}
+          {visibleCount < exactMatches.length && <div className="mt-7 flex justify-center"><button onClick={() => setVisibleCount((count) => count + PAGE_SIZE)} className="min-h-12 rounded-full border border-amber-300/30 bg-amber-300/[.06] px-7 text-sm font-black text-amber-200">Show {Math.min(PAGE_SIZE, exactMatches.length - visibleCount)} more</button></div>}
         </>}
       </section>
+
+      {queryActive && closeMatches.length > 0 && <section className="rounded-[28px] border border-amber-300/15 bg-amber-300/[.025] p-5 sm:p-7">
+        <div className="flex items-start gap-3"><AlertTriangle size={20} className="mt-0.5 shrink-0 text-amber-300" /><div><p className="text-[10px] font-black uppercase tracking-[.3em] text-amber-300">Close matches — not exact</p><h2 className="mt-2 text-2xl font-black text-white">These vehicles break at least one recognized requirement.</h2><p className="mt-2 text-sm leading-6 text-slate-400">The difference is shown on each card. No missing source feature is treated as present.</p></div></div>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {closeMatches.map((match) => <InventoryPlayCard
+            key={`close-${match.vehicle.id}`}
+            vehicle={match.vehicle}
+            match={match}
+            shortlisted={shortlist.includes(match.vehicle.id)}
+            battling={battle.includes(match.vehicle.id)}
+            onShortlist={() => toggleShortlist(match.vehicle.id)}
+            onBattle={() => toggleBattle(match.vehicle.id)}
+            onSwipe={() => setSwipeSeed(match.vehicle.id)}
+            onFinance={() => setFinanceVehicle(match.vehicle)}
+          />)}
+        </div>
+      </section>}
 
       <FinanceInterestModal vehicle={financeVehicle} onClose={() => setFinanceVehicle(null)} />
     </div>
   );
 }
 
-function tokenizeQuery(query: string) {
-  const stopWords = new Set(["with", "and", "the", "a", "an"]);
-  return query.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/).filter((token) => token && !stopWords.has(token));
+function smartFilterMatches(vehicle: Vehicle, filterId: string) {
+  if (filterId === "awd") {
+    const drivetrain = vehicle.drivetrain.toLowerCase().replace(/[^a-z0-9]+/g, " ");
+    return drivetrain.includes("awd") || drivetrain.includes("4wd") || drivetrain.includes("4x4") || drivetrain.includes("all wheel drive") || drivetrain.includes("four wheel drive");
+  }
+  return vehicleHasFeature(vehicle, filterId);
 }
 
-function vehicleSearchText(vehicle: Vehicle) {
-  const drivetrain = vehicle.drivetrain.toLowerCase();
-  const drivetrainAliases = drivetrain.includes("awd") ? "all wheel drive awd" : drivetrain.includes("4wd") || drivetrain.includes("4x4") ? "four wheel drive 4wd 4x4" : drivetrain.includes("fwd") ? "front wheel drive fwd" : drivetrain.includes("rwd") ? "rear wheel drive rwd" : "";
-  const colors = `${vehicle.exteriorColor ?? vehicle.accent ?? ""} ${vehicle.interiorColor ?? ""}`.toLowerCase();
-  const colorGroups: Array<[string, string[]]> = [
-    ["red", ["red", "scarlet", "crimson", "ruby", "burgundy", "maroon"]],
-    ["black", ["black", "obsidian", "midnight", "super black"]],
-    ["white", ["white", "pearl", "ivory"]],
-    ["gray", ["gray", "grey", "gun metallic", "graphite", "charcoal"]],
-    ["blue", ["blue", "navy", "cobalt", "deep ocean"]],
-    ["green", ["green", "forest", "evergreen"]],
-    ["silver", ["silver", "platinum"]],
-  ];
-  const colorAliases = colorGroups.filter(([, names]) => names.some((name) => colors.includes(name))).map(([alias]) => alias).join(" ");
-
-  return [
-    vehicle.year,
-    vehicle.make,
-    vehicle.model,
-    vehicle.trim,
-    vehicle.type,
-    vehicle.drivetrain,
-    drivetrainAliases,
-    vehicle.condition,
-    vehicle.exteriorColor,
-    vehicle.interiorColor,
-    vehicle.accent,
-    colorAliases,
-    vehicle.features?.join(" "),
-    vehicle.id,
-  ].filter(Boolean).join(" ").toLowerCase().replace(/[^a-z0-9]+/g, " ");
-}
-
-function smartFilterMatches(vehicle: Vehicle, filter: SmartFilter) {
-  const text = vehicleSearchText(vehicle);
-  return filter.terms.some((term) => text.includes(term));
-}
-
-function InventoryPlayCard({ vehicle, shortlisted, battling, onShortlist, onBattle, onSwipe, onFinance }: { vehicle: Vehicle; shortlisted: boolean; battling: boolean; onShortlist: () => void; onBattle: () => void; onSwipe: () => void; onFinance: () => void }) {
-  return <article className={cn("overflow-hidden rounded-[24px] border bg-[#0d131b]", shortlisted ? "border-emerald-400/35" : "border-white/10")}>
+function InventoryPlayCard({ vehicle, match, shortlisted, battling, onShortlist, onBattle, onSwipe, onFinance }: { vehicle: Vehicle; match?: InventorySearchMatch; shortlisted: boolean; battling: boolean; onShortlist: () => void; onBattle: () => void; onSwipe: () => void; onFinance: () => void }) {
+  return <article className={cn("overflow-hidden rounded-[24px] border bg-[#0d131b]", match?.kind === "close" ? "border-amber-300/25" : shortlisted ? "border-emerald-400/35" : "border-white/10")}>
     <div className="relative aspect-[16/9] overflow-hidden bg-[#111923]">
       <img src={vehicle.image} alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`} className="h-full w-full object-cover" loading="lazy" />
-      <span className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/70 px-2.5 py-1 text-[9px] font-black uppercase tracking-[.14em] text-emerald-300 backdrop-blur">Verified live</span>
+      <span className={cn("absolute left-3 top-3 rounded-full border bg-black/70 px-2.5 py-1 text-[9px] font-black uppercase tracking-[.14em] backdrop-blur", match?.kind === "close" ? "border-amber-300/25 text-amber-200" : "border-white/10 text-emerald-300")}>{match?.kind === "close" ? "Close match" : "Verified live"}</span>
     </div>
     <div className="p-5">
       <div className="flex items-start justify-between gap-4"><div><h3 className="text-xl font-black text-white">{vehicle.year} {vehicle.make} {vehicle.model}</h3><p className="mt-1 text-xs leading-5 text-slate-500">{vehicle.trim} · {vehicle.drivetrain} · {vehicle.mileage.toLocaleString()} mi</p></div><span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-black text-white/45">{vehicle.type}</span></div>
       {(vehicle.exteriorColor || vehicle.accent) && <p className="mt-3 text-xs font-bold text-slate-400">{vehicle.exteriorColor ?? vehicle.accent}{vehicle.condition ? ` · ${vehicle.condition}` : ""}</p>}
+      {match?.kind === "close" && match.missing.length > 0 && <div className="mt-3 rounded-xl border border-amber-300/15 bg-amber-300/[.05] p-3"><p className="text-[9px] font-black uppercase tracking-[.16em] text-amber-300">What differs</p>{match.missing.map((reason) => <p key={reason} className="mt-1 text-[11px] leading-5 text-amber-100/75">• {reason}</p>)}</div>}
       {vehicle.features && vehicle.features.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{vehicle.features.slice(0, 3).map((feature) => <span key={feature} className="rounded-full bg-white/[.04] px-2 py-1 text-[9px] font-bold text-slate-500">{feature}</span>)}</div>}
       <p className="mt-4 text-[10px] leading-5 text-slate-600">VIN {vehicle.id}</p>
       <div className="mt-5 grid grid-cols-2 gap-2">
