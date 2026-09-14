@@ -1,0 +1,36 @@
+name: NorAutoMatch Inventory Provider Cache CI
+
+on:
+  push:
+    branches:
+      - "architecture/**"
+  pull_request:
+    branches:
+      - "reactivation/2026-09-08"
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  provider-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Compile provider-neutral cache verification surface
+        run: |
+          rm -rf .tmp-inventory-provider-cache-tests
+          npx tsc -p tsconfig.inventory-provider-cache-tests.json
+      - name: Execute provider-neutral cache challenges
+        run: node .tmp-inventory-provider-cache-tests/scripts/inventory-provider-cache.behavior.js
+      - name: Typecheck customer application
+        run: npm run typecheck
