@@ -45,6 +45,10 @@ export function liveRecordToVehicle(record: LiveInventoryRecord): Vehicle | unde
     drivetrain: record.drivetrain ?? "Unknown",
     image: record.photos?.[0] ?? "/images/vehicle-placeholder.jpg",
     accent: record.exteriorColor ?? "Color unavailable",
+    condition: record.condition,
+    exteriorColor: record.exteriorColor,
+    interiorColor: record.interiorColor,
+    features: record.features,
   };
 }
 
