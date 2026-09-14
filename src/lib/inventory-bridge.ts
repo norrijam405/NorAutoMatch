@@ -49,6 +49,11 @@ export function liveRecordToVehicle(record: LiveInventoryRecord): Vehicle | unde
     exteriorColor: record.exteriorColor,
     interiorColor: record.interiorColor,
     features: record.features,
+    transmission: record.transmission,
+    engine: record.engine,
+    fuelType: record.fuelType,
+    cityMpg: record.cityMpg,
+    highwayMpg: record.highwayMpg,
   };
 }
 

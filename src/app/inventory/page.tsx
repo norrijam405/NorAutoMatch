@@ -14,17 +14,18 @@ export default async function InventoryPage() {
 
   if (runtime.effectiveMode !== "live-enabled") return <InventoryUnavailable reason={runtime.reason} />;
 
+  let catalog;
   try {
-    const catalog = await loadOrrCustomerCatalog({
+    catalog = await loadOrrCustomerCatalog({
       mode: process.env.NORAUTO_INVENTORY_MODE,
       liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
     });
-
-    return <main className="min-h-screen bg-[#070b10] py-8 sm:py-12"><div className="shell"><div className="mb-6 flex items-center justify-between gap-4"><Link href="/" className="inline-flex items-center gap-2 text-sm font-black text-slate-400 hover:text-white"><ArrowLeft size={16} /> Home</Link><div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[.16em] text-emerald-300"><ShieldCheck size={14} /> Live source verified</div></div><InteractiveInventory vehicles={catalog.vehicles} fetchedAt={catalog.sourceEvidence?.fetchedAt} /></div></main>;
   } catch (error) {
     console.error("NORAUTO_INVENTORY_PAGE_LOAD_FAILED", error instanceof Error ? error.message : String(error));
     return <InventoryUnavailable reason="live-source-verification-failed" />;
   }
+
+  return <main className="min-h-screen bg-[#070b10] py-8 sm:py-12"><div className="shell"><div className="mb-6 flex items-center justify-between gap-4"><Link href="/" className="inline-flex items-center gap-2 text-sm font-black text-slate-400 hover:text-white"><ArrowLeft size={16} /> Home</Link><div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[.16em] text-emerald-300"><ShieldCheck size={14} /> Live source verified</div></div><InteractiveInventory vehicles={catalog.vehicles} fetchedAt={catalog.sourceEvidence?.fetchedAt} /></div></main>;
 }
 
 function InventoryUnavailable({ reason }: { reason: string }) {

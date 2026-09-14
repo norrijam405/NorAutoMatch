@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "outDir": ".tmp-garage-battle-tests"
+  },
+  "include": [
+    "scripts/garage-battle.behavior.ts",
+    "src/lib/garage-battle.ts",
+    "src/lib/inventory.ts"
+  ]
+}
