@@ -11,14 +11,20 @@
   },
   "include": [
     "scripts/inventory-provider-cache.behavior.ts",
+    "scripts/inventory-provider-cache-postgres.integration.ts",
     "src/lib/inventory-provider-contract.ts",
     "src/lib/inventory-provider-cache-store.ts",
     "src/lib/inventory-provider-cache-reader.ts",
+    "src/lib/inventory-provider-cache-catalog.ts",
     "src/lib/inventory-provider-sync.ts",
     "src/lib/orr-inventory-provider-adapter.ts",
     "src/lib/inventory-snapshot-diff.ts",
     "src/lib/orr-public-algolia.ts",
     "src/lib/orr-algolia-normalizer.ts",
+    "src/lib/inventory-catalog.ts",
+    "src/lib/inventory-catalog-integrity.ts",
+    "src/lib/inventory-runtime.ts",
+    "src/lib/inventory-bridge.ts",
     "src/lib/live-inventory.ts",
     "src/lib/inventory.ts"
   ]
