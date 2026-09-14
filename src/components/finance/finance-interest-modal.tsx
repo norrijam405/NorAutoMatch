@@ -25,6 +25,7 @@ export function FinanceInterestModal({ vehicle, onClose }: Props) {
   const [error, setError] = useState("");
 
   if (!vehicle) return null;
+  const selectedVehicle = vehicle;
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -46,11 +47,11 @@ export function FinanceInterestModal({ vehicle, onClose }: Props) {
         budgetRange: "Not provided — finance interest only",
         paymentMethod: "Financing",
         tradeIn: "",
-        notes: `Customer requested a secure financing next step for VIN ${vehicle.id}. No credit application, SSN, income, or credit-pull authorization was collected by this form.`,
+        notes: `Customer requested a secure financing next step for VIN ${selectedVehicle.id}. No credit application or credit-pull authorization was collected by this form.`,
         source: "NorAuto Match finance-interest gate",
         trigger: "retail",
         pipeline: "Standard Retail",
-        shortlistedVehicleIds: [vehicle.id],
+        shortlistedVehicleIds: [selectedVehicle.id],
         consent: true,
       }),
     });
@@ -75,7 +76,7 @@ export function FinanceInterestModal({ vehicle, onClose }: Props) {
 
         {status === "done" ? <div className="p-8 text-center"><span className="mx-auto grid size-14 place-items-center rounded-full bg-emerald-400/10 text-emerald-300"><CheckCircle2 size={28} /></span><h3 className="mt-5 text-2xl font-black text-white">Finance-interest request saved.</h3><p className="mt-3 text-sm leading-6 text-slate-400">The next step is a secure human-guided application path. This form did not submit a credit application and did not authorize a credit inquiry.</p><button onClick={onClose} className="mt-6 rounded-full bg-amber-300 px-6 py-3 text-sm font-black text-black">Back to inventory</button></div> :
         <form onSubmit={submit} className="grid gap-4 p-5 sm:grid-cols-2 sm:p-7">
-          <div className="sm:col-span-2 rounded-2xl border border-emerald-400/15 bg-emerald-400/[.05] p-4"><p className="text-xs font-black text-emerald-200">{vehicle.year} {vehicle.make} {vehicle.model} {vehicle.trim}</p><p className="mt-1 text-[11px] text-slate-500">VIN {vehicle.id}</p></div>
+          <div className="sm:col-span-2 rounded-2xl border border-emerald-400/15 bg-emerald-400/[.05] p-4"><p className="text-xs font-black text-emerald-200">{selectedVehicle.year} {selectedVehicle.make} {selectedVehicle.model} {selectedVehicle.trim}</p><p className="mt-1 text-[11px] text-slate-500">VIN {selectedVehicle.id}</p></div>
           <Field label="First name"><input required minLength={2} className="field" autoComplete="given-name" value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} /></Field>
           <Field label="Last name"><input required minLength={2} className="field" autoComplete="family-name" value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} /></Field>
           <Field label="Email"><input required type="email" className="field" autoComplete="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></Field>
