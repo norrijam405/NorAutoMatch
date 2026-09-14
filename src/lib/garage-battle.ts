@@ -63,11 +63,10 @@ const MODEL_SPECS: ModelSpec[] = [
     model: "Rogue",
     year: 2026,
     seatingCapacity: 5,
-    exteriorLengthIn: 183,
     cargoRearSeatsUpMinCuFt: 36.3,
     cargoRearSeatsUpMaxCuFt: 36.5,
-    sourceUrl: "https://www.nissanusa.com/vehicles/crossovers-suvs/rogue/specs-trims.html",
-    sourceLabel: "2026 Nissan Rogue specs",
+    sourceUrl: "https://www.nissanusa.com/content/dam/Nissan/us/vehicle-brochures/2026/2026-nissan-rogue-brochure-en.pdf",
+    sourceLabel: "2026 Nissan Rogue brochure",
   },
   {
     make: "Nissan",
