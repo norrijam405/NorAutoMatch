@@ -31,12 +31,10 @@ try {
     fetchedAt: result.fetchedAt,
     sourceHash: result.sourceHash,
     persistenceStatus: result.persistenceStatus,
-    diffCounts: result.diff
-      ? result.diff.changes.reduce<Record<string, number>>((counts, change) => {
-          counts[change.type] = (counts[change.type] ?? 0) + 1;
-          return counts;
-        }, {})
-      : {},
+    changeCounts: result.changes.reduce<Record<string, number>>((counts, change) => {
+      counts[change.type] = (counts[change.type] ?? 0) + 1;
+      return counts;
+    }, {}),
     customerVisibleLiveInventoryChanged: false,
     networkAccessOnCustomerReadPath: result.networkAccessOnCustomerReadPath,
     authorityEffect: result.authorityEffect,
