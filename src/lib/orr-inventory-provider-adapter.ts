@@ -7,7 +7,15 @@ const PROVIDER_ID = "ridemotive-algolia";
 const DEALERSHIP_ID = "2175";
 const DEALERSHIP_NAME = "Orr Nissan West";
 
+function requiredIdentity(value: string | undefined, field: string, vin: string) {
+  if (!value?.trim()) throw new Error(`ORR_PROVIDER_IDENTITY_INCOMPLETE:${field}:${vin}`);
+  return value.trim();
+}
+
 function mapRecord(record: ReturnType<typeof normalizeOrrAlgoliaDiscovery>["records"][number]): InventoryProviderRecord {
+  const make = requiredIdentity(record.make, "make", record.vin);
+  const model = requiredIdentity(record.model, "model", record.vin);
+
   return {
     providerId: PROVIDER_ID,
     dealershipId: DEALERSHIP_ID,
@@ -19,8 +27,8 @@ function mapRecord(record: ReturnType<typeof normalizeOrrAlgoliaDiscovery>["reco
     vin: record.vin,
     stockNumber: record.stockNumber,
     modelYear: String(record.year),
-    make: record.make,
-    model: record.model,
+    make,
+    model,
     trim: record.trim,
     condition: record.condition,
     price: record.price,
