@@ -57,23 +57,28 @@ function safeIdentityGateDiagnostics(discovery: OrrAlgoliaDiscovery) {
   };
 }
 
-function safeMediaFieldDiagnostics(discovery: OrrAlgoliaDiscovery) {
-  return discovery.hits.slice(0, 5).map((hit) => {
-    const mediaFields = Object.entries(hit)
-      .filter(([key]) => /(image|photo|media|gallery|picture)/i.test(key))
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, value]) => ({
-        key,
-        type: Array.isArray(value) ? "array" : typeof value,
-        count: Array.isArray(value) ? value.length : undefined,
-        populated: Array.isArray(value) ? value.length > 0 : typeof value === "string" ? value.trim().length > 0 : value != null,
-      }));
-    return {
-      objectID: typeof hit.objectID === "string" ? hit.objectID : hit.id?.toString(),
-      vin: typeof hit.vin === "string" ? hit.vin : undefined,
-      mediaFields,
-    };
-  });
+function safeFeatureSchemaDiagnostics(discovery: OrrAlgoliaDiscovery) {
+  const candidateKeys = [...new Set(discovery.hits.flatMap((hit) => Object.keys(hit).filter((key) => /(feature|option|equipment|package|accessor|technology|comfort|safety)/i.test(key))))].sort();
+  const sampleShapes = discovery.hits.slice(0, 12).map((hit) => ({
+    objectID: typeof hit.objectID === "string" ? hit.objectID : hit.id?.toString(),
+    fields: Object.fromEntries(candidateKeys
+      .filter((key) => key in hit)
+      .map((key) => {
+        const value = hit[key];
+        return [key, {
+          type: Array.isArray(value) ? "array" : typeof value,
+          count: Array.isArray(value) ? value.length : undefined,
+          populated: Array.isArray(value) ? value.length > 0 : typeof value === "string" ? value.trim().length > 0 : value != null,
+        }];
+      })),
+  }));
+  const normalized = normalizeOrrAlgoliaDiscovery(discovery);
+  return {
+    candidateKeys,
+    featureBearingNormalizedRecords: normalized.records.filter((record) => (record.features?.length ?? 0) > 0).length,
+    normalizedRecordCount: normalized.records.length,
+    sampleShapes,
+  };
 }
 
 export async function loadOrrCustomerCatalog(options: OrrCustomerCatalogOptions = {}): Promise<InventoryCatalog> {
@@ -89,7 +94,7 @@ export async function loadOrrCustomerCatalog(options: OrrCustomerCatalogOptions 
 
   const discover = options.discover ?? (() => discoverOrrAlgoliaInventory({ hitsPerPage: 100, maxPages: 10 }));
   const discovery = await discover();
-  console.info("NORAUTO_INVENTORY_MEDIA_FIELD_DIAGNOSTIC", safeMediaFieldDiagnostics(discovery));
+  console.info("NORAUTO_INVENTORY_FEATURE_SCHEMA_DIAGNOSTIC", safeFeatureSchemaDiagnostics(discovery));
   const sourceGate = buildInventoryShadowReceipt(discovery);
   if (sourceGate.gate.status !== "PASS") {
     console.warn("NORAUTO_INVENTORY_SOURCE_GATE_DIAGNOSTIC", {
