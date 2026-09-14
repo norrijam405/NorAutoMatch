@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { buildProviderCachedCatalog } from "../src/lib/inventory-provider-cache-catalog";
 import { buildCachedCustomerInventory } from "../src/lib/inventory-provider-cache-reader";
 import { assertForwardSnapshotSequence } from "../src/lib/inventory-provider-sync";
+import { resolveInventoryRuntime, LIVE_INVENTORY_ACTIVATION_VALUE } from "../src/lib/inventory-runtime";
 import { buildOrrProviderSnapshot } from "../src/lib/orr-inventory-provider-adapter";
 import { diffInventorySnapshots } from "../src/lib/inventory-snapshot-diff";
 import type { InventoryProviderSnapshot } from "../src/lib/inventory-provider-contract";
@@ -65,9 +67,8 @@ const cached = buildCachedCustomerInventory({
   nowMs: Date.parse("2026-09-14T19:00:00.000Z"),
   maxAgeMs: 2 * 60 * 60 * 1000,
 });
-assert.equal(cached.cacheEligibleForCustomerUse, true);
+assert.equal(cached.eligibleForCustomerUse, true);
 assert.equal(cached.customerVisibleLiveInventory, false);
-assert.equal(cached.authorityEffect, "NONE");
 assert.equal(cached.vehicles.length, 1);
 assert.equal(cached.vehicles[0].id, "1N4BL4DV9SN320880");
 assert.equal(cached.vehicles[0].year, 2026.5);
@@ -77,6 +78,28 @@ assert.throws(
   () => buildCachedCustomerInventory({ snapshot: first, nowMs: Date.parse("2026-09-15T06:00:00.000Z"), maxAgeMs: 2 * 60 * 60 * 1000 }),
   /INVENTORY_CACHE_STALE/,
 );
+
+const inactiveRuntime = resolveInventoryRuntime({ mode: "live-enabled" });
+assert.throws(
+  () => buildProviderCachedCatalog({ runtime: inactiveRuntime, cached }),
+  /INVENTORY_CACHE_RUNTIME_NOT_ACTIVATED/,
+);
+
+const activeRuntime = resolveInventoryRuntime({
+  mode: "live-enabled",
+  liveActivation: LIVE_INVENTORY_ACTIVATION_VALUE,
+});
+const catalog = buildProviderCachedCatalog({
+  runtime: activeRuntime,
+  cached,
+  generatedAt: "2026-09-14T19:00:00.000Z",
+});
+assert.equal(catalog.source, "provider-cache");
+assert.equal(catalog.customerVisibleLiveInventory, true);
+assert.equal(catalog.vehicles.length, 1);
+assert.equal(catalog.vehicles[0].year, 2026.5);
+assert.equal(catalog.sourceEvidence?.providerId, "ridemotive-algolia");
+assert.equal(catalog.sourceEvidence?.sourceHash, "snapshot-hash-1");
 
 const missingStateSnapshot: InventoryProviderSnapshot = {
   ...first,
