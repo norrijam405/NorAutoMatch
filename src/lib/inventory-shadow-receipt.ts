@@ -25,6 +25,7 @@ export type InventoryShadowReceipt = {
     errorCount: number;
     blockingErrorCount: number;
     inactiveExcludedCount: number;
+    toleratedIdentityIncompleteCount: number;
     issueCounts: Record<string, number>;
   };
   gate: {
@@ -52,8 +53,19 @@ export function buildInventoryShadowReceipt(discovery: OrrAlgoliaDiscovery): Inv
 
   const warningCount = normalized.issues.filter((issue) => issue.severity === "WARNING").length;
   const errors = normalized.issues.filter((issue) => issue.severity === "ERROR");
-  const blockingErrors = errors.filter((issue) => issue.code !== "INACTIVE_HIT");
-  const inactiveExcludedCount = errors.length - blockingErrors.length;
+  const identityIncompleteErrors = errors.filter((issue) => issue.code === "IDENTITY_INCOMPLETE");
+  const identityToleranceLimit = Math.max(2, Math.floor(discovery.hits.length * 0.02));
+  const tolerateIdentityIncomplete = identityIncompleteErrors.length > 0
+    && identityIncompleteErrors.length <= identityToleranceLimit
+    && normalized.records.length > 0;
+
+  const blockingErrors = errors.filter((issue) => {
+    if (issue.code === "INACTIVE_HIT") return false;
+    if (issue.code === "IDENTITY_INCOMPLETE" && tolerateIdentityIncomplete) return false;
+    return true;
+  });
+  const inactiveExcludedCount = errors.filter((issue) => issue.code === "INACTIVE_HIT").length;
+  const toleratedIdentityIncompleteCount = tolerateIdentityIncomplete ? identityIncompleteErrors.length : 0;
   const errorCount = errors.length;
   const blockingErrorCount = blockingErrors.length;
   const issueCounts = normalized.issues.reduce<Record<string, number>>((counts, issue) => {
@@ -97,6 +109,7 @@ export function buildInventoryShadowReceipt(discovery: OrrAlgoliaDiscovery): Inv
       errorCount,
       blockingErrorCount,
       inactiveExcludedCount,
+      toleratedIdentityIncompleteCount,
       issueCounts,
     },
     gate: {
