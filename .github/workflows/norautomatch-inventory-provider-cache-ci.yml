@@ -16,6 +16,20 @@ jobs:
   provider-cache:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,11 +40,21 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+      - name: Apply provider-cache schema to isolated Postgres
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: psql -h 127.0.0.1 -U norauto -d norauto_ci -f sql/2026-09-14_inventory_provider_snapshots.sql
       - name: Compile provider-neutral cache verification surface
         run: |
           rm -rf .tmp-inventory-provider-cache-tests
           npx tsc -p tsconfig.inventory-provider-cache-tests.json
       - name: Execute provider-neutral cache challenges
         run: node .tmp-inventory-provider-cache-tests/scripts/inventory-provider-cache.behavior.js
+      - name: Execute Postgres persistence challenges
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-provider-cache-tests/scripts/inventory-provider-cache-postgres.integration.js
       - name: Typecheck customer application
         run: npm run typecheck
