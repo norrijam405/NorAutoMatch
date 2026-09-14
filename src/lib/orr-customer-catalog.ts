@@ -59,25 +59,22 @@ function safeIdentityGateDiagnostics(discovery: OrrAlgoliaDiscovery) {
 
 function safeFeatureSchemaDiagnostics(discovery: OrrAlgoliaDiscovery) {
   const candidateKeys = [...new Set(discovery.hits.flatMap((hit) => Object.keys(hit).filter((key) => /(feature|option|equipment|package|accessor|technology|comfort|safety)/i.test(key))))].sort();
-  const sampleShapes = discovery.hits.slice(0, 12).map((hit) => ({
-    objectID: typeof hit.objectID === "string" ? hit.objectID : hit.id?.toString(),
-    fields: Object.fromEntries(candidateKeys
-      .filter((key) => key in hit)
-      .map((key) => {
-        const value = hit[key];
-        return [key, {
-          type: Array.isArray(value) ? "array" : typeof value,
-          count: Array.isArray(value) ? value.length : undefined,
-          populated: Array.isArray(value) ? value.length > 0 : typeof value === "string" ? value.trim().length > 0 : value != null,
-        }];
-      })),
-  }));
   const normalized = normalizeOrrAlgoliaDiscovery(discovery);
   return {
     candidateKeys,
     featureBearingNormalizedRecords: normalized.records.filter((record) => (record.features?.length ?? 0) > 0).length,
     normalizedRecordCount: normalized.records.length,
-    sampleShapes,
+    sampleNormalizedFeatures: normalized.records.slice(0, 5).map((record) => ({
+      vin: record.vin,
+      features: record.features?.slice(0, 20) ?? [],
+    })),
+    sampleRawFeatureShapes: discovery.hits.slice(0, 5).map((hit) => ({
+      objectID: typeof hit.objectID === "string" ? hit.objectID : hit.id?.toString(),
+      featuresType: Array.isArray(hit.features) ? "array" : typeof hit.features,
+      parsedFeaturesType: Array.isArray(hit.parsed_features) ? "array" : typeof hit.parsed_features,
+      accessoriesType: Array.isArray(hit.accessories) ? "array" : typeof hit.accessories,
+      searchableAccessoriesType: Array.isArray(hit.searchable_accessories) ? "array" : typeof hit.searchable_accessories,
+    })),
   };
 }
 
