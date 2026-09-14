@@ -1,7 +1,7 @@
 import type { Vehicle } from "./inventory";
 import type { InventoryRuntimeDecision } from "./inventory-runtime";
 
-export type InventoryCatalogSource = "demo" | "orr-live";
+export type InventoryCatalogSource = "demo" | "orr-live" | "provider-cache";
 
 export type InventoryCatalog = {
   requestedMode: InventoryRuntimeDecision["requestedMode"];
@@ -12,7 +12,8 @@ export type InventoryCatalog = {
   generatedAt: string;
   vehicles: Vehicle[];
   sourceEvidence?: {
-    dealerId: 2175;
+    providerId?: string;
+    dealerId: number | string;
     sourceUrl: string;
     sourceHash: string;
     fetchedAt: string;
