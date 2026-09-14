@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "outDir": ".tmp-inventory-provider-cache-tests"
+  },
+  "include": [
+    "scripts/inventory-provider-cache.behavior.ts",
+    "src/lib/inventory-provider-contract.ts",
+    "src/lib/orr-inventory-provider-adapter.ts",
+    "src/lib/inventory-snapshot-diff.ts",
+    "src/lib/orr-public-algolia.ts",
+    "src/lib/orr-algolia-normalizer.ts",
+    "src/lib/live-inventory.ts"
+  ]
+}
