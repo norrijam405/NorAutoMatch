@@ -22,8 +22,8 @@ export function Logo() {
 
 const links = [
   { href: "/#matcher", label: "Find my match" },
+  { href: "/inventory", label: "Inventory" },
   { href: "/how-it-works", label: "How it works" },
-  { href: "/areas/mustang", label: "Service areas" },
   { href: "/terms", label: "Disclosures" },
 ];
 
@@ -35,31 +35,15 @@ export function Header() {
       <div className="shell flex h-[66px] items-center justify-between sm:h-[74px]">
         <Logo />
         <nav className="hidden items-center gap-7 md:flex" aria-label="Main navigation">
-          {links.map((link) => (
-            <Link key={link.href} href={link.href} className="text-sm font-semibold text-slate-300 hover:text-white">
-              {link.label}
-            </Link>
-          ))}
+          {links.map((link) => <Link key={link.href} href={link.href} className="text-sm font-semibold text-slate-300 hover:text-white">{link.label}</Link>)}
         </nav>
         <div className="hidden items-center gap-2 sm:flex">
           <a href={brand.textHref} className="btn-secondary min-h-10 px-4 py-2"><MessageSquareText size={16} /> Text me</a>
           <a href={`tel:${brand.phoneRaw}`} className="btn-primary min-h-10 px-4 py-2"><Phone size={16} /> {brand.phoneDisplay}</a>
         </div>
-        <button className="grid size-10 shrink-0 place-items-center rounded-xl border border-white/10 md:hidden" onClick={() => setOpen(!open)} aria-label="Toggle menu" aria-expanded={open}>
-          {open ? <X size={20} /> : <Menu size={20} />}
-        </button>
+        <button className="grid size-10 shrink-0 place-items-center rounded-xl border border-white/10 md:hidden" onClick={() => setOpen(!open)} aria-label="Toggle menu" aria-expanded={open}>{open ? <X size={20} /> : <Menu size={20} />}</button>
       </div>
-      {open && (
-        <div className="border-t border-white/10 bg-slate-950 px-4 py-4 md:hidden">
-          <nav className="shell flex flex-col gap-1.5">
-            {links.map((link) => <Link key={link.href} href={link.href} onClick={() => setOpen(false)} className="rounded-xl px-3 py-3 text-base font-semibold text-slate-200 hover:bg-white/5">{link.label}</Link>)}
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <a href={brand.textHref} className="btn-secondary min-h-11"><MessageSquareText size={16} /> Text</a>
-              <a href={`tel:${brand.phoneRaw}`} className="btn-primary min-h-11"><Phone size={16} /> Call</a>
-            </div>
-          </nav>
-        </div>
-      )}
+      {open && <div className="border-t border-white/10 bg-slate-950 px-4 py-4 md:hidden"><nav className="shell flex flex-col gap-1.5">{links.map((link) => <Link key={link.href} href={link.href} onClick={() => setOpen(false)} className="rounded-xl px-3 py-3 text-base font-semibold text-slate-200 hover:bg-white/5">{link.label}</Link>)}<div className="mt-3 grid grid-cols-2 gap-2"><a href={brand.textHref} className="btn-secondary min-h-11"><MessageSquareText size={16} /> Text</a><a href={`tel:${brand.phoneRaw}`} className="btn-primary min-h-11"><Phone size={16} /> Call</a></div></nav></div>}
     </header>
   );
 }
