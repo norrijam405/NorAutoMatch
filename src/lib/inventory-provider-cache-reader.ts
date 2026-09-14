@@ -7,12 +7,12 @@ import { loadLatestInventoryProviderSnapshot } from "./inventory-provider-cache-
 export type CachedInventoryReadResult = {
   providerId: string;
   dealershipId: string;
+  sourceUrl: string;
   fetchedAt: string;
   sourceHash: string;
   snapshotAgeMs: number;
-  cacheEligibleForCustomerUse: true;
+  eligibleForCustomerUse: true;
   customerVisibleLiveInventory: false;
-  authorityEffect: "NONE";
   vehicles: Vehicle[];
   rejected: Array<{ vin: string; reason: string }>;
 };
@@ -97,12 +97,12 @@ export function buildCachedCustomerInventory(input: {
   return {
     providerId: snapshot.providerId,
     dealershipId: snapshot.dealershipId,
+    sourceUrl: snapshot.sourceUrl,
     fetchedAt: snapshot.fetchedAt,
     sourceHash: snapshot.sourceHash,
     snapshotAgeMs,
-    cacheEligibleForCustomerUse: true,
+    eligibleForCustomerUse: true,
     customerVisibleLiveInventory: false,
-    authorityEffect: "NONE",
     vehicles,
     rejected,
   };
