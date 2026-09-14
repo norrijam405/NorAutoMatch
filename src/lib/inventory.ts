@@ -10,6 +10,10 @@ export type Vehicle = {
   drivetrain: string;
   image: string;
   accent: string;
+  condition?: string;
+  exteriorColor?: string;
+  interiorColor?: string;
+  features?: string[];
 };
 
 // Demonstration inventory for the matcher experience. Replace with an approved
