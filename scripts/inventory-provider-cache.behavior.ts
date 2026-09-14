@@ -65,7 +65,9 @@ const cached = buildCachedCustomerInventory({
   nowMs: Date.parse("2026-09-14T19:00:00.000Z"),
   maxAgeMs: 2 * 60 * 60 * 1000,
 });
-assert.equal(cached.customerVisibleLiveInventory, true);
+assert.equal(cached.cacheEligibleForCustomerUse, true);
+assert.equal(cached.customerVisibleLiveInventory, false);
+assert.equal(cached.authorityEffect, "NONE");
 assert.equal(cached.vehicles.length, 1);
 assert.equal(cached.vehicles[0].id, "1N4BL4DV9SN320880");
 assert.equal(cached.vehicles[0].year, 2026.5);
