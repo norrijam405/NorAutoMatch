@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { buildCachedCustomerInventory } from "../src/lib/inventory-provider-cache-reader";
+import { assertForwardSnapshotSequence } from "../src/lib/inventory-provider-sync";
 import { buildOrrProviderSnapshot } from "../src/lib/orr-inventory-provider-adapter";
 import { diffInventorySnapshots } from "../src/lib/inventory-snapshot-diff";
 import type { InventoryProviderSnapshot } from "../src/lib/inventory-provider-contract";
@@ -92,6 +93,16 @@ const changed = buildOrrProviderSnapshot({
   sourceHash: "snapshot-hash-2",
   fetchedAt: "2026-09-14T19:00:00.000Z",
 });
+assert.doesNotThrow(() => assertForwardSnapshotSequence(first, changed));
+assert.throws(
+  () => assertForwardSnapshotSequence(changed, first),
+  /INVENTORY_SYNC_TIME_ROLLBACK/,
+);
+assert.throws(
+  () => assertForwardSnapshotSequence(first, { ...first, sourceHash: "different-hash" }),
+  /INVENTORY_SYNC_SAME_TIME_SOURCE_COLLISION/,
+);
+
 const changedDiff = diffInventorySnapshots(first, changed);
 assert.equal(changedDiff.changes.length, 1);
 assert.equal(changedDiff.changes[0].type, "UPDATED");
