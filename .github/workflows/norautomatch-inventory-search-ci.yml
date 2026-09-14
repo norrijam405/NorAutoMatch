@@ -31,5 +31,11 @@ jobs:
           npx tsc -p tsconfig.inventory-tests.json
       - name: Execute deterministic structured search challenges
         run: node .tmp-inventory-tests/scripts/inventory-search.behavior.js
+      - name: Compile Garage Battle evidence surface
+        run: |
+          rm -rf .tmp-garage-battle-tests
+          npx tsc -p tsconfig.garage-battle-tests.json
+      - name: Execute Garage Battle evidence challenges
+        run: node .tmp-garage-battle-tests/scripts/garage-battle.behavior.js
       - name: Typecheck customer application
         run: npm run typecheck
