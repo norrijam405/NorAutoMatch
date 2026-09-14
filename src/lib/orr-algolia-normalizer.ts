@@ -3,7 +3,7 @@ import type { LiveInventoryRecord } from "./live-inventory";
 import type { OrrAlgoliaDiscovery, OrrAlgoliaHit } from "./orr-public-algolia";
 
 const SOURCE_NAME = "orrnissanwest_public_algolia";
-const PARSER_VERSION = "orr-algolia-v4";
+const PARSER_VERSION = "orr-algolia-v5";
 const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/i;
 const DEALER_ID = 2175;
 
@@ -42,9 +42,28 @@ function positiveMoney(value: unknown) {
 }
 
 function stringArray(value: unknown) {
-  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
-  if (typeof value === "string" && value.trim()) return value.split("|").map((item) => item.trim()).filter(Boolean);
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim());
+  if (typeof value === "string" && value.trim()) return value.split(/[|\n]/).map((item) => item.trim()).filter(Boolean);
   return undefined;
+}
+
+function collectFeatureStrings(hit: OrrAlgoliaHit) {
+  const candidates: unknown[] = [
+    hit.parsed_features,
+    hit.features,
+    hit.searchable_accessories,
+    hit.accessories,
+    hit.accessory_package,
+    hit.floor_plan_features,
+    hit.equipment_groups,
+  ];
+  const values = candidates.flatMap((candidate) => stringArray(candidate) ?? []);
+  const deduped = new Map<string, string>();
+  for (const value of values) {
+    const key = value.toLowerCase().replace(/\s+/g, " ").trim();
+    if (key && !deduped.has(key)) deduped.set(key, value);
+  }
+  return [...deduped.values()];
 }
 
 function validHttpUrl(value: string) {
@@ -110,6 +129,7 @@ export function normalizeOrrAlgoliaHit(
   const sourceStockStatus = stringValue(hit.stock_status);
   const inTransit = hit.in_transit === true || sourceStockStatus?.toLowerCase() === "in_transit";
   const photos = normalizePhotos(hit);
+  const features = collectFeatureStrings(hit);
   const record: LiveInventoryRecord = {
     source: SOURCE_NAME,
     sourceUrl: "https://orrnissanwest.com/inventory",
@@ -136,7 +156,7 @@ export function normalizeOrrAlgoliaHit(
     highwayMpg: numberValue(hit.highway_mpg),
     bodyType: stringValue(hit.category) ?? stringValue(hit.body_subtype),
     photos: photos.length > 0 ? photos : undefined,
-    features: stringArray(hit.parsed_features) ?? stringArray(hit.features),
+    features: features.length > 0 ? features : undefined,
     incentives: normalizeIncentives(hit),
     availabilityState: "ACTIVE_CURRENT",
     firstSeenAt: fetchedAt,
