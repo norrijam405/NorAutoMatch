@@ -1,8 +1,15 @@
 import type { Pool } from "pg";
 import type { InventoryProviderAdapter, InventoryProviderSnapshot } from "./inventory-provider-contract";
 import { assertProviderSnapshotBoundary } from "./inventory-provider-contract";
-import { loadLatestInventoryProviderSnapshot, persistInventoryProviderSnapshot } from "./inventory-provider-cache-store";
-import { diffInventorySnapshots, type InventorySnapshotDiff } from "./inventory-snapshot-diff";
+import {
+  loadInventoryProviderCurrentState,
+  loadLatestInventoryProviderSnapshot,
+  persistInventoryProviderSnapshotAndState,
+} from "./inventory-provider-cache-store";
+import {
+  reconcileInventoryProviderCurrentState,
+  type InventoryProviderStateChange,
+} from "./inventory-provider-current-state";
 
 export type InventoryProviderSyncResult = {
   providerId: string;
@@ -10,7 +17,7 @@ export type InventoryProviderSyncResult = {
   fetchedAt: string;
   sourceHash: string;
   persistenceStatus: "COMMITTED" | "DEDUPLICATED";
-  diff: InventorySnapshotDiff | null;
+  changes: InventoryProviderStateChange[];
   networkAccessOnCustomerReadPath: false;
   authorityEffect: "NONE";
 };
@@ -37,16 +44,28 @@ export async function syncInventoryProviderCache(input: {
   const current = assertProviderSnapshotBoundary(await input.adapter.fetchSnapshot());
   if (current.providerId !== input.adapter.providerId) throw new Error("INVENTORY_SYNC_ADAPTER_PROVIDER_DRIFT");
 
-  const previous = await loadLatestInventoryProviderSnapshot({
+  const previousSnapshot = await loadLatestInventoryProviderSnapshot({
     pool: input.pool,
     providerId: current.providerId,
     dealershipId: current.dealershipId,
   });
-  assertForwardSnapshotSequence(previous, current);
+  assertForwardSnapshotSequence(previousSnapshot, current);
 
-  const persisted = await persistInventoryProviderSnapshot({ pool: input.pool, snapshot: current });
-  const sameSnapshot = previous?.fetchedAt === current.fetchedAt && previous.sourceHash === current.sourceHash;
-  const diff = previous && !sameSnapshot ? diffInventorySnapshots(previous, current) : null;
+  const previousState = await loadInventoryProviderCurrentState({
+    pool: input.pool,
+    providerId: current.providerId,
+    dealershipId: current.dealershipId,
+  });
+  const reconciled = reconcileInventoryProviderCurrentState({
+    previous: previousState,
+    currentSnapshot: current,
+  });
+
+  const persisted = await persistInventoryProviderSnapshotAndState({
+    pool: input.pool,
+    snapshot: current,
+    state: reconciled.state,
+  });
 
   return {
     providerId: current.providerId,
@@ -54,7 +73,7 @@ export async function syncInventoryProviderCache(input: {
     fetchedAt: current.fetchedAt,
     sourceHash: current.sourceHash,
     persistenceStatus: persisted.status,
-    diff,
+    changes: reconciled.changes,
     networkAccessOnCustomerReadPath: false,
     authorityEffect: "NONE",
   };
