@@ -10,6 +10,7 @@
     "outDir": ".tmp-inventory-tests"
   },
   "include": [
+    "scripts/inventory-search.behavior.ts",
     "scripts/live-inventory.behavior.ts",
     "scripts/orr-parser.behavior.ts",
     "scripts/inventory-bridge.behavior.ts",
@@ -62,6 +63,7 @@
     "scripts/conversation-response-preparation-store.integration.ts",
     "scripts/conversation-response-draft.behavior.ts",
     "scripts/production-readiness.behavior.ts",
+    "src/lib/inventory-search.ts",
     "src/lib/live-inventory.ts",
     "src/lib/orr-public-inventory.ts",
     "src/lib/orr-public-algolia.ts",
