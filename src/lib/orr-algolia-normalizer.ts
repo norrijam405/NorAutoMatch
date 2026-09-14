@@ -3,7 +3,7 @@ import type { LiveInventoryRecord } from "./live-inventory";
 import type { OrrAlgoliaDiscovery, OrrAlgoliaHit } from "./orr-public-algolia";
 
 const SOURCE_NAME = "orrnissanwest_public_algolia";
-const PARSER_VERSION = "orr-algolia-v3";
+const PARSER_VERSION = "orr-algolia-v4";
 const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/i;
 const DEALER_ID = 2175;
 
@@ -45,6 +45,21 @@ function stringArray(value: unknown) {
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
   if (typeof value === "string" && value.trim()) return value.split("|").map((item) => item.trim()).filter(Boolean);
   return undefined;
+}
+
+function validHttpUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function normalizePhotos(hit: OrrAlgoliaHit) {
+  const candidates = [hit.images, hit.image_urls, hit.photos, hit.photo_urls, hit.processed_images];
+  const values = candidates.flatMap((candidate) => stringArray(candidate) ?? []);
+  return [...new Set(values.filter(validHttpUrl))].slice(0, 30);
 }
 
 function hashCanonicalHit(hit: OrrAlgoliaHit) {
@@ -96,6 +111,7 @@ export function normalizeOrrAlgoliaHit(
 
   const sourceStockStatus = stringValue(hit.stock_status);
   const inTransit = hit.in_transit === true || sourceStockStatus?.toLowerCase() === "in_transit";
+  const photos = normalizePhotos(hit);
   const record: LiveInventoryRecord = {
     source: SOURCE_NAME,
     sourceUrl: "https://orrnissanwest.com/inventory",
@@ -121,6 +137,7 @@ export function normalizeOrrAlgoliaHit(
     cityMpg: numberValue(hit.city_mpg),
     highwayMpg: numberValue(hit.highway_mpg),
     bodyType: stringValue(hit.category) ?? stringValue(hit.body_subtype),
+    photos: photos.length > 0 ? photos : undefined,
     features: stringArray(hit.parsed_features) ?? stringArray(hit.features),
     incentives: normalizeIncentives(hit),
     availabilityState: "ACTIVE_CURRENT",
