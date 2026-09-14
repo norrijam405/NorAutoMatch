@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowDown, ArrowRight, BadgeCheck, CarFront, Gauge, Heart, MessageSquareText, SearchCheck, ShieldCheck, Swords } from "lucide-react";
 import { RuntimeAutoMatcher } from "@/components/matcher/runtime-auto-matcher";
@@ -7,10 +6,18 @@ import { brand } from "@/lib/brand";
 export default function HomePage() {
   return (
     <>
-      <section className="relative overflow-hidden border-b border-white/10 bg-[#06090e]">
-        <Image src="/images/hero-okc.jpg" alt="Vehicle on a dark city road" fill priority className="object-cover object-[68%_center] opacity-70" sizes="100vw" />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,#06090e_0%,rgba(6,9,14,.96)_42%,rgba(6,9,14,.42)_76%,rgba(6,9,14,.7)_100%)]" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#06090e] via-transparent to-[#06090e]/30" />
+      <section className="relative overflow-hidden border-b border-white/10 bg-[#05080d]">
+        <div aria-hidden="true" className="absolute inset-0 overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_38%,rgba(255,255,255,.08),transparent_24%),radial-gradient(circle_at_80%_68%,rgba(239,68,68,.14),transparent_18%),linear-gradient(118deg,#05080d_0%,#08111b_42%,#0b1420_67%,#05080d_100%)]" />
+          <div className="absolute -right-24 top-[19%] h-1.5 w-[44rem] rotate-[-10deg] bg-gradient-to-r from-transparent via-white/65 to-transparent blur-[2px]" />
+          <div className="absolute -right-16 top-[25%] h-1 w-[38rem] rotate-[-10deg] bg-gradient-to-r from-transparent via-amber-200/45 to-transparent blur-[3px]" />
+          <div className="absolute -right-32 bottom-[24%] h-2 w-[46rem] rotate-[7deg] bg-gradient-to-r from-transparent via-red-500/35 to-transparent blur-[5px]" />
+          <div className="absolute right-[7%] top-[26%] size-32 rounded-full bg-white/[.035] blur-2xl" />
+          <div className="absolute right-[15%] bottom-[17%] size-24 rounded-full bg-red-500/[.08] blur-2xl" />
+          <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(255,255,255,.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.02)_1px,transparent_1px)] [background-size:34px_34px]" />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,#05080d_0%,rgba(5,8,13,.95)_43%,rgba(5,8,13,.35)_78%,rgba(5,8,13,.72)_100%)]" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#05080d] via-transparent to-[#05080d]/40" />
+        </div>
         <div className="absolute -left-20 top-[42%] h-7 w-72 -rotate-6 bg-red-600/90 sm:w-[28rem]" />
         <div className="absolute right-[-7rem] top-28 hidden h-8 w-[28rem] rotate-[-8deg] bg-red-600/60 lg:block" />
         <div className="shell relative flex min-h-[610px] items-center py-12 sm:min-h-[720px] sm:py-20">
@@ -62,22 +69,22 @@ export default function HomePage() {
         <RuntimeAutoMatcher />
       </div>
 
-      <section className="border-y border-white/10 bg-[#eee8dc] py-14 text-[#0c1118] sm:py-20">
-        <div className="shell grid gap-10 lg:grid-cols-[.8fr_1.2fr] lg:items-center">
+      <section className="border-y border-white/10 bg-[#eee8dc] py-10 text-[#0c1118] sm:py-14">
+        <div className="shell grid gap-7 lg:grid-cols-[.72fr_1.28fr] lg:items-center">
           <div className="relative">
-            <div className="absolute -left-6 top-14 h-5 w-48 -rotate-6 bg-red-600" />
+            <div className="absolute -left-6 top-12 h-4 w-44 -rotate-6 bg-red-600" />
             <p className="relative text-[10px] font-black uppercase tracking-[.3em] text-red-700">Built around you</p>
-            <h2 className="relative mt-3 text-6xl font-black leading-[.78] tracking-[-.075em] sm:text-8xl">YOUR<br />MATCH<br />DNA</h2>
+            <h2 className="relative mt-3 text-5xl font-black leading-[.8] tracking-[-.07em] sm:text-7xl">YOUR<br />MATCH<br />DNA</h2>
           </div>
           <div>
-            <p className="max-w-2xl text-lg font-bold leading-8">Your likes, passes, budget lane, body-style preferences, utility needs, and must-haves should become a personal buying profile — not just another search filter.</p>
-            <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <p className="max-w-2xl text-base font-bold leading-7 sm:text-lg sm:leading-8">Your likes, passes, budget lane, body-style preferences, utility needs, and must-haves should become a personal buying profile — not just another search filter.</p>
+            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Signal icon={<CarFront size={20} />} label="Body style" />
               <Signal icon={<Gauge size={20} />} label="Performance" />
               <Signal icon={<ShieldCheck size={20} />} label="Practical fit" />
               <Signal icon={<BadgeCheck size={20} />} label="Budget lane" />
             </div>
-            <p className="mt-5 border-l-4 border-red-600 pl-4 text-sm leading-6 text-black/60">This layer becomes personalized as the interaction state is wired in. Until then, the site does not pretend it learned preferences it has not actually observed.</p>
+            <p className="mt-4 border-l-4 border-red-600 pl-4 text-sm leading-6 text-black/60">This layer becomes personalized as the interaction state is wired in. Until then, the site does not pretend it learned preferences it has not actually observed.</p>
           </div>
         </div>
       </section>
