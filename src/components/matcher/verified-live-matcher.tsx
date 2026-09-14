@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ArrowRight, Check, RotateCcw, ShieldCheck, X } from "lucide-react";
 import type { InventoryCatalog } from "@/lib/inventory-catalog";
@@ -8,6 +9,7 @@ import { cn } from "@/lib/cn";
 import { LeadModal } from "./lead-modal";
 
 const terms = [36, 48, 60, 72];
+const HOME_PREVIEW_COUNT = 6;
 
 type Props = {
   catalog: InventoryCatalog;
@@ -120,11 +122,14 @@ export function VerifiedLiveMatcher({ catalog }: Props) {
         </div>
 
         <div className="mt-12">
-          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><p className="eyebrow">Verified live catalog</p><h3 className="mt-2 text-3xl font-black text-white">Currently eligible vehicles</h3></div><p className="text-xs text-slate-500">In-transit, stale, malformed, inactive and unverified units are excluded upstream.</p></div>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {vehicles.slice(0, 60).map((vehicle) => <LiveCatalogCard key={vehicle.id} vehicle={vehicle} shortlisted={shortlisted.includes(vehicle.id)} onAsk={() => { if (!shortlisted.includes(vehicle.id)) setShortlisted((ids) => [...ids, vehicle.id]); setLeadOpen(true); }} />)}
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+            <div><p className="eyebrow">Inventory window</p><h3 className="mt-2 text-3xl font-black text-white">A few verified units — not the whole lot.</h3><p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">The homepage stays focused. Open the full inventory playground to search phrases like “red Rogue AWD,” filter source-provided features, save vehicles, launch SwipeMatch, or start a Garage Battle.</p></div>
+            <Link href="/inventory" className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-full bg-amber-300 px-6 text-sm font-black text-black">Browse full inventory <ArrowRight size={16} /></Link>
           </div>
-          {vehicles.length > 60 && <p className="mt-5 text-center text-xs text-slate-500">Showing the first 60 verified units in this interface while search/filter UX is hardened.</p>}
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {vehicles.slice(0, HOME_PREVIEW_COUNT).map((vehicle) => <LiveCatalogCard key={vehicle.id} vehicle={vehicle} shortlisted={shortlisted.includes(vehicle.id)} onAsk={() => { if (!shortlisted.includes(vehicle.id)) setShortlisted((ids) => [...ids, vehicle.id]); setLeadOpen(true); }} />)}
+          </div>
+          {vehicles.length > HOME_PREVIEW_COUNT && <p className="mt-5 text-center text-xs text-slate-600">Showing {HOME_PREVIEW_COUNT} of {vehicles.length} verified eligible units here. The full interactive catalog lives on the inventory page.</p>}
         </div>
       </div>
 
@@ -138,9 +143,9 @@ function Range({ label, value, min, max, step, display, onChange }: { label: str
 }
 
 function LiveVehicleCard({ vehicle, onPass, onShortlist }: { vehicle: Vehicle; onPass: () => void; onShortlist: () => void }) {
-  return <article className="rounded-[26px] border border-white/15 bg-slate-950 p-6 shadow-card"><div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start"><div><p className="text-xs font-bold text-emerald-300">VIN {vehicle.id}</p><h3 className="mt-2 text-3xl font-black text-white">{vehicle.year} {vehicle.make} {vehicle.model}</h3><p className="mt-2 text-sm text-slate-400">{vehicle.trim} · {vehicle.type} · {vehicle.drivetrain} · {vehicle.mileage.toLocaleString()} mi</p></div><div className="sm:text-right"><p className="text-[10px] font-black uppercase tracking-[.18em] text-slate-600">Pricing</p><p className="mt-1 text-sm font-bold text-slate-400">Current figures on request</p></div></div><div className="mt-8 grid grid-cols-2 gap-3"><button onClick={onPass} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-rose-400/25 bg-rose-400/10 font-bold text-rose-200"><X size={18} /> Pass</button><button onClick={onShortlist} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 font-bold text-emerald-200"><Check size={18} /> Shortlist</button></div></article>;
+  return <article className="overflow-hidden rounded-[26px] border border-white/15 bg-slate-950 shadow-card"><div className="aspect-[16/9] bg-[#111923]"><img src={vehicle.image} alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`} className="h-full w-full object-cover" /></div><div className="p-6"><div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start"><div><p className="text-xs font-bold text-emerald-300">VIN {vehicle.id}</p><h3 className="mt-2 text-3xl font-black text-white">{vehicle.year} {vehicle.make} {vehicle.model}</h3><p className="mt-2 text-sm text-slate-400">{vehicle.trim} · {vehicle.type} · {vehicle.drivetrain} · {vehicle.mileage.toLocaleString()} mi</p></div><div className="sm:text-right"><p className="text-[10px] font-black uppercase tracking-[.18em] text-slate-600">Pricing</p><p className="mt-1 text-sm font-bold text-slate-400">Current figures on request</p></div></div><div className="mt-8 grid grid-cols-2 gap-3"><button onClick={onPass} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-rose-400/25 bg-rose-400/10 font-bold text-rose-200"><X size={18} /> Pass</button><button onClick={onShortlist} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 font-bold text-emerald-200"><Check size={18} /> Shortlist</button></div></div></article>;
 }
 
 function LiveCatalogCard({ vehicle, shortlisted, onAsk }: { vehicle: Vehicle; shortlisted: boolean; onAsk: () => void }) {
-  return <article className={cn("rounded-2xl border bg-slate-900/70 p-5", shortlisted ? "border-emerald-400/40" : "border-white/10")}><div><p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">Verified live</p><h4 className="mt-2 font-black text-white">{vehicle.year} {vehicle.make} {vehicle.model}</h4><p className="mt-1 text-xs text-slate-500">{vehicle.trim} · {vehicle.drivetrain} · {vehicle.mileage.toLocaleString()} mi</p></div><div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3"><p className="text-[11px] text-slate-500">VIN-specific figures available when you&apos;re ready.</p><button onClick={onAsk} className="text-xs font-bold text-amber-300">{shortlisted ? "Ask about it →" : "Shortlist + ask →"}</button></div></article>;
+  return <article className={cn("overflow-hidden rounded-2xl border bg-slate-900/70", shortlisted ? "border-emerald-400/40" : "border-white/10")}><div className="aspect-[16/9] bg-[#111923]"><img src={vehicle.image} alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`} className="h-full w-full object-cover" loading="lazy" /></div><div className="p-5"><div><p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">Verified live</p><h4 className="mt-2 font-black text-white">{vehicle.year} {vehicle.make} {vehicle.model}</h4><p className="mt-1 text-xs text-slate-500">{vehicle.trim} · {vehicle.drivetrain} · {vehicle.mileage.toLocaleString()} mi</p></div><div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3"><p className="text-[11px] text-slate-500">VIN-specific figures available when you&apos;re ready.</p><button onClick={onAsk} className="text-xs font-bold text-amber-300">{shortlisted ? "Ask about it →" : "Shortlist + ask →"}</button></div></div></article>;
 }
