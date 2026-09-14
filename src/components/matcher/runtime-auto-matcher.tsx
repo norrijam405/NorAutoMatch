@@ -1,4 +1,4 @@
-import { AlertTriangle, FlaskConical, MessageSquareText, ShieldCheck } from "lucide-react";
+import { FlaskConical, MessageSquareText, ShieldCheck } from "lucide-react";
 import type { InventoryCatalog } from "@/lib/inventory-catalog";
 import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
 import { loadOrrCustomerCatalog } from "@/lib/orr-customer-catalog";
@@ -27,7 +27,11 @@ export async function RuntimeAutoMatcher() {
       mode: process.env.NORAUTO_INVENTORY_MODE,
       liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
     });
-  } catch {
+  } catch (error) {
+    console.error("NORAUTO_LIVE_INVENTORY_LOAD_FAILED", {
+      name: error instanceof Error ? error.name : "UnknownError",
+      message: error instanceof Error ? error.message : "Unknown live inventory failure",
+    });
     catalog = undefined;
   }
 
@@ -56,22 +60,22 @@ function InventoryTruthBanner({ mode, reason }: { mode: "demo" | "live-shadow" |
 
 function LiveInventoryUnavailable() {
   return (
-    <section id="matcher" className="scroll-mt-24 py-10 sm:py-20">
+    <section id="matcher" className="scroll-mt-24 py-8 sm:py-12">
       <div className="shell">
-        <div className="mx-auto max-w-3xl overflow-hidden rounded-[24px] border border-amber-400/20 bg-amber-400/[.05] p-5 sm:rounded-[30px] sm:p-10">
-          <div className="flex items-start gap-4">
-            <span className="grid size-11 shrink-0 place-items-center rounded-xl border border-amber-400/25 bg-amber-400/10 text-amber-300 sm:size-14 sm:rounded-2xl"><AlertTriangle size={24} /></span>
-            <div className="min-w-0">
-              <p className="eyebrow">Inventory refresh</p>
-              <h2 className="mt-2 text-2xl font-black tracking-[-.03em] text-white sm:text-4xl">Fresh matches are being verified.</h2>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:mt-4 sm:text-base sm:leading-7">We’re checking the latest vehicle data before showing it here. NorAuto Match would rather pause the row than show stale or unverified availability.</p>
+        <div className="relative mx-auto max-w-4xl overflow-hidden border-y border-white/10 bg-black/20 px-1 py-8 sm:px-0 sm:py-10">
+          <div className="absolute -left-20 top-10 h-4 w-56 -rotate-6 bg-red-600/90" />
+          <div className="relative grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[.3em] text-red-400">Verified inventory</p>
+              <h2 className="mt-3 text-4xl font-black leading-[.86] tracking-[-.055em] text-white sm:text-6xl">NO VERIFIED<br />MATCH YET.</h2>
+              <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base sm:leading-7">We’re checking fresh inventory before putting a car in front of you. If the source cannot be verified, NorAuto Match stops here instead of showing stale or invented availability.</p>
+            </div>
+            <div className="grid gap-2 sm:flex lg:grid lg:min-w-[220px]">
+              <a href={brand.textHref} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-amber-300 px-5 text-sm font-black text-black"><MessageSquareText size={17} /> Tell me what you need</a>
+              <a href="/how-it-works" className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/20 px-5 text-sm font-black text-white">How matching works</a>
             </div>
           </div>
-          <div className="mt-5 grid gap-2 sm:mt-7 sm:flex">
-            <a href={brand.textHref} className="btn-primary justify-center"><MessageSquareText size={17} /> Tell me what you need</a>
-            <a href="/how-it-works" className="btn-secondary justify-center">See how matching works</a>
-          </div>
-          <p className="mt-4 text-center text-[11px] font-semibold text-amber-200/80 sm:text-left">Verified inventory will return here automatically when the current snapshot passes checks.</p>
+          <p className="relative mt-5 text-[10px] font-black uppercase tracking-[.16em] text-white/35">Fresh units return automatically after the source passes verification.</p>
         </div>
       </div>
     </section>
