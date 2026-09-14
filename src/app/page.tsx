@@ -1,113 +1,145 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowDown, ArrowRight, BadgeCheck, CarFront, Gauge, MapPin, MessageSquareText, SearchCheck, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowDown, ArrowRight, BadgeCheck, CarFront, Gauge, Heart, MessageSquareText, SearchCheck, ShieldCheck, Swords } from "lucide-react";
 import { RuntimeAutoMatcher } from "@/components/matcher/runtime-auto-matcher";
 import { brand } from "@/lib/brand";
 
 export default function HomePage() {
   return (
     <>
-      <section className="relative min-h-[640px] overflow-hidden border-b border-white/5 sm:min-h-[760px]">
-        <Image src="/images/hero-okc.jpg" alt="Dark crossover in Oklahoma City at night" fill priority className="object-cover object-[66%_center]" sizes="100vw" />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,#071018_0%,rgba(7,16,24,.95)_30%,rgba(7,16,24,.68)_60%,rgba(7,16,24,.24)_100%)]" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#071018] via-transparent to-[#071018]/30" />
-        <div className="absolute inset-0 grid-noise opacity-30" />
-        <div className="shell relative flex min-h-[640px] items-center py-12 sm:min-h-[760px] sm:py-20">
+      <section className="relative overflow-hidden border-b border-white/10 bg-[#06090e]">
+        <Image src="/images/hero-okc.jpg" alt="Vehicle on a dark city road" fill priority className="object-cover object-[68%_center] opacity-70" sizes="100vw" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,#06090e_0%,rgba(6,9,14,.96)_42%,rgba(6,9,14,.42)_76%,rgba(6,9,14,.7)_100%)]" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#06090e] via-transparent to-[#06090e]/30" />
+        <div className="absolute -left-20 top-[42%] h-7 w-72 -rotate-6 bg-red-600/90 sm:w-[28rem]" />
+        <div className="absolute right-[-7rem] top-28 hidden h-8 w-[28rem] rotate-[-8deg] bg-red-600/60 lg:block" />
+        <div className="shell relative flex min-h-[610px] items-center py-12 sm:min-h-[720px] sm:py-20">
           <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-3.5 py-2 text-[11px] font-bold uppercase tracking-[.08em] text-amber-200 backdrop-blur sm:text-xs"><span className="size-2 animate-pulse-soft rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399]" /> Car shopping, without the pressure</div>
-            <h1 className="mt-6 text-[clamp(3rem,15vw,6.7rem)] font-black leading-[.88] tracking-[-.06em] text-white sm:mt-7">Tell me<br />the <span className="text-amber-300">number.</span></h1>
-            <p className="mt-6 max-w-xl text-lg font-medium leading-7 text-slate-200 sm:mt-7 sm:text-2xl sm:leading-8">Start with what you can live with. I’ll help narrow the noise, compare the right vehicles, and move toward a verified match.</p>
-            <div className="mt-7 grid gap-3 sm:mt-9 sm:flex sm:flex-row">
-              <a href="#matcher" className="btn-primary justify-center px-7">Find my match <ArrowDown size={18} /></a>
-              <a href={brand.textHref} className="btn-secondary justify-center px-7"><MessageSquareText size={18} /> Text me</a>
+            <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[.28em] text-white/55 sm:text-xs">
+              <span className="h-[2px] w-8 bg-red-500" /> Car shopping, without the pressure
             </div>
-            <div className="-mx-4 mt-7 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:mt-10 sm:grid sm:max-w-2xl sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0">
-              <Proof icon={<Gauge size={17} />} title="Payment first" text="Start with the monthly." />
-              <Proof icon={<SearchCheck size={17} />} title="Verified inventory" text="Only current authorized matches." />
-              <Proof icon={<MessageSquareText size={17} />} title="One direct line" text="No pressure maze." />
+            <h1 className="mt-6 text-[clamp(3.9rem,16vw,8rem)] font-black leading-[.78] tracking-[-.075em] text-white">
+              TELL ME<br />THE <span className="relative inline-block italic text-white"><span className="absolute inset-x-[-.03em] top-[48%] h-[.28em] -rotate-2 bg-red-600" /><span className="relative">NUMBER.</span></span>
+            </h1>
+            <p className="mt-7 max-w-xl text-base font-medium leading-7 text-slate-200 sm:text-xl sm:leading-8">Your budget. Your life. Your match. Start with the number you can live with and let NorAuto cut through the noise.</p>
+            <div className="mt-8 grid gap-3 sm:flex">
+              <a href="#matcher" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-amber-300 px-7 text-sm font-black text-black shadow-[0_0_28px_rgba(252,211,77,.14)]">Start my match <ArrowDown size={18} /></a>
+              <a href={brand.textHref} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-white/20 bg-black/25 px-7 text-sm font-black text-white backdrop-blur"><MessageSquareText size={18} /> Ask me directly</a>
+            </div>
+            <div className="mt-8 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-[.16em]">
+              <span className="bg-red-600 px-3 py-2 text-white">Real fit first</span>
+              <span className="border border-amber-300/35 bg-black/30 px-3 py-2 text-amber-200">Verified inventory</span>
+              <span className="border border-white/15 bg-black/30 px-3 py-2 text-white/70">No pressure maze</span>
             </div>
           </div>
         </div>
-        <div className="absolute bottom-6 right-6 hidden items-center gap-2 text-[10px] font-bold uppercase tracking-[.18em] text-white/35 lg:flex"><MapPin size={14} /> Oklahoma City, OK</div>
       </section>
 
-      <section className="border-b border-white/5 bg-slate-950/65 py-4 sm:py-5">
+      <section className="border-b border-white/10 bg-[#080c12] py-4">
         <div className="shell">
           <div className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 sm:mx-0 sm:grid sm:grid-cols-4 sm:overflow-visible sm:px-0">
-            <JourneyStep number="01" label="Discover" detail="Set your lane" />
-            <JourneyStep number="02" label="Shortlist" detail="Keep what fits" />
-            <JourneyStep number="03" label="Compare" detail="See the tradeoffs" />
-            <JourneyStep number="04" label="Decide" detail="Move on a verified match" />
+            <Journey icon={<SearchCheck size={18} />} label="Discover" active />
+            <Journey icon={<Heart size={18} />} label="Shortlist" />
+            <Journey icon={<Swords size={18} />} label="Compare" />
+            <Journey icon={<BadgeCheck size={18} />} label="Decide" />
           </div>
         </div>
       </section>
 
-      <RuntimeAutoMatcher />
-
-      <section className="border-y border-white/5 bg-slate-950/45 py-12 sm:py-20">
+      <section className="bg-[#070b10] pt-12 sm:pt-20">
         <div className="shell">
-          <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-            <div className="max-w-3xl"><p className="eyebrow">The NorAuto Standard</p><h2 className="mt-3 text-3xl font-black tracking-[-.04em] text-white sm:mt-4 sm:text-5xl">Human help.<br />Clean follow-through.</h2></div>
-            <p className="max-w-md text-sm leading-6 text-slate-400">Less dealership theater. More context, accountability, and a direct path from first question to next move.</p>
-          </div>
-          <div className="-mx-4 mt-7 flex snap-x gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-2 md:px-0 md:pb-0 xl:grid-cols-4">
-            <Standard number="01" title="A real match brief" text="Budget, use case, and must-haves become a short list—not a blast of random links." />
-            <Standard number="02" title="See the actual unit" text="When a vehicle is verified, focus on the details that matter before making the drive." />
-            <Standard number="03" title="Numbers with context" text="Price, assumptions, and next steps stay understandable before the paperwork conversation." />
-            <Standard number="04" title="Same direct line" text="Questions do not get orphaned when the process moves forward." />
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[.32em] text-red-400">SwipeMatch / Discover</p>
+              <h2 className="mt-3 text-4xl font-black leading-[.9] tracking-[-.055em] text-white sm:text-6xl">DISCOVER<br />YOUR MATCH <span className="text-red-500">—</span></h2>
+            </div>
+            <p className="max-w-xl text-sm leading-6 text-slate-400 sm:text-base sm:leading-7">The cards below come from NorAuto Match’s existing inventory runtime. When authorized live inventory passes verification, you see real units. When it doesn’t, NorAuto says so instead of making one up.</p>
           </div>
         </div>
       </section>
 
-      <section className="border-b border-white/5 bg-slate-950/20 py-14 sm:py-24">
-        <div className="shell">
-          <div className="grid gap-8 lg:grid-cols-[.8fr_1.2fr] lg:items-start lg:gap-12">
-            <div className="lg:sticky lg:top-28">
-              <p className="eyebrow">How NorAuto Match works</p>
-              <h2 className="mt-3 text-3xl font-black tracking-[-.04em] text-white sm:mt-4 sm:text-5xl">Less lot.<br />More signal.</h2>
-              <p className="mt-4 max-w-md text-sm leading-6 text-slate-400 sm:mt-5 sm:text-base sm:leading-7">Start with your actual life and budget, then narrow toward a vehicle worth your time.</p>
-              <Link href="/how-it-works" className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-amber-300 hover:text-amber-200 sm:mt-7">See the full process <ArrowRight size={16} /></Link>
+      <div className="bg-[#070b10]">
+        <RuntimeAutoMatcher />
+      </div>
+
+      <section className="border-y border-white/10 bg-[#eee8dc] py-14 text-[#0c1118] sm:py-20">
+        <div className="shell grid gap-10 lg:grid-cols-[.8fr_1.2fr] lg:items-center">
+          <div className="relative">
+            <div className="absolute -left-6 top-14 h-5 w-48 -rotate-6 bg-red-600" />
+            <p className="relative text-[10px] font-black uppercase tracking-[.3em] text-red-700">Built around you</p>
+            <h2 className="relative mt-3 text-6xl font-black leading-[.78] tracking-[-.075em] sm:text-8xl">YOUR<br />MATCH<br />DNA</h2>
+          </div>
+          <div>
+            <p className="max-w-2xl text-lg font-bold leading-8">Your likes, passes, budget lane, body-style preferences, utility needs, and must-haves should become a personal buying profile — not just another search filter.</p>
+            <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Signal icon={<CarFront size={20} />} label="Body style" />
+              <Signal icon={<Gauge size={20} />} label="Performance" />
+              <Signal icon={<ShieldCheck size={20} />} label="Practical fit" />
+              <Signal icon={<BadgeCheck size={20} />} label="Budget lane" />
             </div>
-            <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0">
-              <Step number="01" icon={<Gauge />} title="Set the lane" text="Give me the payment target, cash or trade equity, and the term you can live with." />
-              <Step number="02" icon={<CarFront />} title="Match—or pass" text="Shortlist what fits and kill the noise without a sales desk hovering." />
-              <Step number="03" icon={<Sparkles />} title="Keep searching" text="If the verified row is wrong, the request can move into the authorized sourcing path." />
-              <Step number="04" icon={<ShieldCheck />} title="Verify before action" text="Availability, price, financing assumptions, and delivery get checked before anything is treated as final." />
-            </div>
+            <p className="mt-5 border-l-4 border-red-600 pl-4 text-sm leading-6 text-black/60">This layer becomes personalized as the interaction state is wired in. Until then, the site does not pretend it learned preferences it has not actually observed.</p>
           </div>
         </div>
       </section>
 
-      <section className="py-14 sm:py-24">
+      <section className="bg-[#070b10] py-14 sm:py-20">
         <div className="shell">
-          <div className="relative overflow-hidden rounded-[28px] border border-amber-400/20 bg-gradient-to-br from-amber-400/15 via-slate-900 to-emerald-400/10 px-5 py-10 text-center shadow-glow sm:rounded-[32px] sm:px-12 sm:py-16">
-            <div className="absolute inset-0 grid-noise opacity-40" />
-            <div className="relative mx-auto max-w-3xl">
-              <span className="mx-auto grid size-12 place-items-center rounded-2xl border border-amber-400/25 bg-amber-400/10 text-amber-300 sm:size-14"><BadgeCheck size={25} /></span>
-              <p className="eyebrow mt-5 sm:mt-6">One search. One person.</p>
-              <h2 className="mt-3 text-3xl font-black tracking-[-.04em] text-white sm:mt-4 sm:text-5xl">Still looking at 14 tabs?</h2>
-              <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-300 sm:mt-5 sm:text-lg sm:leading-8">Send the monthly number and the three things the vehicle has to do. I’ll tell you what fits—or keep the search moving.</p>
-              <div className="mt-7 grid gap-3 sm:mt-8 sm:flex sm:justify-center"><a href="#matcher" className="btn-primary justify-center">Run the matcher <ArrowRight size={17} /></a><a href={brand.textHref} className="btn-secondary justify-center">Text me instead</a></div>
-            </div>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div><p className="text-[10px] font-black uppercase tracking-[.3em] text-amber-300">Shortlist</p><h2 className="mt-2 text-4xl font-black tracking-[-.05em] text-white sm:text-6xl">YOUR GARAGE <span className="text-red-500">—</span></h2></div>
+            <p className="max-w-md text-sm leading-6 text-slate-400">The next product layer: keep the real units you like, compare them without opening fourteen tabs, and carry the shortlist into the buying conversation.</p>
           </div>
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            <FeatureCard number="01" title="Save the survivors" text="Keep real verified units or vehicle families that earned another look." />
+            <FeatureCard number="02" title="Garage Battle" text="Compare the tradeoffs around your priorities instead of declaring one universal winner." red />
+            <FeatureCard number="03" title="Take the next step" text="Request a test drive or send a Buyer Brief only after the product has already helped you." />
+          </div>
+        </div>
+      </section>
+
+      <section className="border-y border-white/10 bg-[#0b1017] py-14 sm:py-20">
+        <div className="shell grid gap-8 lg:grid-cols-[.85fr_1.15fr] lg:items-center">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[.3em] text-amber-300">Money lane</p>
+            <h2 className="mt-3 text-4xl font-black leading-[.9] tracking-[-.055em] text-white sm:text-6xl">WHAT NUMBER<br />FEELS RIGHT?</h2>
+            <p className="mt-4 max-w-md text-sm leading-6 text-slate-400">Money gets the calm treatment. Estimates stay estimates. No fake approvals, no mystery math.</p>
+          </div>
+          <div className="rounded-[28px] border border-amber-300/20 bg-white/[.035] p-5 sm:p-7">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Money label="Target payment" value="Your number" />
+              <Money label="Down payment" value="Your cash" />
+              <Money label="Trade equity" value="If known" />
+              <Money label="Term" value="Your lane" />
+            </div>
+            <div className="mt-4 rounded-2xl border border-amber-300/25 bg-amber-300/[.06] p-4"><p className="text-[10px] font-black uppercase tracking-[.2em] text-amber-300">Estimated buying lane</p><p className="mt-2 text-lg font-black text-white">The real purchase-estimate endpoint is already in the app and will drive this panel as we connect the visual controls.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section className="relative overflow-hidden bg-black py-16 sm:py-24">
+        <div className="absolute -right-24 top-12 h-8 w-[34rem] rotate-[-8deg] bg-red-600/90" />
+        <div className="shell relative">
+          <p className="text-[10px] font-black uppercase tracking-[.3em] text-red-400">Final hit</p>
+          <h2 className="mt-4 text-5xl font-black leading-[.82] tracking-[-.07em] text-white sm:text-8xl">STOP SHOPPING<br /><span className="text-red-500">14 TABS.</span></h2>
+          <p className="mt-6 max-w-xl text-lg leading-8 text-white/55">Real guidance. Better drives. A car search that remembers there is a person on the other side of the screen.</p>
+          <div className="mt-8 flex flex-wrap gap-3"><a href="#matcher" className="inline-flex min-h-12 items-center gap-2 rounded-full bg-amber-300 px-6 text-sm font-black text-black">Find my match <ArrowRight size={17} /></a><Link href="/how-it-works" className="inline-flex min-h-12 items-center rounded-full border border-white/20 px-6 text-sm font-black text-white">How it works</Link></div>
         </div>
       </section>
     </>
   );
 }
 
-function JourneyStep({ number, label, detail }: { number: string; label: string; detail: string }) {
-  return <div className="min-w-[150px] snap-start rounded-xl border border-white/10 bg-white/[.025] px-3.5 py-3 sm:min-w-0"><div className="flex items-center gap-2"><span className="text-[9px] font-black tracking-[.18em] text-amber-300/60">{number}</span><strong className="text-xs text-white">{label}</strong></div><span className="mt-1 block text-[10px] text-slate-500">{detail}</span></div>;
+function Journey({ icon, label, active = false }: { icon: React.ReactNode; label: string; active?: boolean }) {
+  return <div className={`flex min-w-[145px] snap-start items-center justify-center gap-2 rounded-xl border px-4 py-3 text-xs font-black ${active ? "border-red-500/40 bg-red-500/10 text-red-300" : "border-white/10 bg-white/[.02] text-white/60"}`}>{icon}{label}</div>;
 }
 
-function Standard({ number, title, text }: { number: string; title: string; text: string }) {
-  return <article className="min-w-[78vw] snap-start rounded-2xl border border-white/10 bg-slate-900/60 p-5 sm:min-w-[320px] md:min-w-0"><span className="text-[10px] font-black tracking-[.2em] text-amber-300/60">{number}</span><h3 className="mt-3 text-lg font-black text-white">{title}</h3><p className="mt-2 text-sm leading-6 text-slate-400">{text}</p></article>;
+function Signal({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return <div className="border-2 border-black/10 bg-white/60 p-4"><span className="text-amber-700">{icon}</span><p className="mt-3 text-sm font-black">{label}</p></div>;
 }
 
-function Proof({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
-  return <div className="flex min-w-[190px] snap-start items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/45 p-3.5 backdrop-blur sm:min-w-0"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/5 text-amber-300">{icon}</span><span><strong className="block text-xs font-bold text-white">{title}</strong><span className="mt-0.5 block text-[11px] text-slate-400">{text}</span></span></div>;
+function FeatureCard({ number, title, text, red = false }: { number: string; title: string; text: string; red?: boolean }) {
+  return <article className={`rounded-[24px] border p-5 ${red ? "border-red-500/40 bg-red-600 text-white" : "border-white/10 bg-white/[.035] text-white"}`}><span className={`text-[10px] font-black tracking-[.2em] ${red ? "text-white/60" : "text-amber-300/60"}`}>{number}</span><h3 className="mt-4 text-xl font-black">{title}</h3><p className={`mt-2 text-sm leading-6 ${red ? "text-white/80" : "text-slate-400"}`}>{text}</p></article>;
 }
 
-function Step({ number, icon, title, text }: { number: string; icon: React.ReactNode; title: string; text: string }) {
-  return <article className="min-w-[82vw] snap-start rounded-2xl border border-white/10 bg-slate-900/50 p-5 transition hover:border-white/20 sm:min-w-0 sm:rounded-3xl sm:p-6"><div className="flex items-center justify-between"><span className="text-[10px] font-black tracking-[.2em] text-amber-300/60">{number}</span><span className="grid size-10 place-items-center rounded-xl border border-white/10 bg-white/[.04] text-amber-300">{icon}</span></div><div className="mt-4"><h3 className="text-xl font-black text-white">{title}</h3><p className="mt-2 text-sm leading-6 text-slate-400">{text}</p></div></article>;
+function Money({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl border border-white/10 bg-black/25 p-3"><p className="text-[9px] font-black uppercase tracking-[.16em] text-white/35">{label}</p><p className="mt-2 text-sm font-black text-white">{value}</p></div>;
 }
