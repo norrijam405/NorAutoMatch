@@ -36,11 +36,12 @@ function vehicle(overrides: Partial<Vehicle>): Vehicle {
   assert.ok(cargo?.text.includes("36.3–36.5 cu. ft."));
   assert.ok(cargo?.text.includes("23.9–30 cu. ft."));
   assert.ok(cargo?.evidence.every((entry) => entry.source === "manufacturer-spec"));
+  assert.ok(cargo?.evidence.some((entry) => entry.label === "2026 Nissan Rogue brochure"));
 
-  const parking = story.signals.find((signal) => signal.id === "footprint");
-  assert.ok(parking);
-  assert.equal(parking?.vehicleId, "KICKS");
-  assert.ok(parking?.text.includes("11.1 inches shorter"));
+  // Exact 2026 Rogue brochure evidence currently establishes cargo/seating but not
+  // the overall-length value used by the current 2026.5 web specs. Fail closed.
+  assert.ok(!story.signals.some((signal) => signal.id === "footprint"));
+  assert.ok(story.evidenceGaps.some((gap) => gap.includes("does not establish a clear overall-length advantage")));
 
   const price = story.signals.find((signal) => signal.id === "advertised-price");
   assert.ok(price);
@@ -73,6 +74,7 @@ function vehicle(overrides: Partial<Vehicle>): Vehicle {
   assert.equal(story.signals.find((signal) => signal.id === "cargo")?.vehicleId, "R25");
   assert.equal(story.signals.find((signal) => signal.id === "city-mpg")?.vehicleId, "K25");
   assert.equal(story.signals.find((signal) => signal.id === "highway-mpg")?.vehicleId, "K25");
+  assert.ok(!story.signals.some((signal) => signal.id === "footprint"));
 }
 
 console.log("PASS_GARAGE_BATTLE_EVIDENCE_BOUNDARIES");
