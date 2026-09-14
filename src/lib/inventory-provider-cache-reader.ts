@@ -10,7 +10,9 @@ export type CachedInventoryReadResult = {
   fetchedAt: string;
   sourceHash: string;
   snapshotAgeMs: number;
-  customerVisibleLiveInventory: true;
+  cacheEligibleForCustomerUse: true;
+  customerVisibleLiveInventory: false;
+  authorityEffect: "NONE";
   vehicles: Vehicle[];
   rejected: Array<{ vin: string; reason: string }>;
 };
@@ -98,7 +100,9 @@ export function buildCachedCustomerInventory(input: {
     fetchedAt: snapshot.fetchedAt,
     sourceHash: snapshot.sourceHash,
     snapshotAgeMs,
-    customerVisibleLiveInventory: true,
+    cacheEligibleForCustomerUse: true,
+    customerVisibleLiveInventory: false,
+    authorityEffect: "NONE",
     vehicles,
     rejected,
   };
