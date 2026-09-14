@@ -106,18 +106,18 @@ export default function HomePage() {
       <section className="border-y border-white/10 bg-[#0b1017] py-14 sm:py-20">
         <div className="shell grid gap-8 lg:grid-cols-[.85fr_1.15fr] lg:items-center">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[.3em] text-amber-300">Money lane</p>
-            <h2 className="mt-3 text-4xl font-black leading-[.9] tracking-[-.055em] text-white sm:text-6xl">WHAT NUMBER<br />FEELS RIGHT?</h2>
-            <p className="mt-4 max-w-md text-sm leading-6 text-slate-400">Money gets the calm treatment. Estimates stay estimates. No fake approvals, no mystery math.</p>
+            <p className="text-[10px] font-black uppercase tracking-[.3em] text-amber-300">Planning context</p>
+            <h2 className="mt-3 text-4xl font-black leading-[.9] tracking-[-.055em] text-white sm:text-6xl">YOUR NUMBER<br />STARTS THE CONVERSATION.</h2>
+            <p className="mt-4 max-w-md text-sm leading-6 text-slate-400">Your comfort target helps narrow the field. NorAuto does not turn that preference into a promised payment or approval.</p>
           </div>
           <div className="rounded-[28px] border border-amber-300/20 bg-white/[.035] p-5 sm:p-7">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Money label="Target payment" value="Your number" />
-              <Money label="Down payment" value="Your cash" />
-              <Money label="Trade equity" value="If known" />
-              <Money label="Term" value="Your lane" />
+              <Money label="Comfort target" value="Your number" />
+              <Money label="Down / trade" value="Your context" />
+              <Money label="Term" value="Your preference" />
+              <Money label="Exact VIN" value="Required later" />
             </div>
-            <div className="mt-4 rounded-2xl border border-amber-300/25 bg-amber-300/[.06] p-4"><p className="text-[10px] font-black uppercase tracking-[.2em] text-amber-300">Estimated buying lane</p><p className="mt-2 text-lg font-black text-white">The real purchase-estimate endpoint is already in the app and will drive this panel as we connect the visual controls.</p></div>
+            <div className="mt-4 rounded-2xl border border-amber-300/20 bg-black/20 p-4"><p className="text-[10px] font-black uppercase tracking-[.2em] text-amber-300">Not a payment quote</p><p className="mt-2 text-sm leading-6 text-slate-300">Actual payment figures depend on the exact vehicle/VIN and selling figures, approved credit and lender terms, down payment, trade position, taxes, fees, incentives, optional products, and other deal-specific inputs.</p></div>
           </div>
         </div>
       </section>
