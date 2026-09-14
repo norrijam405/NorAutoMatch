@@ -57,27 +57,6 @@ function safeIdentityGateDiagnostics(discovery: OrrAlgoliaDiscovery) {
   };
 }
 
-function safeFeatureSchemaDiagnostics(discovery: OrrAlgoliaDiscovery) {
-  const candidateKeys = [...new Set(discovery.hits.flatMap((hit) => Object.keys(hit).filter((key) => /(feature|option|equipment|package|accessor|technology|comfort|safety)/i.test(key))))].sort();
-  const normalized = normalizeOrrAlgoliaDiscovery(discovery);
-  return {
-    candidateKeys,
-    featureBearingNormalizedRecords: normalized.records.filter((record) => (record.features?.length ?? 0) > 0).length,
-    normalizedRecordCount: normalized.records.length,
-    sampleNormalizedFeatures: normalized.records.slice(0, 5).map((record) => ({
-      vin: record.vin,
-      features: record.features?.slice(0, 20) ?? [],
-    })),
-    sampleRawFeatureShapes: discovery.hits.slice(0, 5).map((hit) => ({
-      objectID: typeof hit.objectID === "string" ? hit.objectID : hit.id?.toString(),
-      featuresType: Array.isArray(hit.features) ? "array" : typeof hit.features,
-      parsedFeaturesType: Array.isArray(hit.parsed_features) ? "array" : typeof hit.parsed_features,
-      accessoriesType: Array.isArray(hit.accessories) ? "array" : typeof hit.accessories,
-      searchableAccessoriesType: Array.isArray(hit.searchable_accessories) ? "array" : typeof hit.searchable_accessories,
-    })),
-  };
-}
-
 export async function loadOrrCustomerCatalog(options: OrrCustomerCatalogOptions = {}): Promise<InventoryCatalog> {
   const runtime = resolveInventoryRuntime({ mode: options.mode, liveActivation: options.liveActivation });
 
@@ -91,7 +70,6 @@ export async function loadOrrCustomerCatalog(options: OrrCustomerCatalogOptions 
 
   const discover = options.discover ?? (() => discoverOrrAlgoliaInventory({ hitsPerPage: 100, maxPages: 10 }));
   const discovery = await discover();
-  console.info("NORAUTO_INVENTORY_FEATURE_SCHEMA_DIAGNOSTIC", safeFeatureSchemaDiagnostics(discovery));
   const sourceGate = buildInventoryShadowReceipt(discovery);
   if (sourceGate.gate.status !== "PASS") {
     console.warn("NORAUTO_INVENTORY_SOURCE_GATE_DIAGNOSTIC", {
