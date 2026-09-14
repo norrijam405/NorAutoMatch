@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowDown, ArrowRight, BadgeCheck, CarFront, Gauge, Heart, MessageSquareText, SearchCheck, ShieldCheck, Swords } from "lucide-react";
-import { RuntimeAutoMatcher } from "@/components/matcher/runtime-auto-matcher";
+import { HomeInventorySpotlight } from "@/components/inventory/home-inventory-spotlight";
 import { brand } from "@/lib/brand";
 
 export default function HomePage() {
@@ -60,14 +60,12 @@ export default function HomePage() {
               <p className="text-[10px] font-black uppercase tracking-[.32em] text-red-400">SwipeMatch / Discover</p>
               <h2 className="mt-3 text-4xl font-black leading-[.9] tracking-[-.055em] text-white sm:text-6xl">DISCOVER<br />YOUR MATCH <span className="text-red-500">—</span></h2>
             </div>
-            <p className="max-w-xl text-sm leading-6 text-slate-400 sm:text-base sm:leading-7">The cards below come from NorAuto Match’s existing inventory runtime. When authorized live inventory passes verification, you see real units. When it doesn’t, NorAuto says so instead of making one up.</p>
+            <p className="max-w-xl text-sm leading-6 text-slate-400 sm:text-base sm:leading-7">The homepage gives you a quick verified look instead of an endless inventory dump. The full inventory playground is one tap away when you want search, SwipeMatch, Garage, and comparison tools.</p>
           </div>
         </div>
       </section>
 
-      <div className="bg-[#070b10]">
-        <RuntimeAutoMatcher />
-      </div>
+      <HomeInventorySpotlight />
 
       <section className="border-y border-white/10 bg-[#eee8dc] py-10 text-[#0c1118] sm:py-14">
         <div className="shell grid gap-7 lg:grid-cols-[.72fr_1.28fr] lg:items-center">
@@ -93,12 +91,12 @@ export default function HomePage() {
         <div className="shell">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div><p className="text-[10px] font-black uppercase tracking-[.3em] text-amber-300">Shortlist</p><h2 className="mt-2 text-4xl font-black tracking-[-.05em] text-white sm:text-6xl">YOUR GARAGE <span className="text-red-500">—</span></h2></div>
-            <p className="max-w-md text-sm leading-6 text-slate-400">The next product layer: keep the real units you like, compare them without opening fourteen tabs, and carry the shortlist into the buying conversation.</p>
+            <p className="max-w-md text-sm leading-6 text-slate-400">Keep the real units you like, compare them without opening fourteen tabs, and carry the shortlist into the buying conversation.</p>
           </div>
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             <FeatureCard number="01" title="Save the survivors" text="Keep real verified units or vehicle families that earned another look." />
             <FeatureCard number="02" title="Garage Battle" text="Compare the tradeoffs around your priorities instead of declaring one universal winner." red />
-            <FeatureCard number="03" title="Take the next step" text="Request a test drive or send a Buyer Brief only after the product has already helped you." />
+            <FeatureCard number="03" title="Take the next step" text="Request a test drive, ask about financing, or send a Buyer Brief only after the product has already helped you." />
           </div>
         </div>
       </section>
@@ -128,7 +126,7 @@ export default function HomePage() {
           <p className="text-[10px] font-black uppercase tracking-[.3em] text-red-400">Final hit</p>
           <h2 className="mt-4 text-5xl font-black leading-[.82] tracking-[-.07em] text-white sm:text-8xl">STOP SHOPPING<br /><span className="text-red-500">14 TABS.</span></h2>
           <p className="mt-6 max-w-xl text-lg leading-8 text-white/55">Real guidance. Better drives. A car search that remembers there is a person on the other side of the screen.</p>
-          <div className="mt-8 flex flex-wrap gap-3"><a href="#matcher" className="inline-flex min-h-12 items-center gap-2 rounded-full bg-amber-300 px-6 text-sm font-black text-black">Find my match <ArrowRight size={17} /></a><Link href="/how-it-works" className="inline-flex min-h-12 items-center rounded-full border border-white/20 px-6 text-sm font-black text-white">How it works</Link></div>
+          <div className="mt-8 flex flex-wrap gap-3"><a href="#matcher" className="inline-flex min-h-12 items-center gap-2 rounded-full bg-amber-300 px-6 text-sm font-black text-black">Find my match <ArrowRight size={17} /></a><Link href="/inventory" className="inline-flex min-h-12 items-center rounded-full border border-white/20 px-6 text-sm font-black text-white">Browse inventory</Link></div>
         </div>
       </section>
     </>
