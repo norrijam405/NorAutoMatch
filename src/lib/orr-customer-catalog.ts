@@ -57,6 +57,25 @@ function safeIdentityGateDiagnostics(discovery: OrrAlgoliaDiscovery) {
   };
 }
 
+function safeMediaFieldDiagnostics(discovery: OrrAlgoliaDiscovery) {
+  return discovery.hits.slice(0, 5).map((hit) => {
+    const mediaFields = Object.entries(hit)
+      .filter(([key]) => /(image|photo|media|gallery|picture)/i.test(key))
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => ({
+        key,
+        type: Array.isArray(value) ? "array" : typeof value,
+        count: Array.isArray(value) ? value.length : undefined,
+        populated: Array.isArray(value) ? value.length > 0 : typeof value === "string" ? value.trim().length > 0 : value != null,
+      }));
+    return {
+      objectID: typeof hit.objectID === "string" ? hit.objectID : hit.id?.toString(),
+      vin: typeof hit.vin === "string" ? hit.vin : undefined,
+      mediaFields,
+    };
+  });
+}
+
 export async function loadOrrCustomerCatalog(options: OrrCustomerCatalogOptions = {}): Promise<InventoryCatalog> {
   const runtime = resolveInventoryRuntime({ mode: options.mode, liveActivation: options.liveActivation });
 
@@ -70,6 +89,7 @@ export async function loadOrrCustomerCatalog(options: OrrCustomerCatalogOptions 
 
   const discover = options.discover ?? (() => discoverOrrAlgoliaInventory({ hitsPerPage: 100, maxPages: 10 }));
   const discovery = await discover();
+  console.info("NORAUTO_INVENTORY_MEDIA_FIELD_DIAGNOSTIC", safeMediaFieldDiagnostics(discovery));
   const sourceGate = buildInventoryShadowReceipt(discovery);
   if (sourceGate.gate.status !== "PASS") {
     console.warn("NORAUTO_INVENTORY_SOURCE_GATE_DIAGNOSTIC", {
