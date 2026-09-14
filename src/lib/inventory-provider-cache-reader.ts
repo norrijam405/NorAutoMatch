@@ -1,8 +1,8 @@
 import type { Pool } from "pg";
 import type { Vehicle } from "./inventory";
-import type { InventoryProviderRecord, InventoryProviderSnapshot } from "./inventory-provider-contract";
-import { assertProviderSnapshotBoundary } from "./inventory-provider-contract";
-import { loadLatestInventoryProviderSnapshot } from "./inventory-provider-cache-store";
+import type { InventoryProviderRecord } from "./inventory-provider-contract";
+import type { InventoryProviderCurrentState } from "./inventory-provider-current-state";
+import { loadInventoryProviderCurrentState } from "./inventory-provider-cache-store";
 
 export type CachedInventoryReadResult = {
   providerId: string;
@@ -59,13 +59,16 @@ function recordToVehicle(record: InventoryProviderRecord): Vehicle | undefined {
 }
 
 export function buildCachedCustomerInventory(input: {
-  snapshot: InventoryProviderSnapshot;
+  state: InventoryProviderCurrentState;
   nowMs?: number;
   maxAgeMs?: number;
 }): CachedInventoryReadResult {
-  const snapshot = assertProviderSnapshotBoundary(input.snapshot);
+  const state = input.state;
+  if (!state.providerId.trim() || !state.dealershipId.trim() || !state.sourceUrl.trim() || !state.sourceHash.trim()) {
+    throw new Error("INVENTORY_CACHE_STATE_IDENTITY_INCOMPLETE");
+  }
   const nowMs = input.nowMs ?? Date.now();
-  const fetchedMs = Date.parse(snapshot.fetchedAt);
+  const fetchedMs = Date.parse(state.asOf);
   const maxAgeMs = input.maxAgeMs ?? 6 * 60 * 60 * 1000;
 
   if (!Number.isFinite(fetchedMs)) throw new Error("INVENTORY_CACHE_FETCHED_AT_INVALID");
@@ -77,7 +80,9 @@ export function buildCachedCustomerInventory(input: {
 
   const vehicles: Vehicle[] = [];
   const rejected: Array<{ vin: string; reason: string }> = [];
-  for (const record of snapshot.records) {
+  for (const record of state.records) {
+    if (record.providerId !== state.providerId) throw new Error(`INVENTORY_CACHE_RECORD_PROVIDER_DRIFT:${record.vin}`);
+    if (record.dealershipId !== state.dealershipId) throw new Error(`INVENTORY_CACHE_RECORD_DEALERSHIP_DRIFT:${record.vin}`);
     if (record.inTransit === true) {
       rejected.push({ vin: record.vin, reason: "source_status:in_transit" });
       continue;
@@ -95,11 +100,11 @@ export function buildCachedCustomerInventory(input: {
   }
 
   return {
-    providerId: snapshot.providerId,
-    dealershipId: snapshot.dealershipId,
-    sourceUrl: snapshot.sourceUrl,
-    fetchedAt: snapshot.fetchedAt,
-    sourceHash: snapshot.sourceHash,
+    providerId: state.providerId,
+    dealershipId: state.dealershipId,
+    sourceUrl: state.sourceUrl,
+    fetchedAt: state.asOf,
+    sourceHash: state.sourceHash,
     snapshotAgeMs,
     eligibleForCustomerUse: true,
     customerVisibleLiveInventory: false,
@@ -115,11 +120,11 @@ export async function loadCachedCustomerInventory(input: {
   nowMs?: number;
   maxAgeMs?: number;
 }): Promise<CachedInventoryReadResult> {
-  const snapshot = await loadLatestInventoryProviderSnapshot({
+  const state = await loadInventoryProviderCurrentState({
     pool: input.pool,
     providerId: input.providerId,
     dealershipId: input.dealershipId,
   });
-  if (!snapshot) throw new Error("INVENTORY_CACHE_EMPTY");
-  return buildCachedCustomerInventory({ snapshot, nowMs: input.nowMs, maxAgeMs: input.maxAgeMs });
+  if (!state) throw new Error("INVENTORY_CACHE_EMPTY");
+  return buildCachedCustomerInventory({ state, nowMs: input.nowMs, maxAgeMs: input.maxAgeMs });
 }
