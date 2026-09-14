@@ -12,6 +12,7 @@
   "include": [
     "scripts/inventory-provider-cache.behavior.ts",
     "scripts/inventory-provider-cache-postgres.integration.ts",
+    "scripts/run-inventory-provider-sync.ts",
     "src/lib/inventory-provider-contract.ts",
     "src/lib/inventory-provider-cache-store.ts",
     "src/lib/inventory-provider-cache-reader.ts",
