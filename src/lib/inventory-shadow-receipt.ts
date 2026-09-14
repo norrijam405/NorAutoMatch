@@ -25,7 +25,6 @@ export type InventoryShadowReceipt = {
     errorCount: number;
     blockingErrorCount: number;
     inactiveExcludedCount: number;
-    toleratedIdentityIncompleteCount: number;
     issueCounts: Record<string, number>;
   };
   gate: {
@@ -65,7 +64,6 @@ export function buildInventoryShadowReceipt(discovery: OrrAlgoliaDiscovery): Inv
     return true;
   });
   const inactiveExcludedCount = errors.filter((issue) => issue.code === "INACTIVE_HIT").length;
-  const toleratedIdentityIncompleteCount = tolerateIdentityIncomplete ? identityIncompleteErrors.length : 0;
   const errorCount = errors.length;
   const blockingErrorCount = blockingErrors.length;
   const issueCounts = normalized.issues.reduce<Record<string, number>>((counts, issue) => {
@@ -109,7 +107,6 @@ export function buildInventoryShadowReceipt(discovery: OrrAlgoliaDiscovery): Inv
       errorCount,
       blockingErrorCount,
       inactiveExcludedCount,
-      toleratedIdentityIncompleteCount,
       issueCounts,
     },
     gate: {
