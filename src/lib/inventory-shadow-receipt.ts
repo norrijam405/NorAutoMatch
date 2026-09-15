@@ -24,6 +24,7 @@ export type InventoryShadowReceipt = {
     warningCount: number;
     errorCount: number;
     blockingErrorCount: number;
+    quarantinedErrorCount: number;
     inactiveExcludedCount: number;
     issueCounts: Record<string, number>;
   };
@@ -52,17 +53,26 @@ export function buildInventoryShadowReceipt(discovery: OrrAlgoliaDiscovery): Inv
 
   const warningCount = normalized.issues.filter((issue) => issue.severity === "WARNING").length;
   const errors = normalized.issues.filter((issue) => issue.severity === "ERROR");
-  const identityIncompleteErrors = errors.filter((issue) => issue.code === "IDENTITY_INCOMPLETE");
-  const identityToleranceLimit = Math.max(2, Math.floor(discovery.hits.length * 0.02));
-  const tolerateIdentityIncomplete = identityIncompleteErrors.length > 0
-    && identityIncompleteErrors.length <= identityToleranceLimit
+
+  // Row-level source defects are quarantined only when they remain a small minority of
+  // an otherwise complete, non-empty dealer snapshot. Structural errors still fail closed.
+  const quarantineLimit = Math.max(2, Math.floor(discovery.hits.length * 0.02));
+  const rowLevelErrors = errors.filter((issue) =>
+    issue.code === "IDENTITY_INCOMPLETE" || issue.code === "PRICE_INVALID"
+  );
+  const tolerateRowLevelDefects = rowLevelErrors.length > 0
+    && rowLevelErrors.length <= quarantineLimit
     && normalized.records.length > 0;
 
   const blockingErrors = errors.filter((issue) => {
     if (issue.code === "INACTIVE_HIT") return false;
-    if (issue.code === "IDENTITY_INCOMPLETE" && tolerateIdentityIncomplete) return false;
+    if (
+      tolerateRowLevelDefects
+      && (issue.code === "IDENTITY_INCOMPLETE" || issue.code === "PRICE_INVALID")
+    ) return false;
     return true;
   });
+  const quarantinedErrorCount = tolerateRowLevelDefects ? rowLevelErrors.length : 0;
   const inactiveExcludedCount = errors.filter((issue) => issue.code === "INACTIVE_HIT").length;
   const errorCount = errors.length;
   const blockingErrorCount = blockingErrors.length;
@@ -106,6 +116,7 @@ export function buildInventoryShadowReceipt(discovery: OrrAlgoliaDiscovery): Inv
       warningCount,
       errorCount,
       blockingErrorCount,
+      quarantinedErrorCount,
       inactiveExcludedCount,
       issueCounts,
     },
