@@ -15,7 +15,7 @@ permissions:
 jobs:
   provider-cache:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     services:
       postgres:
         image: postgres:17-alpine
@@ -42,10 +42,17 @@ jobs:
         run: npm ci
       - name: Dependency security gate
         run: npm audit --audit-level=high
-      - name: Apply provider-cache schema to isolated Postgres
+      - name: Apply checksum-bound production schema twice
         env:
-          PGPASSWORD: norauto-ci-password
-        run: psql -h 127.0.0.1 -U norauto -d norauto_ci -f sql/2026-09-14_inventory_provider_snapshots.sql
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          node scripts/start-production.mjs
+          node scripts/start-production.mjs
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '12'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.inventory_provider_snapshots') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.inventory_provider_current_state') IS NOT NULL" | grep -qx 't'
       - name: Compile provider-neutral cache verification surface
         run: |
           rm -rf .tmp-inventory-provider-cache-tests
@@ -56,5 +63,22 @@ jobs:
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
         run: node .tmp-inventory-provider-cache-tests/scripts/inventory-provider-cache-postgres.integration.js
+      - name: Enforce customer-path source isolation
+        run: |
+          if grep -R -n -F 'loadOrrCustomerCatalog' src/app src/components; then
+            echo 'Customer request path regressed to request-time dealership source discovery.' >&2
+            exit 1
+          fi
+          grep -F 'loadOrrCachedCustomerCatalog' src/app/api/inventory/route.ts
+          grep -F 'loadOrrCachedCustomerCatalog' src/app/inventory/page.tsx
+          grep -F 'loadOrrCachedCustomerCatalog' src/components/inventory/home-inventory-spotlight.tsx
+          grep -F 'loadOrrCachedCustomerCatalog' src/app/api/leads/route.ts
+          grep -F 'export const dynamic = "force-dynamic"' src/app/page.tsx
+          grep -F 'norautomatch-crm-v12-inventory-provider-cache.sql' scripts/start-production.mjs
       - name: Typecheck customer application
         run: npm run typecheck
+      - name: Production build cache-backed customer application
+        env:
+          NORAUTO_INVENTORY_MODE: demo
+          NORAUTO_LIVE_INVENTORY_ACTIVATION: ""
+        run: npm run build
