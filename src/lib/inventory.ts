@@ -1,14 +1,23 @@
 export type Vehicle = {
   id: string;
+  vin?: string;
+  stockNumber?: string;
   year: number;
   make: string;
   model: string;
   trim: string;
   price: number;
+  marketPrice?: number;
+  discountAmount?: number;
+  docFee?: number;
+  displayedDealerSubtotal?: number;
+  msrp?: number;
   type: "SUV" | "Sedan" | "Truck";
   mileage: number;
   drivetrain: string;
   image: string;
+  photos?: string[];
+  vehicleUrl?: string;
   accent: string;
   condition?: string;
   exteriorColor?: string;
@@ -16,6 +25,8 @@ export type Vehicle = {
   features?: string[];
   transmission?: string;
   engine?: string;
+  horsepower?: number;
+  doors?: number;
   fuelType?: string;
   cityMpg?: number;
   highwayMpg?: number;
