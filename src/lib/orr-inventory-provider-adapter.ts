@@ -3,9 +3,9 @@ import { assertProviderSnapshotBoundary } from "./inventory-provider-contract";
 import { normalizeOrrAlgoliaDiscovery } from "./orr-algolia-normalizer";
 import { discoverOrrAlgoliaInventory, type OrrAlgoliaDiscovery } from "./orr-public-algolia";
 
-const PROVIDER_ID = "ridemotive-algolia";
-const DEALERSHIP_ID = "2175";
-const DEALERSHIP_NAME = "Orr Nissan West";
+export const ORR_INVENTORY_PROVIDER_ID = "ridemotive-algolia";
+export const ORR_INVENTORY_DEALERSHIP_ID = "2175";
+export const ORR_INVENTORY_DEALERSHIP_NAME = "Orr Nissan West";
 
 function requiredIdentity(value: string | undefined, field: string, vin: string) {
   if (!value?.trim()) throw new Error(`ORR_PROVIDER_IDENTITY_INCOMPLETE:${field}:${vin}`);
@@ -17,9 +17,9 @@ function mapRecord(record: ReturnType<typeof normalizeOrrAlgoliaDiscovery>["reco
   const model = requiredIdentity(record.model, "model", record.vin);
 
   return {
-    providerId: PROVIDER_ID,
-    dealershipId: DEALERSHIP_ID,
-    dealershipName: DEALERSHIP_NAME,
+    providerId: ORR_INVENTORY_PROVIDER_ID,
+    dealershipId: ORR_INVENTORY_DEALERSHIP_ID,
+    dealershipName: ORR_INVENTORY_DEALERSHIP_NAME,
     sourceUrl: record.sourceUrl,
     sourceRecordId: record.sourceVehicleId ?? record.vin,
     sourceFetchedAt: record.fetchedAt,
@@ -52,7 +52,7 @@ function mapRecord(record: ReturnType<typeof normalizeOrrAlgoliaDiscovery>["reco
 
 export function buildOrrProviderSnapshot(discovery: OrrAlgoliaDiscovery): InventoryProviderSnapshot {
   if (!discovery.completeSnapshot) throw new Error("ORR_PROVIDER_SNAPSHOT_INCOMPLETE");
-  if (discovery.dealerId !== Number(DEALERSHIP_ID)) throw new Error("ORR_PROVIDER_DEALER_BOUNDARY_MISMATCH");
+  if (discovery.dealerId !== Number(ORR_INVENTORY_DEALERSHIP_ID)) throw new Error("ORR_PROVIDER_DEALER_BOUNDARY_MISMATCH");
 
   const normalized = normalizeOrrAlgoliaDiscovery(discovery);
   const fatalIssues = normalized.issues.filter((issue) => issue.severity === "ERROR");
@@ -61,9 +61,9 @@ export function buildOrrProviderSnapshot(discovery: OrrAlgoliaDiscovery): Invent
   }
 
   return assertProviderSnapshotBoundary({
-    providerId: PROVIDER_ID,
-    dealershipId: DEALERSHIP_ID,
-    dealershipName: DEALERSHIP_NAME,
+    providerId: ORR_INVENTORY_PROVIDER_ID,
+    dealershipId: ORR_INVENTORY_DEALERSHIP_ID,
+    dealershipName: ORR_INVENTORY_DEALERSHIP_NAME,
     authorized: true,
     fetchedAt: discovery.fetchedAt,
     sourceUrl: discovery.sourceUrl,
@@ -73,7 +73,7 @@ export function buildOrrProviderSnapshot(discovery: OrrAlgoliaDiscovery): Invent
 }
 
 export class OrrInventoryProviderAdapter implements InventoryProviderAdapter {
-  readonly providerId = PROVIDER_ID;
+  readonly providerId = ORR_INVENTORY_PROVIDER_ID;
 
   constructor(private readonly discover: () => Promise<OrrAlgoliaDiscovery> = () => discoverOrrAlgoliaInventory({ hitsPerPage: 100, maxPages: 10 })) {}
 
