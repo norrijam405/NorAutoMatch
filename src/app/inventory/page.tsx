@@ -27,7 +27,7 @@ export default async function InventoryPage() {
 
   const sourceLabel = catalog.source === "provider-cache" ? "Verified cached inventory" : "Verified live inventory";
 
-  return <main className="min-h-screen bg-[#070b10] py-8 sm:py-12"><div className="shell"><div className="mb-6 flex items-center justify-between gap-4"><Link href="/" className="inline-flex items-center gap-2 text-sm font-black text-slate-400 hover:text-white"><ArrowLeft size={16} /> Home</Link><div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[.16em] text-emerald-300"><ShieldCheck size={14} /> {sourceLabel}</div></div><InteractiveInventory vehicles={catalog.vehicles} fetchedAt={catalog.sourceEvidence?.fetchedAt} /></div></main>;
+  return <main className="min-h-screen bg-[#070b10] py-8 sm:py-12"><div className="shell"><div className="mb-6 flex flex-wrap items-center justify-between gap-4"><div className="flex flex-wrap items-center gap-4"><Link href="/" className="inline-flex items-center gap-2 text-sm font-black text-slate-400 hover:text-white"><ArrowLeft size={16} /> Home</Link><Link href="/vehicles" className="text-sm font-black text-amber-300 hover:text-amber-200">Vehicle details →</Link></div><div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[.16em] text-emerald-300"><ShieldCheck size={14} /> {sourceLabel}</div></div><InteractiveInventory vehicles={catalog.vehicles} fetchedAt={catalog.sourceEvidence?.fetchedAt} /></div></main>;
 }
 
 function InventoryUnavailable({ reason }: { reason: string }) {
