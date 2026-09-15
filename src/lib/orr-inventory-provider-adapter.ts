@@ -1,11 +1,12 @@
 import type { InventoryProviderAdapter, InventoryProviderRecord, InventoryProviderSnapshot } from "./inventory-provider-contract";
 import { assertProviderSnapshotBoundary } from "./inventory-provider-contract";
 import { normalizeOrrAlgoliaDiscovery } from "./orr-algolia-normalizer";
+import {
+  ORR_INVENTORY_DEALERSHIP_ID,
+  ORR_INVENTORY_DEALERSHIP_NAME,
+  ORR_INVENTORY_PROVIDER_ID,
+} from "./orr-inventory-provider-identity";
 import { discoverOrrAlgoliaInventory, type OrrAlgoliaDiscovery } from "./orr-public-algolia";
-
-export const ORR_INVENTORY_PROVIDER_ID = "ridemotive-algolia";
-export const ORR_INVENTORY_DEALERSHIP_ID = "2175";
-export const ORR_INVENTORY_DEALERSHIP_NAME = "Orr Nissan West";
 
 function requiredIdentity(value: string | undefined, field: string, vin: string) {
   if (!value?.trim()) throw new Error(`ORR_PROVIDER_IDENTITY_INCOMPLETE:${field}:${vin}`);
