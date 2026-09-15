@@ -5,7 +5,8 @@ export type Vehicle = {
   model: string;
   trim: string;
   price: number;
-  type: "SUV" | "Sedan" | "Truck";
+  /** Source-supported body/category label. Do not drop valid inventory because it is not SUV/Sedan/Truck. */
+  type: string;
   mileage: number;
   drivetrain: string;
   image: string;
@@ -19,6 +20,8 @@ export type Vehicle = {
   fuelType?: string;
   cityMpg?: number;
   highwayMpg?: number;
+  inTransit?: boolean;
+  sourceStockStatus?: string;
 };
 
 // Demonstration inventory for non-live development only. Production/customer-visible
