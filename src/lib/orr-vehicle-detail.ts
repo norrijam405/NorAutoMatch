@@ -21,9 +21,14 @@ export async function loadVerifiedOrrVehicleDetail(vinInput: string): Promise<{
   }
 
   const normalized = normalizeOrrAlgoliaDiscovery(discovery);
-  const fatalIssues = normalized.issues.filter((issue) => issue.severity === "ERROR");
-  if (fatalIssues.length > 0) {
-    throw new Error(`NORAUTO_VEHICLE_DETAIL_NORMALIZATION_FAILED:${fatalIssues.map((issue) => issue.code).join(",")}`);
+  // Do not let an unrelated malformed dealer record suppress a healthy VIN detail page.
+  // Snapshot-wide transport/source integrity still has to pass above; here we fail closed
+  // only when the requested VIN itself carries a fatal normalization issue.
+  const targetFatalIssues = normalized.issues.filter(
+    (issue) => issue.severity === "ERROR" && issue.vin?.toUpperCase() === vin,
+  );
+  if (targetFatalIssues.length > 0) {
+    throw new Error(`NORAUTO_VEHICLE_DETAIL_NORMALIZATION_FAILED:${targetFatalIssues.map((issue) => issue.code).join(",")}`);
   }
 
   const vehicle = normalized.records.find((record) => record.vin === vin);
