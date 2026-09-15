@@ -1,7 +1,7 @@
 import type { LiveInventoryRecord } from "./live-inventory";
 import { normalizeOrrAlgoliaDiscovery } from "./orr-algolia-normalizer";
 import { buildInventoryShadowReceipt } from "./inventory-shadow-receipt";
-import { discoverOrrAlgoliaInventory } from "./orr-public-algolia";
+import { discoverOrrAlgoliaInventoryCached } from "./orr-public-algolia-cache";
 
 const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/i;
 
@@ -14,7 +14,7 @@ export async function loadVerifiedOrrVehicleDetail(vinInput: string): Promise<{
   const vin = vinInput.trim().toUpperCase();
   if (!VIN_RE.test(vin)) throw new Error("NORAUTO_VEHICLE_DETAIL_INVALID_VIN");
 
-  const discovery = await discoverOrrAlgoliaInventory({ hitsPerPage: 100, maxPages: 10 });
+  const discovery = await discoverOrrAlgoliaInventoryCached({ hitsPerPage: 100, maxPages: 10 });
   const sourceGate = buildInventoryShadowReceipt(discovery);
   if (sourceGate.gate.status !== "PASS") {
     throw new Error(`NORAUTO_VEHICLE_DETAIL_SOURCE_GATE_FAILED:${sourceGate.gate.reasons.join(",")}`);
