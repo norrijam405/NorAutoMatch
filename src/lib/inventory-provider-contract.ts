@@ -14,6 +14,10 @@ export type InventoryProviderRecord = {
   trim?: string;
   condition?: string;
   price?: number;
+  marketPrice?: number;
+  discountAmount?: number;
+  docFee?: number;
+  displayedDealerSubtotal?: number;
   msrp?: number;
   mileage?: number;
   exteriorColor?: string;
@@ -21,6 +25,8 @@ export type InventoryProviderRecord = {
   drivetrain?: string;
   transmission?: string;
   engine?: string;
+  horsepower?: number;
+  doors?: number;
   fuelType?: string;
   cityMpg?: number;
   highwayMpg?: number;
