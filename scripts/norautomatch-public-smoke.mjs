@@ -17,17 +17,36 @@ async function hit(path) {
     contentType: response.headers.get("content-type"),
   };
 
+  if (path === "/") {
+    result.hero = {
+      liveSwipeMatch: body.includes("Live SwipeMatch"),
+      openExactVin: body.includes("Open exact VIN"),
+      verifiedVin: body.includes("Verified VIN"),
+      ridemotiveImage: body.includes("images.app.ridemotive.com"),
+    };
+  }
+
   if (path === "/api/inventory" && response.ok) {
     const json = JSON.parse(body);
+    const vehicles = Array.isArray(json.vehicles) ? json.vehicles : [];
+    const vehiclesWithHttpImage = vehicles.filter((vehicle) => /^https:\/\//.test(String(vehicle.image || ""))).length;
+    const ridemotiveImages = vehicles.filter((vehicle) => /^https:\/\/images\.app\.ridemotive\.com\//.test(String(vehicle.image || ""))).length;
     result.source = json.source;
     result.mode = json.effectiveMode;
-    result.count = Array.isArray(json.vehicles) ? json.vehicles.length : null;
-    result.vin = json.vehicles?.[0]?.id ?? null;
+    result.count = vehicles.length;
+    result.vin = vehicles[0]?.id ?? null;
+    result.images = {
+      withHttpImage: vehiclesWithHttpImage,
+      ridemotive: ridemotiveImages,
+      coverage: vehicles.length > 0 ? vehiclesWithHttpImage / vehicles.length : 0,
+    };
     result.evidence = json.sourceEvidence
       ? {
           rawHitCount: json.sourceEvidence.rawHitCount,
           normalizedCount: json.sourceEvidence.normalizedCount,
           eligibleCount: json.sourceEvidence.eligibleCount,
+          rejectedCount: json.sourceEvidence.rejectedCount,
+          inTransitCount: json.sourceEvidence.inTransitCount,
           warningCount: json.sourceEvidence.warningCount,
           errorCount: json.sourceEvidence.errorCount,
         }
@@ -59,6 +78,7 @@ if (inventory?.status === "fulfilled") {
         containsVin: detail.body.includes(api.vin),
         containsVerifiedLabel: detail.body.includes("Source-verified VIN"),
         containsEquipmentSection: detail.body.includes("Source-provided equipment"),
+        containsRidemotiveImage: detail.body.includes("images.app.ridemotive.com"),
       })}`,
     );
   }
@@ -80,6 +100,17 @@ for (const result of results) {
   }
   if (expected.has(result.path) && result.status !== expected.get(result.path)) failed = true;
   if (["/account", "/garage", "/manager"].includes(result.path) && ![302, 303, 307, 308].includes(result.status)) failed = true;
+
+  if (result.path === "/") {
+    if (!result.hero?.liveSwipeMatch || !result.hero?.openExactVin || !result.hero?.verifiedVin || !result.hero?.ridemotiveImage) failed = true;
+  }
+
+  if (result.path === "/api/inventory") {
+    if (result.source !== "orr-live" || result.mode !== "live-enabled") failed = true;
+    if (!Number.isFinite(result.count) || result.count <= 0) failed = true;
+    if (!result.evidence || result.evidence.rawHitCount < result.count) failed = true;
+    if (!result.images || result.images.coverage < 0.9 || result.images.ridemotive <= 0) failed = true;
+  }
 }
 
 if (failed) process.exitCode = 1;
