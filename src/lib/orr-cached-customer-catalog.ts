@@ -6,7 +6,7 @@ import { resolveInventoryRuntime } from "./inventory-runtime";
 import {
   ORR_INVENTORY_DEALERSHIP_ID,
   ORR_INVENTORY_PROVIDER_ID,
-} from "./orr-inventory-provider-adapter";
+} from "./orr-inventory-provider-identity";
 
 let inventoryCachePool: Pool | undefined;
 
