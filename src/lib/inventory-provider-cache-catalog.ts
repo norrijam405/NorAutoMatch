@@ -42,7 +42,7 @@ export function buildProviderCachedCatalog(input: {
 }
 
 export async function loadProviderCachedCatalog(input: {
-  pool: Pool;
+  pool?: Pool;
   providerId: string;
   dealershipId: string;
   mode?: string;
@@ -59,6 +59,8 @@ export async function loadProviderCachedCatalog(input: {
       generatedAt: new Date(input.nowMs ?? Date.now()).toISOString(),
     }));
   }
+
+  if (!input.pool) throw new Error("INVENTORY_CACHE_DATABASE_UNAVAILABLE");
 
   const cached = await loadCachedCustomerInventory({
     pool: input.pool,
