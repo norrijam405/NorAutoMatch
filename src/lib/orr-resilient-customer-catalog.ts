@@ -10,16 +10,39 @@ export type OrrResilientCatalogOptions = {
   maxAgeMs?: number;
 };
 
+const LIVE_PROCESS_CACHE_TTL_MS = 60_000;
+let processLiveCatalog: { catalog: InventoryCatalog; cachedAtMs: number } | undefined;
+let inflightLiveCatalog: Promise<InventoryCatalog> | undefined;
+
+async function loadSingleFlightLiveCatalog(options: OrrResilientCatalogOptions) {
+  const nowMs = options.nowMs ?? Date.now();
+  if (processLiveCatalog && nowMs - processLiveCatalog.cachedAtMs <= LIVE_PROCESS_CACHE_TTL_MS) {
+    return processLiveCatalog.catalog;
+  }
+
+  if (inflightLiveCatalog) return inflightLiveCatalog;
+
+  inflightLiveCatalog = loadOrrCustomerCatalog(options)
+    .then((catalog) => {
+      processLiveCatalog = { catalog, cachedAtMs: Date.now() };
+      return catalog;
+    })
+    .finally(() => {
+      inflightLiveCatalog = undefined;
+    });
+
+  return inflightLiveCatalog;
+}
+
 /**
  * Customer-facing Orr catalog loader.
  *
  * Preference order:
  * 1. Durable verified provider cache when present and eligible.
- * 2. Bounded read-only public Orr/Algolia snapshot, passed through the same
- *    source gate, normalization, freshness, dealer boundary, and catalog
- *    integrity checks as the established live path.
+ * 2. A short-lived process-local copy of the most recent verified live catalog.
+ * 3. One bounded read-only public Orr/Algolia fetch shared by concurrent callers.
  *
- * Live-enabled mode never substitutes demonstration inventory when both real
+ * Live-enabled mode never substitutes demonstration inventory when all real
  * sources fail. The caller receives the live error and must fail closed.
  */
 export async function loadOrrResilientCustomerCatalog(
@@ -43,7 +66,7 @@ export async function loadOrrResilientCustomerCatalog(
     );
   }
 
-  // This path remains fail-closed. loadOrrCustomerCatalog performs the public
-  // source gate and throws rather than substituting demo records on live failure.
-  return loadOrrCustomerCatalog(options);
+  // The fallback remains fail-closed. A single verified dealer fetch is shared
+  // by simultaneous homepage/API/catalog requests, then reused for only 60s.
+  return loadSingleFlightLiveCatalog(options);
 }
