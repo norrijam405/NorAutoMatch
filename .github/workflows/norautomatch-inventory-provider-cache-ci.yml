@@ -1,0 +1,84 @@
+name: NorAutoMatch Inventory Provider Cache CI
+
+on:
+  push:
+    branches:
+      - "architecture/**"
+  pull_request:
+    branches:
+      - "reactivation/2026-09-08"
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  provider-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+      - name: Apply checksum-bound production schema twice
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          node scripts/start-production.mjs
+          node scripts/start-production.mjs
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '12'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.inventory_provider_snapshots') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.inventory_provider_current_state') IS NOT NULL" | grep -qx 't'
+      - name: Compile provider-neutral cache verification surface
+        run: |
+          rm -rf .tmp-inventory-provider-cache-tests
+          npx tsc -p tsconfig.inventory-provider-cache-tests.json
+      - name: Execute provider-neutral cache challenges
+        run: node .tmp-inventory-provider-cache-tests/scripts/inventory-provider-cache.behavior.js
+      - name: Execute Postgres persistence challenges
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-provider-cache-tests/scripts/inventory-provider-cache-postgres.integration.js
+      - name: Enforce customer-path source isolation
+        run: |
+          if grep -R -n -F 'loadOrrCustomerCatalog' src/app src/components; then
+            echo 'Customer request path regressed to request-time dealership source discovery.' >&2
+            exit 1
+          fi
+          grep -F 'loadOrrCachedCustomerCatalog' src/app/api/inventory/route.ts
+          grep -F 'loadOrrCachedCustomerCatalog' src/app/inventory/page.tsx
+          grep -F 'loadOrrCachedCustomerCatalog' src/components/inventory/home-inventory-spotlight.tsx
+          grep -F 'loadOrrCachedCustomerCatalog' src/app/api/leads/route.ts
+          grep -F 'export const dynamic = "force-dynamic"' src/app/page.tsx
+          grep -F 'norautomatch-crm-v12-inventory-provider-cache.sql' scripts/start-production.mjs
+      - name: Typecheck customer application
+        run: npm run typecheck
+      - name: Production build cache-backed customer application
+        env:
+          NORAUTO_INVENTORY_MODE: demo
+          NORAUTO_LIVE_INVENTORY_ACTIVATION: ""
+        run: npm run build

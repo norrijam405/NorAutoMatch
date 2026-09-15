@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Search, ShieldCheck, Shuffle } from "lucide-react";
 import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
-import { loadOrrCustomerCatalog } from "@/lib/orr-customer-catalog";
+import { loadOrrCachedCustomerCatalog } from "@/lib/orr-cached-customer-catalog";
 
 export async function HomeInventorySpotlight() {
   const runtime = resolveInventoryRuntime({
@@ -15,7 +15,7 @@ export async function HomeInventorySpotlight() {
 
   let catalog;
   try {
-    catalog = await loadOrrCustomerCatalog({
+    catalog = await loadOrrCachedCustomerCatalog({
       mode: process.env.NORAUTO_INVENTORY_MODE,
       liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
     });
@@ -31,13 +31,13 @@ export async function HomeInventorySpotlight() {
         <div className="rounded-[30px] border border-white/10 bg-white/[.025] p-5 sm:p-7">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[.25em] text-emerald-300"><ShieldCheck size={14} /> Verified live inventory</div>
+              <div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[.25em] text-emerald-300"><ShieldCheck size={14} /> Verified cached inventory</div>
               <h2 className="mt-3 text-4xl font-black leading-[.9] tracking-[-.055em] text-white sm:text-6xl">A QUICK LOOK.<br /><span className="text-red-500">NOT A WALL OF CARS.</span></h2>
               <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base sm:leading-7">Browse a few fresh units here, then open the full inventory playground to search naturally, shortlist, SwipeMatch, compare, and keep building your Garage.</p>
             </div>
             <div className="text-xs text-slate-500 lg:text-right">
               <p>{catalog.vehicles.length} verified eligible units</p>
-              {catalog.sourceEvidence?.fetchedAt && <p>Source checked {new Date(catalog.sourceEvidence.fetchedAt).toLocaleString()}</p>}
+              {catalog.sourceEvidence?.fetchedAt && <p>Cache refreshed {new Date(catalog.sourceEvidence.fetchedAt).toLocaleString()}</p>}
             </div>
           </div>
 
@@ -49,7 +49,7 @@ export async function HomeInventorySpotlight() {
                   <img src={vehicle.image} alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`} className="h-full w-full object-cover" loading="lazy" />
                 </div>
                 <div className="p-4">
-                  <p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-300">Verified live</p>
+                  <p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-300">Verified cached</p>
                   <h3 className="mt-2 text-lg font-black text-white">{vehicle.year} {vehicle.make} {vehicle.model}</h3>
                   <p className="mt-1 text-xs leading-5 text-slate-500">{vehicle.trim} · {vehicle.drivetrain}{vehicle.exteriorColor ? ` · ${vehicle.exteriorColor}` : ""}</p>
                   <p className="mt-3 text-[11px] text-slate-600">VIN-specific figures available when you&apos;re ready.</p>
@@ -78,7 +78,7 @@ function InventoryTeaserUnavailable() {
           <div className="relative">
             <p className="text-[10px] font-black uppercase tracking-[.25em] text-red-400">Verified inventory</p>
             <h2 className="mt-3 text-4xl font-black tracking-[-.05em] text-white">Fresh inventory is being verified.</h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">NorAuto does not fill this space with stale or invented units. The inventory playground returns when the source passes verification.</p>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">NorAuto does not fill this space with stale or invented units. The inventory playground returns when the cache passes verification.</p>
             <Link href="/inventory" className="mt-5 inline-flex min-h-12 items-center gap-2 rounded-full border border-white/15 px-5 text-sm font-black text-white">Check inventory <ArrowRight size={16} /></Link>
           </div>
         </div>

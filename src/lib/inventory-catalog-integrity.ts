@@ -17,11 +17,12 @@ export type CatalogIntegrityFinding = {
 
 export function verifyInventoryCatalogIntegrity(catalog: InventoryCatalog): CatalogIntegrityFinding[] {
   const findings: CatalogIntegrityFinding[] = [];
+  const liveSource = catalog.source !== "demo";
 
-  if (catalog.source === "orr-live" && !catalog.customerVisibleLiveInventory) {
-    findings.push({ code: "LIVE_SOURCE_WITHOUT_ACTIVATION", message: "Live source catalog cannot be customer-visible without an activated runtime decision." });
+  if (liveSource && !catalog.customerVisibleLiveInventory) {
+    findings.push({ code: "LIVE_SOURCE_WITHOUT_ACTIVATION", message: "Live-source catalog cannot be customer-visible without an activated runtime decision." });
   }
-  if (catalog.effectiveMode === "live-enabled" && catalog.source !== "orr-live") {
+  if (catalog.effectiveMode === "live-enabled" && !liveSource) {
     findings.push({ code: "LIVE_MODE_WITH_DEMO_SOURCE", message: "Activated live mode cannot silently present demonstration inventory." });
   }
 
@@ -32,7 +33,7 @@ export function verifyInventoryCatalogIntegrity(catalog: InventoryCatalog): Cata
     }
     ids.add(vehicle.id);
 
-    if (catalog.source === "orr-live" && !VIN_RE.test(vehicle.id)) {
+    if (liveSource && !VIN_RE.test(vehicle.id)) {
       findings.push({ code: "LIVE_ID_NOT_VIN", vehicleId: vehicle.id, message: "Live customer vehicle identifier must be the normalized VIN." });
     }
     if (!Number.isFinite(vehicle.price) || vehicle.price <= 0) {

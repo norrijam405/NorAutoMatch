@@ -3,6 +3,8 @@ import { ArrowDown, ArrowRight, BadgeCheck, CarFront, Gauge, Heart, MessageSquar
 import { HomeInventorySpotlight } from "@/components/inventory/home-inventory-spotlight";
 import { brand } from "@/lib/brand";
 
+export const dynamic = "force-dynamic";
+
 export default function HomePage() {
   return (
     <>
