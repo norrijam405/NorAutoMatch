@@ -20,7 +20,7 @@ export type CachedInventoryReadResult = {
 function normalizeBodyType(value?: string): Vehicle["type"] | undefined {
   if (!value) return undefined;
   const text = value.toLowerCase();
-  if (text.includes("suv") || text.includes("crossover")) return "SUV";
+  if (text.includes("suv") || text.includes("crossover") || text.includes("station wagon")) return "SUV";
   if (text.includes("truck") || text.includes("pickup")) return "Truck";
   if (text.includes("sedan") || text.includes("car")) return "Sedan";
   return undefined;
@@ -34,17 +34,28 @@ function recordToVehicle(record: InventoryProviderRecord): Vehicle | undefined {
   const type = normalizeBodyType(record.bodyType);
   if (!Number.isFinite(year) || !record.make.trim() || !record.model.trim() || !record.trim?.trim() || !record.price || !type) return undefined;
 
+  const photos = record.sourcePhotos.map((photo) => photo.url).filter(Boolean);
+
   return {
     id: record.vin,
+    vin: record.vin,
+    stockNumber: record.stockNumber,
     year,
     make: record.make,
     model: record.model,
     trim: record.trim,
     price: record.price,
+    marketPrice: record.marketPrice,
+    discountAmount: record.discountAmount,
+    docFee: record.docFee,
+    displayedDealerSubtotal: record.displayedDealerSubtotal,
+    msrp: record.msrp,
     type,
     mileage: record.mileage ?? 0,
     drivetrain: record.drivetrain ?? "Unknown",
-    image: record.sourcePhotos[0]?.url ?? "/images/vehicle-placeholder.jpg",
+    image: photos[0] ?? "/images/vehicle-placeholder.jpg",
+    photos: photos.length > 0 ? photos : undefined,
+    vehicleUrl: record.vehicleUrl,
     accent: record.exteriorColor ?? "Color unavailable",
     condition: record.condition,
     exteriorColor: record.exteriorColor,
@@ -52,6 +63,8 @@ function recordToVehicle(record: InventoryProviderRecord): Vehicle | undefined {
     features: record.features,
     transmission: record.transmission,
     engine: record.engine,
+    horsepower: record.horsepower,
+    doors: record.doors,
     fuelType: record.fuelType,
     cityMpg: record.cityMpg,
     highwayMpg: record.highwayMpg,
