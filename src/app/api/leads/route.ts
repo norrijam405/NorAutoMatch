@@ -5,7 +5,7 @@ import { buildDeskPrepPacket } from "@/lib/desk-prep";
 import { classifyLeadInventoryEvidence } from "@/lib/lead-inventory-evidence";
 import { leadSchema } from "@/lib/lead-schema";
 import { createManagerHandoff } from "@/lib/manager-handoff";
-import { loadOrrCustomerCatalog } from "@/lib/orr-customer-catalog";
+import { loadOrrCachedCustomerCatalog } from "@/lib/orr-cached-customer-catalog";
 import {
   MemoryPublicAbuseCounterStore,
   evaluatePublicAbuse,
@@ -128,7 +128,7 @@ export async function POST(request: Request) {
 
   if (parsed.data.shortlistedVehicleIds.length > 0) {
     try {
-      const catalog = await loadOrrCustomerCatalog({
+      const catalog = await loadOrrCachedCustomerCatalog({
         mode: process.env.NORAUTO_INVENTORY_MODE,
         liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
       });
