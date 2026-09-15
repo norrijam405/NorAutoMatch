@@ -19,9 +19,10 @@ export type InventoryProviderStateChange =
   | { type: "UNCHANGED"; vin: string; current: InventoryProviderRecord };
 
 const MATERIAL_FIELDS: Array<keyof InventoryProviderRecord> = [
-  "stockNumber", "modelYear", "make", "model", "trim", "condition", "price", "msrp", "mileage",
-  "exteriorColor", "interiorColor", "drivetrain", "transmission", "engine", "fuelType", "cityMpg",
-  "highwayMpg", "bodyType", "inTransit", "features", "sourcePhotos", "vehicleUrl",
+  "stockNumber", "modelYear", "make", "model", "trim", "condition", "price", "marketPrice", "discountAmount",
+  "docFee", "displayedDealerSubtotal", "msrp", "mileage", "exteriorColor", "interiorColor", "drivetrain",
+  "transmission", "engine", "horsepower", "doors", "fuelType", "cityMpg", "highwayMpg", "bodyType", "inTransit",
+  "features", "sourcePhotos", "vehicleUrl",
 ];
 
 function comparable(value: unknown) {
