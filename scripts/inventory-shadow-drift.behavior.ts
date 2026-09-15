@@ -25,6 +25,7 @@ function receipt(overrides: Partial<InventoryShadowReceipt> = {}): InventoryShad
       warningCount: 32,
       errorCount: 3,
       blockingErrorCount: 0,
+      quarantinedErrorCount: 0,
       inactiveExcludedCount: 3,
       issueCounts: { INACTIVE_HIT: 3, STOCK_NUMBER_MISSING: 32 },
     },
@@ -53,7 +54,7 @@ assert(stableDiff.doesNotProve.includes("VEHICLE_SOLD_OR_REMOVED"));
 
 const changed = receipt({
   source: { ...previous.source, fetchedAt: "2026-09-10T00:00:00.000Z", sourceHash: "b".repeat(64), rawHitCount: 300, reportedHitCount: 300 },
-  normalization: { ...previous.normalization, normalizedCount: 296, eligibleCount: 135, warningCount: 35, errorCount: 4, blockingErrorCount: 1, inactiveExcludedCount: 3, issueCounts: { INACTIVE_HIT: 3, STOCK_NUMBER_MISSING: 35, PRICE_INVALID: 1 } },
+  normalization: { ...previous.normalization, normalizedCount: 296, eligibleCount: 135, warningCount: 35, errorCount: 4, blockingErrorCount: 1, quarantinedErrorCount: 0, inactiveExcludedCount: 3, issueCounts: { INACTIVE_HIT: 3, STOCK_NUMBER_MISSING: 35, PRICE_INVALID: 1 } },
   gate: { status: "FAIL", reasons: ["NORMALIZATION_ERROR_PRICE_INVALID"] },
 });
 const changedDiff = compareInventoryShadowReceipts(previous, changed);
