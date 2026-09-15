@@ -1,7 +1,7 @@
 import { FlaskConical, MessageSquareText, ShieldCheck } from "lucide-react";
 import type { InventoryCatalog } from "@/lib/inventory-catalog";
 import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
-import { loadOrrCustomerCatalog } from "@/lib/orr-customer-catalog";
+import { loadOrrCachedCustomerCatalog } from "@/lib/orr-cached-customer-catalog";
 import { brand } from "@/lib/brand";
 import { AutoMatcher } from "./auto-matcher";
 import { VerifiedLiveMatcher } from "./verified-live-matcher";
@@ -23,14 +23,14 @@ export async function RuntimeAutoMatcher() {
 
   let catalog: InventoryCatalog | undefined;
   try {
-    catalog = await loadOrrCustomerCatalog({
+    catalog = await loadOrrCachedCustomerCatalog({
       mode: process.env.NORAUTO_INVENTORY_MODE,
       liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
     });
   } catch (error) {
-    console.error("NORAUTO_LIVE_INVENTORY_LOAD_FAILED", {
+    console.error("NORAUTO_CACHED_INVENTORY_LOAD_FAILED", {
       name: error instanceof Error ? error.name : "UnknownError",
-      message: error instanceof Error ? error.message : "Unknown live inventory failure",
+      message: error instanceof Error ? error.message : "Unknown cached inventory failure",
     });
     catalog = undefined;
   }
