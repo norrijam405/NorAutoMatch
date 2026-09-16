@@ -4,17 +4,17 @@ import Link from "next/link";
 import { LogIn, Menu, MessageSquareText, Phone, X } from "lucide-react";
 import { useState } from "react";
 import { brand } from "@/lib/brand";
+import { NAM_BADGE_DATA_URI } from "@/lib/brand-images";
 
 export function Logo() {
   return (
     <Link href="/" className="group inline-flex min-w-0 items-center gap-2.5 sm:gap-3" aria-label="NorAuto Match home">
-      <span className="relative grid size-9 shrink-0 place-items-center rounded-xl border border-amber-400/30 bg-amber-400/10 sm:size-10">
-        <span className="h-2.5 w-5 -rotate-45 border-b-[3px] border-l-[3px] border-amber-300" />
-        <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399]" />
+      <span className="relative grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl border border-red-500/20 bg-black/35 shadow-[0_0_24px_rgba(239,68,68,.08)] sm:size-11">
+        <img src={NAM_BADGE_DATA_URI} alt="" className="size-full object-contain" />
       </span>
       <span className="min-w-0 leading-none">
         <span className="block text-[15px] font-black tracking-tight text-white sm:text-base">NorAuto Match</span>
-        <span className="mt-1 block truncate text-[8px] font-bold uppercase tracking-[.11em] text-amber-300 sm:text-[9px]">Car shopping, without the pressure</span>
+        <span className="mt-1 block truncate text-[8px] font-bold uppercase tracking-[.11em] text-red-300 sm:text-[9px]">Car shopping, without the pressure</span>
       </span>
     </Link>
   );
@@ -39,13 +39,13 @@ export function Header() {
           {links.map((link) => <Link key={link.href} href={link.href} className="text-sm font-semibold text-slate-300 hover:text-white">{link.label}</Link>)}
         </nav>
         <div className="hidden items-center gap-2 sm:flex">
-          <Link href="/login" className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm font-black text-white hover:border-amber-300/50 hover:text-amber-200"><LogIn size={16} /> Sign in</Link>
+          <Link href="/login" className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm font-black text-white hover:border-red-300/50 hover:text-red-200"><LogIn size={16} /> Sign in</Link>
           <a href={brand.textHref} className="btn-secondary min-h-10 px-4 py-2"><MessageSquareText size={16} /> Text me</a>
           <a href={`tel:${brand.phoneRaw}`} className="btn-primary min-h-10 px-4 py-2"><Phone size={16} /> {brand.phoneDisplay}</a>
         </div>
         <button className="grid size-10 shrink-0 place-items-center rounded-xl border border-white/10 md:hidden" onClick={() => setOpen(!open)} aria-label="Toggle menu" aria-expanded={open}>{open ? <X size={20} /> : <Menu size={20} />}</button>
       </div>
-      {open && <div className="border-t border-white/10 bg-slate-950 px-4 py-4 md:hidden"><nav className="shell flex flex-col gap-1.5">{links.map((link) => <Link key={link.href} href={link.href} onClick={() => setOpen(false)} className="rounded-xl px-3 py-3 text-base font-semibold text-slate-200 hover:bg-white/5">{link.label}</Link>)}<Link href="/login" onClick={() => setOpen(false)} className="mt-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-amber-300/30 bg-amber-300/10 px-4 font-black text-amber-200"><LogIn size={16} /> Sign in / Create account</Link><div className="mt-3 grid grid-cols-2 gap-2"><a href={brand.textHref} className="btn-secondary min-h-11"><MessageSquareText size={16} /> Text</a><a href={`tel:${brand.phoneRaw}`} className="btn-primary min-h-11"><Phone size={16} /> Call</a></div></nav></div>}
+      {open && <div className="border-t border-white/10 bg-slate-950 px-4 py-4 md:hidden"><nav className="shell flex flex-col gap-1.5">{links.map((link) => <Link key={link.href} href={link.href} onClick={() => setOpen(false)} className="rounded-xl px-3 py-3 text-base font-semibold text-slate-200 hover:bg-white/5">{link.label}</Link>)}<Link href="/login" onClick={() => setOpen(false)} className="mt-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-300/30 bg-red-300/10 px-4 font-black text-red-200"><LogIn size={16} /> Sign in / Create account</Link><div className="mt-3 grid grid-cols-2 gap-2"><a href={brand.textHref} className="btn-secondary min-h-11"><MessageSquareText size={16} /> Text</a><a href={`tel:${brand.phoneRaw}`} className="btn-primary min-h-11"><Phone size={16} /> Call</a></div></nav></div>}
     </header>
   );
 }
