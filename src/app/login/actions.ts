@@ -8,8 +8,8 @@ function safeNext(value: FormDataEntryValue | null) {
   return path.startsWith("/") && !path.startsWith("//") ? path : "/account";
 }
 
-function authError(message: string, nextPath: string) {
-  redirect(`/login?error=${encodeURIComponent(message)}&next=${encodeURIComponent(nextPath)}`);
+function authError(message: string, nextPath: string, mode: "signin" | "signup" = "signin") {
+  redirect(`/login?mode=${mode}&error=${encodeURIComponent(message)}&next=${encodeURIComponent(nextPath)}`);
 }
 
 export async function login(formData: FormData) {
@@ -17,11 +17,18 @@ export async function login(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const nextPath = safeNext(formData.get("next"));
 
-  if (!email || !password) authError("Email and password are required.", nextPath);
+  if (!email || !password) authError("Enter both your email and password.", nextPath, "signin");
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) authError("Sign-in failed. Check your credentials and try again.", nextPath);
+
+  if (error) {
+    const code = "code" in error ? error.code : undefined;
+    if (code === "email_not_confirmed") {
+      authError("This account still needs email confirmation. Open the confirmation email first, then come back and sign in with the same email and password.", nextPath, "signin");
+    }
+    authError("That email and password did not sign in. If this is your first visit, choose Create account instead.", nextPath, "signin");
+  }
 
   redirect(nextPath);
 }
@@ -32,7 +39,7 @@ export async function signup(formData: FormData) {
   const nextPath = safeNext(formData.get("next"));
 
   if (!email || password.length < 8) {
-    authError("Use a valid email and a password with at least 8 characters.", nextPath);
+    authError("Enter a valid email and choose a password with at least 8 characters.", nextPath, "signup");
   }
 
   const supabase = await createClient();
@@ -43,7 +50,8 @@ export async function signup(formData: FormData) {
     options: { emailRedirectTo: `${siteUrl}/auth/confirm?next=${encodeURIComponent(nextPath)}` },
   });
 
-  if (error) authError("Account creation failed. Please try again.", nextPath);
+  if (error) authError("We could not create the account. Check the email/password and try again.", nextPath, "signup");
   if (data.session) redirect(nextPath);
-  redirect(`/login?message=${encodeURIComponent("Check your email to confirm your account, then sign in.")}&next=${encodeURIComponent(nextPath)}`);
+
+  redirect(`/login?mode=signin&message=${encodeURIComponent("Account request received. Check the inbox for the email you just used, open the NorAuto Match confirmation link, then return here and sign in with that same email and password.")}&next=${encodeURIComponent(nextPath)}`);
 }
