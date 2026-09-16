@@ -11,18 +11,14 @@ export type InventoryBridgeResult = {
 
 function normalizeBodyType(value?: string): Vehicle["type"] | undefined {
   if (!value) return undefined;
-  const text = value.toLowerCase();
-  if (text.includes("suv") || text.includes("crossover")) return "SUV";
-  if (text.includes("truck") || text.includes("pickup")) return "Truck";
-  if (text.includes("sedan") || text.includes("car")) return "Sedan";
-  return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
 }
 
 export function liveRecordToVehicle(record: LiveInventoryRecord): Vehicle | undefined {
   const type = normalizeBodyType(record.bodyType);
   if (
     !isMatchEligible(record) ||
-    record.inTransit === true ||
     !record.year ||
     !record.make ||
     !record.model ||
@@ -54,6 +50,8 @@ export function liveRecordToVehicle(record: LiveInventoryRecord): Vehicle | unde
     fuelType: record.fuelType,
     cityMpg: record.cityMpg,
     highwayMpg: record.highwayMpg,
+    inTransit: record.inTransit,
+    sourceStockStatus: record.sourceStockStatus,
   };
 }
 
@@ -72,10 +70,6 @@ export function selectInventoryForMatcher(input: {
 
   for (const raw of input.liveRecords) {
     const record = qualifyFreshness(raw, input.nowMs);
-    if (record.inTransit === true) {
-      rejected.push({ vin: raw.vin, reason: "source_status:in_transit" });
-      continue;
-    }
     const vehicle = liveRecordToVehicle(record);
     if (!vehicle) {
       rejected.push({ vin: raw.vin, reason: `not_match_eligible:${record.availabilityState}` });
