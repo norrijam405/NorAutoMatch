@@ -21,6 +21,34 @@ export type Database = {
         Update: { user_id?: string; vin?: string; created_at?: string };
         Relationships: [];
       };
+      match_dna_events: {
+        Row: {
+          id: number; user_id: string; vin: string; action: string; surface: string;
+          year: number | null; make: string | null; model: string | null; trim: string | null;
+          condition: string | null; body_type: string | null; drivetrain: string | null;
+          price: number | null; mileage: number | null; created_at: string;
+        };
+        Insert: {
+          id?: number; user_id: string; vin: string; action: string; surface?: string;
+          year?: number | null; make?: string | null; model?: string | null; trim?: string | null;
+          condition?: string | null; body_type?: string | null; drivetrain?: string | null;
+          price?: number | null; mileage?: number | null; created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["match_dna_events"]["Row"]>;
+        Relationships: [];
+      };
+      market_scout_jobs: {
+        Row: { id: number; user_id: string; vin: string; status: string; requested_at: string; updated_at: string; last_error: string | null };
+        Insert: { id?: number; user_id: string; vin: string; status?: string; requested_at?: string; updated_at?: string; last_error?: string | null };
+        Update: Partial<Database["public"]["Tables"]["market_scout_jobs"]["Row"]>;
+        Relationships: [];
+      };
+      vehicle_scout_dossiers: {
+        Row: { vin: string; status: string; research_version: string; summary: string | null; pros: Json; cons: Json; watch_items: Json; sources: Json; researched_at: string | null; updated_at: string };
+        Insert: { vin: string; status?: string; research_version?: string; summary?: string | null; pros?: Json; cons?: Json; watch_items?: Json; sources?: Json; researched_at?: string | null; updated_at?: string };
+        Update: Partial<Database["public"]["Tables"]["vehicle_scout_dossiers"]["Row"]>;
+        Relationships: [];
+      };
       inventory_vehicles: {
         Row: {
           vin: string; workspace_id: string; dealer_id: number; provider: string; source_url: string;
