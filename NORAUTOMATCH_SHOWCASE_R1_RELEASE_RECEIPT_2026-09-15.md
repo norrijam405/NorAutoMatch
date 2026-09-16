@@ -1,10 +1,10 @@
-# NorAutoMatch Showcase R1 — Public Release Receipt
+# NorAutoMatch Showcase R1 — Closure Receipt
 
-Date: 2026-09-15
-Truth state: PUBLIC SHOWCASE LIVE / OUTSIDE-IN VERIFIED
-Authority effect: NONE
-Customer transaction authority: NONE
-Paid infrastructure commitment: NONE
+Date: 2026-09-16
+Truth state: **PUBLIC SHOWCASE LIVE / OUTSIDE-IN VERIFIED / DEMO-READY**
+Authority effect: **NONE**
+Customer transaction authority: **NONE**
+Paid infrastructure commitment: **NONE**
 
 ## Public showcase
 
@@ -14,102 +14,126 @@ Paid infrastructure commitment: NONE
 - Plan: free
 - Region: Ohio
 - Source branch: `feature/2026-09-15-supabase-auth-r1`
-- Release candidate SHA proven before smoke: `3728d58118ad3a101dd02114acb16ee9535b0715`
+- Current verified branch / live release head: `e78802ec06b194c05e1e6e4c835cd1edf3c57145`
 
-The older Render service tracking `main` was intentionally left untouched because its branch lineage does not match the verified NorAutoMatch canonical/candidate lineage.
+The older Render service tracking `main` remains intentionally untouched because its branch lineage differs from the verified NorAutoMatch candidate/canonical lineage.
 
-## Build proof
+## Build and packaging proof
 
-The exact release candidate SHA was routed through the external Render validator because GitHub-hosted Actions capacity was exhausted.
+The current release line has been routed through the external free Render validator because GitHub-hosted Actions capacity was exhausted.
 
-Observed PASS evidence:
+Verified on the release line:
 - dependency resolution completed
 - `npm ci` completed
-- `npm run typecheck` completed
-- Next.js 16.3.3 production build completed
-- all 28 routes generated
-- 521 packages audited
-- 0 npm vulnerabilities reported by that resolution/build
+- TypeScript typecheck completed
+- Next.js production build completed
+- route generation completed
+- 521 packages audited in the validator flow with 0 npm vulnerabilities reported at that time
+- generated `package-lock.json` is now banked canonically in the candidate branch
 
-## Live inventory proof
+## Hardened outside-in public smoke
 
-The public inventory path is `live-enabled` and uses the authorized Orr Nissan West public inventory boundary.
+The hardened smoke worker passed against the live public URL after the auth/navigation/branding corrections.
 
-Outside-in smoke observed:
+Verified:
 - `/` -> 200
 - `/inventory` -> 200
 - `/api/inventory` -> 200
 - `/vehicles` -> 200
 - `/login` -> 200
-- `/account` -> 307 to `/login?next=%2Faccount`
-- `/garage` -> 307 to `/login?next=%2Fgarage`
-- `/manager` -> 307 to `/login?next=%2Fmanager`
+- unauthenticated `/account` -> 307 to login
+- unauthenticated `/garage` -> 307 to login
+- unauthenticated `/manager` -> 307 to login
+- homepage contains Live SwipeMatch
+- homepage contains Full details
+- Garage entry is present in the customer journey
+- Verified VIN marker is present
+- real Ridemotive vehicle image is present
+- session-adaptive SwipeMatch marker is present
+- primary navigation exposes Sign in
+- primary navigation exposes Garage
+- new NAM brand badge is present
+- NorAuto Match brand name is present
+- auth screen has distinct Sign in and Create account modes
+- auth screen exposes one primary submit action per mode
+- resend-confirmation recovery is present
 
-Inventory API evidence in the smoke:
+## Current live inventory evidence
+
+Latest hardened smoke observed:
 - source: `orr-live`
-- effective mode: `live-enabled`
-- customer-visible live inventory: true
-- eligible vehicles returned: 133
-- first smoke VIN: `1C4HJXDGXJW280847`
+- mode: `live-enabled`
+- active store-associated source units: 405
+- fully normalized / customer-usable units: 398
+- quarantined structured rows: 7
+- in-transit units retained: 15
+- usable vehicles with HTTP/Ridemotive photos: 395 / 398 (~99.25%)
 
-Earlier live-source evidence for the same release line recorded:
-- raw dealer records: 293
-- normalized records: 289
-- customer-eligible VINs: 133
-- warnings preserved: 15
-- normalization errors preserved: 4
+Inventory counts are expected to drift with live dealer inventory. The public store boundary follows the Orr site semantics: active inventory associated through `dealer_ids` containing dealer 2175. In-transit vehicles remain eligible because they can still be sold/reserved rather than being automatically hidden.
 
-No demonstration inventory is silently substituted when the live source fails verification.
+Seven imperfect rows are quarantined for incomplete structured fields; they are not represented as nonexistent or unsellable. They remain a V1.1 enrichment target.
 
 ## VIN detail proof
 
-Outside-in VIN smoke opened:
-`/vehicles/1C4HJXDGXJW280847`
+Latest VIN smoke used `1C4BJWEG6GL118769` and returned 200.
 
 Observed:
-- HTTP 200
-- requested VIN present in rendered body
-- `Source-verified VIN` marker present
-- `Source-provided equipment` section present
+- exact VIN present
+- source-verification label present
+- source-provided equipment section present
+- Ridemotive image present
 
-VIN detail pages expose only source-supported fields such as advertised price, MSRP when present, stock number, mileage, drivetrain, colors, engine, transmission, fuel type/economy, source photos, incentives, and equipment. Missing fields remain missing rather than inferred.
+Vehicle detail pages expose source-supported values only. Missing values remain missing rather than being inferred.
 
-## Reliability correction proven
+## Customer experience banked in R1
 
-The first showcase implementation independently refetched the entire dealer snapshot from homepage/catalog/API/detail surfaces and could hit the Orr request timeout under multi-route smoke.
+- photo-backed hero SwipeMatch
+- diversity-first initial discovery deck instead of provider-order slicing
+- session-adaptive Pass / Keep / Mix behavior
+- Full details routes to the exact VIN page
+- Garage is discoverable from the primary experience
+- provider image IDs are expanded into usable Ridemotive CDN URLs
+- live photos, pricing, mileage, drivetrain, colors, engine, transmission, MPG, incentives, stock and equipment are shown only when source-supported
+- dead-looking homepage controls reduced or converted into real actions / clearly informational presentation
+- shopper budget/payment inputs are framed as preferences/targets, not dealer quotes, approvals, guarantees or final desk figures
+- dealership/lender retain final authority over price, payment, trade, financing, incentives, availability and final deal terms
 
-R1 correction:
-- cache-first live loader remains the preference
-- verified live fallback now uses bounded process-local TTL caching
-- concurrent callers share a single in-flight verified live fetch
-- VIN detail work shares the coalesced snapshot rather than performing an unrelated full fetch
-- TTL is intentionally short so stale data is not converted into durable truth
+## Auth / account hardening
 
-The post-fix multi-route outside-in smoke passed.
-
-## Supabase / Auth state
-
-Separate project: `igniaqua-norautomatch`
-Project ref: `xiqfmaibhhtffrxibiov`
-TOAT is not used.
-
-Implemented and previously verified:
+- separate Supabase project: `igniaqua-norautomatch` (`xiqfmaibhhtffrxibiov`)
+- TOAT is not used
 - Supabase Auth foundation
-- RLS-protected profiles
-- owner-scoped saved vehicles / Garage
-- role membership table
-- new users receive only `norautomatch/member`
+- server-side identity verification
+- RLS owner-scoped profiles and saved vehicles
+- ordinary new users bootstrap only to `norautomatch/member`
 - `/account` and `/garage` require verified identity
-- `/manager` requires an elevated NorAutoMatch membership before page entry
-- existing signed short-lived manager-session + durable revocation boundary remains required for sensitive manager APIs
+- `/manager` requires elevated NorAutoMatch membership and preserves the existing short-lived signed/revocable manager-session boundary for sensitive APIs
+- Sign in is visible from the header
+- Garage is visible from primary navigation
+- Sign in and Create account are separate modes
+- resend confirmation recovery is exposed
+- confirmation callback handles both PKCE auth-code and token-hash confirmation flows
 
-User-live email-confirmation/login/logout with a real test account remains a separate open proof and is not implied by unauthenticated route protection.
+A complete successful human signup -> email confirmation -> sign in -> saved Garage persistence exercise is still an open user-live proof. Automated route/auth UI verification does not substitute for that human mailbox step.
 
-## Remaining hardening / promotion work
+## Branding
 
-1. Durable Supabase inventory cache: designed but the Supabase management connector returned upstream 502 on the migration attempt. The public showcase is protected meanwhile by bounded single-flight in-process caching and verified-live fail-closed behavior.
-2. Bank the externally generated `package-lock.json` into GitHub for complete Docker/npm-ci artifact provenance. External `npm ci` proof exists; the generated lock artifact itself is not yet canonical in GitHub.
-3. Reconcile the older Render `main` service versus the verified NorAutoMatch branch lineage before any canonical production cutover.
-4. Prove real signup/email confirmation/login/logout and operator allow/deny paths user-live.
+R1 now uses the new NorAuto Match red/black/white automotive identity with the NAM steering-wheel badge and skyline detail. Public smoke gates brand discoverability so the badge/brand cannot silently disappear in a later release.
 
-No statement in this receipt promotes the older `main` deployment, grants financial/deal authority, or converts the showcase into a dealer-branded production system.
+The full transparent primary logo and square badge are also preserved separately in the user's NorAutoMatch brand kit for print, business-card, social and merchandise use.
+
+## V1.1 / follow-on hardening
+
+These remain open without invalidating the current live R1 showcase:
+- durable Supabase inventory cache instead of the bounded verified-live in-process/single-flight fallback
+- one successful human signup -> email confirmation -> sign in -> Garage persistence proof
+- recover/enrich the 7 quarantined source rows where alternate Orr/VDP evidence supports it
+- persist Match DNA / shopper preferences across sessions
+- complete the staff lot-photo UI: upload, reorder, choose cover, remove/replace
+- reconcile the older Render `main` service lineage before any canonical production cutover
+
+## Closure interpretation
+
+NorAutoMatch R1 is **customer-showable, live, functional, and demo-ready**.
+
+This receipt does not claim that V1.1 hardening is complete, does not grant deal/financial authority, and does not promote the unrelated older `main` deployment.
