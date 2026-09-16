@@ -15,21 +15,27 @@ export async function HomeHeroSwipeShell() {
     return <HomeHeroSwipe vehicles={[]} sourceLabel="Inventory verification pending" sourceCount={0} />;
   }
 
+  let catalog: Awaited<ReturnType<typeof loadOrrResilientCustomerCatalog>> | null = null;
+
   try {
-    const catalog = await loadOrrResilientCustomerCatalog({
+    catalog = await loadOrrResilientCustomerCatalog({
       mode: process.env.NORAUTO_INVENTORY_MODE,
       liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
     });
-    const vehicles = buildDiverseHeroDeck(catalog.vehicles.filter((vehicle) => vehicle.image), HERO_DECK_SIZE);
-    const sourceCount = catalog.sourceEvidence?.rawHitCount ?? catalog.vehicles.length;
-    const inTransitCount = catalog.sourceEvidence?.inTransitCount ?? 0;
-    const sourceLabel = catalog.source === "provider-cache" ? "Verified cached inventory" : "Verified live inventory";
-
-    return <HomeHeroSwipe vehicles={vehicles} sourceLabel={sourceLabel} sourceCount={sourceCount} inTransitCount={inTransitCount} />;
   } catch (error) {
     console.error("NORAUTO_HOME_HERO_SWIPE_FAILED", error instanceof Error ? error.message : String(error));
+  }
+
+  if (!catalog) {
     return <HomeHeroSwipe vehicles={[]} sourceLabel="Inventory verification pending" sourceCount={0} />;
   }
+
+  const vehicles = buildDiverseHeroDeck(catalog.vehicles.filter((vehicle) => vehicle.image), HERO_DECK_SIZE);
+  const sourceCount = catalog.sourceEvidence?.rawHitCount ?? catalog.vehicles.length;
+  const inTransitCount = catalog.sourceEvidence?.inTransitCount ?? 0;
+  const sourceLabel = catalog.source === "provider-cache" ? "Verified cached inventory" : "Verified live inventory";
+
+  return <HomeHeroSwipe vehicles={vehicles} sourceLabel={sourceLabel} sourceCount={sourceCount} inTransitCount={inTransitCount} />;
 }
 
 function buildDiverseHeroDeck(vehicles: Vehicle[], limit: number) {
