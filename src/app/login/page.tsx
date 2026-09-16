@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { login, signup } from "./actions";
 
@@ -8,24 +9,40 @@ export const metadata: Metadata = {
 };
 
 type LoginPageProps = {
-  searchParams: Promise<{ next?: string; error?: string; message?: string }>;
+  searchParams: Promise<{ next?: string; error?: string; message?: string; mode?: string }>;
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
   const nextPath = params.next?.startsWith("/") && !params.next.startsWith("//") ? params.next : "/account";
+  const mode = params.mode === "signup" ? "signup" : "signin";
+  const creatingAccount = mode === "signup";
+
+  const signinHref = `/login?mode=signin&next=${encodeURIComponent(nextPath)}`;
+  const signupHref = `/login?mode=signup&next=${encodeURIComponent(nextPath)}`;
 
   return (
-    <section className="min-h-[72vh] border-b border-white/5 bg-slate-950/35 py-16 sm:py-20">
+    <section className="min-h-[72vh] border-b border-white/5 bg-slate-950/35 py-12 sm:py-16">
       <div className="shell max-w-xl">
         <p className="eyebrow">Secure account access</p>
-        <h1 className="mt-4 text-4xl font-black tracking-[-.04em] text-white">Sign in to NorAuto Match</h1>
-        <p className="mt-4 text-slate-400">Your account session is handled by Supabase Auth. Operator access is granted separately and cannot be self-assigned.</p>
+        <h1 className="mt-4 text-4xl font-black tracking-[-.04em] text-white">
+          {creatingAccount ? "Create your NorAuto Match account" : "Sign in to NorAuto Match"}
+        </h1>
+        <p className="mt-4 text-slate-400">
+          {creatingAccount
+            ? "Create one customer account to save vehicles and use your Garage. After signup, check your email and confirm the account before signing in."
+            : "Use the same email and password you created for NorAuto Match. If you have not created an account yet, switch to Create account below."}
+        </p>
 
-        {params.error ? <p className="mt-6 rounded-xl border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-200">{params.error}</p> : null}
-        {params.message ? <p className="mt-6 rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-200">{params.message}</p> : null}
+        <div className="mt-7 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-slate-950/70 p-2" aria-label="Account access mode">
+          <Link href={signinHref} className={`rounded-xl px-4 py-3 text-center text-sm font-black transition ${!creatingAccount ? "bg-amber-300 text-slate-950" : "text-slate-300 hover:bg-white/5"}`}>Sign in</Link>
+          <Link href={signupHref} className={`rounded-xl px-4 py-3 text-center text-sm font-black transition ${creatingAccount ? "bg-amber-300 text-slate-950" : "text-slate-300 hover:bg-white/5"}`}>Create account</Link>
+        </div>
 
-        <form className="mt-8 space-y-5 rounded-2xl border border-white/10 bg-slate-950/70 p-6">
+        {params.error ? <p className="mt-5 rounded-xl border border-red-400/30 bg-red-400/10 p-4 text-sm leading-6 text-red-200">{params.error}</p> : null}
+        {params.message ? <p className="mt-5 rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm leading-6 text-emerald-200">{params.message}</p> : null}
+
+        <form action={creatingAccount ? signup : login} className="mt-6 space-y-5 rounded-2xl border border-white/10 bg-slate-950/70 p-6">
           <input type="hidden" name="next" value={nextPath} />
           <label className="block text-sm font-bold text-slate-200">
             Email
@@ -33,13 +50,22 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </label>
           <label className="block text-sm font-bold text-slate-200">
             Password
-            <input name="password" type="password" autoComplete="current-password" minLength={8} required className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none focus:border-amber-300/60" />
+            <input name="password" type="password" autoComplete={creatingAccount ? "new-password" : "current-password"} minLength={8} required className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none focus:border-amber-300/60" />
+            {creatingAccount ? <span className="mt-2 block text-xs font-normal text-slate-500">Use at least 8 characters. You will use this same password after email confirmation.</span> : null}
           </label>
-          <div className="flex flex-wrap gap-3">
-            <button formAction={login} className="rounded-xl bg-amber-300 px-5 py-3 font-black text-slate-950 hover:bg-amber-200">Sign in</button>
-            <button formAction={signup} className="rounded-xl border border-white/15 px-5 py-3 font-black text-white hover:border-white/30">Create account</button>
-          </div>
+          <button type="submit" className="w-full rounded-xl bg-amber-300 px-5 py-3.5 font-black text-slate-950 hover:bg-amber-200">
+            {creatingAccount ? "Create my account" : "Sign in"}
+          </button>
         </form>
+
+        <p className="mt-5 text-center text-sm text-slate-500">
+          {creatingAccount ? "Already created an account? " : "First time here? "}
+          <Link href={creatingAccount ? signinHref : signupHref} className="font-black text-amber-300 hover:text-amber-200">
+            {creatingAccount ? "Sign in instead" : "Create an account"}
+          </Link>
+        </p>
+
+        <p className="mt-8 text-xs leading-5 text-slate-600">Customer signup never grants operator, manager, pricing, financing, or dealership authority. Staff access is assigned separately.</p>
       </div>
     </section>
   );
