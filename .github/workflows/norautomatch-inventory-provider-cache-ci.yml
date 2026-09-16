@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - "architecture/**"
+      - "feature/2026-09-16-durable-inventory-cache-v1-1"
   pull_request:
     branches:
       - "reactivation/2026-09-08"
+      - "feature/2026-09-15-supabase-auth-r1"
       - main
 
 permissions:
@@ -51,8 +53,9 @@ jobs:
           node scripts/start-production.mjs
           node scripts/start-production.mjs
           docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '12'
-          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.inventory_provider_snapshots') IS NOT NULL" | grep -qx 't'
-          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.inventory_provider_current_state') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('igniaqua.inventory_provider_snapshots') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('igniaqua.inventory_provider_current_state') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT has_schema_privilege('public', 'igniaqua', 'USAGE')" | grep -qx 'f'
       - name: Compile provider-neutral cache verification surface
         run: |
           rm -rf .tmp-inventory-provider-cache-tests
