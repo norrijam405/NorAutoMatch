@@ -20,9 +20,11 @@ async function hit(path) {
   if (path === "/") {
     result.hero = {
       liveSwipeMatch: body.includes("Live SwipeMatch"),
-      openExactVin: body.includes("Open exact VIN"),
+      fullDetails: body.includes("Full details"),
+      garage: body.includes("Garage"),
       verifiedVin: body.includes("Verified VIN"),
       ridemotiveImage: body.includes("images.app.ridemotive.com"),
+      sessionAlgorithm: body.includes("Exploring broadly") || body.includes("Adapting to this session"),
     };
   }
 
@@ -102,7 +104,7 @@ for (const result of results) {
   if (["/account", "/garage", "/manager"].includes(result.path) && ![302, 303, 307, 308].includes(result.status)) failed = true;
 
   if (result.path === "/") {
-    if (!result.hero?.liveSwipeMatch || !result.hero?.openExactVin || !result.hero?.verifiedVin || !result.hero?.ridemotiveImage) failed = true;
+    if (!result.hero?.liveSwipeMatch || !result.hero?.fullDetails || !result.hero?.garage || !result.hero?.verifiedVin || !result.hero?.ridemotiveImage || !result.hero?.sessionAlgorithm) failed = true;
   }
 
   if (result.path === "/api/inventory") {
