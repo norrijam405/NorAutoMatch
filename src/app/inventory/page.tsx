@@ -3,6 +3,7 @@ import { ArrowLeft, ShieldCheck } from "lucide-react";
 import { InteractiveInventory } from "@/components/inventory/interactive-inventory";
 import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
 import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -25,9 +26,17 @@ export default async function InventoryPage() {
     return <InventoryUnavailable reason="verified-live-source-unavailable" />;
   }
 
+  const supabase = await createClient();
+  const { data: claimsResult } = await supabase.auth.getClaims();
+  const userId = typeof claimsResult?.claims?.sub === "string" ? claimsResult.claims.sub : null;
+  const { data: savedRows } = userId
+    ? await supabase.from("saved_vehicles").select("vin").eq("user_id", userId)
+    : { data: [] };
+  const initialSavedVins = savedRows?.map((row) => row.vin) ?? [];
+
   const sourceLabel = catalog.source === "provider-cache" ? "Verified cached inventory" : "Verified live inventory";
 
-  return <main className="min-h-screen bg-[#070b10] py-8 sm:py-12"><div className="shell"><div className="mb-6 flex flex-wrap items-center justify-between gap-4"><div className="flex flex-wrap items-center gap-4"><Link href="/" className="inline-flex items-center gap-2 text-sm font-black text-slate-400 hover:text-white"><ArrowLeft size={16} /> Home</Link><Link href="/vehicles" className="text-sm font-black text-amber-300 hover:text-amber-200">Vehicle details →</Link></div><div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[.16em] text-emerald-300"><ShieldCheck size={14} /> {sourceLabel}</div></div><InteractiveInventory vehicles={catalog.vehicles} fetchedAt={catalog.sourceEvidence?.fetchedAt} /></div></main>;
+  return <main className="min-h-screen bg-[#070b10] py-8 sm:py-12"><div className="shell"><div className="mb-6 flex flex-wrap items-center justify-between gap-4"><div className="flex flex-wrap items-center gap-4"><Link href="/" className="inline-flex items-center gap-2 text-sm font-black text-slate-400 hover:text-white"><ArrowLeft size={16} /> Home</Link><Link href="/vehicles" className="text-sm font-black text-amber-300 hover:text-amber-200">Vehicle details →</Link></div><div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[.16em] text-emerald-300"><ShieldCheck size={14} /> {sourceLabel}</div></div><InteractiveInventory vehicles={catalog.vehicles} fetchedAt={catalog.sourceEvidence?.fetchedAt} initialSavedVins={initialSavedVins} signedIn={Boolean(userId)} /></div></main>;
 }
 
 function InventoryUnavailable({ reason }: { reason: string }) {
