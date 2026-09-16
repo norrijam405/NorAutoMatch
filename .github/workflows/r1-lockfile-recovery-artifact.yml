@@ -10,7 +10,7 @@ on:
       - .github/workflows/r1-lockfile-recovery-artifact.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   recover-lockfile:
@@ -33,3 +33,15 @@ jobs:
           path: package-lock.json
           if-no-files-found: error
           retention-days: 1
+      - name: Commit proven lockfile when changed
+        shell: bash
+        run: |
+          git add package-lock.json
+          if git diff --cached --quiet; then
+            echo "Committed lockfile already synchronized."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Synchronize R1 package lock with Supabase dependencies"
+          git push origin HEAD:feature/2026-09-15-supabase-auth-r1
