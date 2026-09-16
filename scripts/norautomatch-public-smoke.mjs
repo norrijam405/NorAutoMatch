@@ -26,6 +26,22 @@ async function hit(path) {
       ridemotiveImage: body.includes("images.app.ridemotive.com"),
       sessionAlgorithm: body.includes("Exploring broadly") || body.includes("Adapting to this session"),
     };
+    result.navigation = {
+      signIn: body.includes("Sign in"),
+      garage: body.includes("href=\"/garage\"") || body.includes("/garage"),
+      brandedBadge: body.includes("data:image/webp;base64"),
+      brandName: body.includes("NorAuto Match"),
+    };
+  }
+
+  if (path === "/login") {
+    result.authUi = {
+      signInMode: body.includes("Sign in to NorAuto Match"),
+      createAccountMode: body.includes("Create account"),
+      createAccountLink: body.includes("mode=signup"),
+      onePrimarySubmit: body.includes("Sign in") && !body.includes("Create my account"),
+      resendRecovery: body.includes("Resend confirmation") || body.includes("Confirmation email not working?"),
+    };
   }
 
   if (path === "/api/inventory" && response.ok) {
@@ -105,6 +121,11 @@ for (const result of results) {
 
   if (result.path === "/") {
     if (!result.hero?.liveSwipeMatch || !result.hero?.fullDetails || !result.hero?.garage || !result.hero?.verifiedVin || !result.hero?.ridemotiveImage || !result.hero?.sessionAlgorithm) failed = true;
+    if (!result.navigation?.signIn || !result.navigation?.garage || !result.navigation?.brandedBadge || !result.navigation?.brandName) failed = true;
+  }
+
+  if (result.path === "/login") {
+    if (!result.authUi?.signInMode || !result.authUi?.createAccountMode || !result.authUi?.createAccountLink || !result.authUi?.onePrimarySubmit || !result.authUi?.resendRecovery) failed = true;
   }
 
   if (result.path === "/api/inventory") {
