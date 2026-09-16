@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { CarFront, Check, Heart, Shuffle, Sparkles, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import type { Vehicle } from "@/lib/inventory";
+import { recordMatchDnaSignal, saveVehicleToGarage } from "@/app/garage/actions";
 
 type Props = {
   vehicles: Vehicle[];
@@ -18,6 +19,8 @@ export function HomeHeroSwipe({ vehicles, sourceLabel, sourceCount, inTransitCou
   const [deck, setDeck] = useState(vehicles);
   const [kept, setKept] = useState<string[]>([]);
   const [seen, setSeen] = useState(0);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const [isSaving, startSaving] = useTransition();
 
   const current = deck[0];
   const sessionLabel = useMemo(() => {
@@ -28,11 +31,30 @@ export function HomeHeroSwipe({ vehicles, sourceLabel, sourceCount, inTransitCou
   if (!current) return <HeroUnavailable />;
 
   function act(action: SwipeAction) {
+    const actedOn = current;
+
     if (action === "keep") {
-      setKept((currentKept) => currentKept.includes(current.id) ? currentKept : [...currentKept, current.id]);
+      setKept((currentKept) => currentKept.includes(actedOn.id) ? currentKept : [...currentKept, actedOn.id]);
+      setSaveNotice("Saving this Keep to your Garage…");
+      startSaving(async () => {
+        const result = await saveVehicleToGarage(actedOn.id, "home_swipematch", "keep");
+        if (result.ok) {
+          setSaveNotice(result.scoutQueued
+            ? "Saved to Garage · Market Scout queued"
+            : "Saved to Garage");
+        } else if (result.authRequired) {
+          setSaveNotice("Kept for this session · sign in to save it to Garage");
+        } else {
+          setSaveNotice("Kept for this session · Garage save needs another try");
+        }
+      });
+    } else {
+      startSaving(async () => {
+        await recordMatchDnaSignal(actedOn.id, action === "pass" ? "pass" : "mix", "home_swipematch");
+      });
     }
 
-    setDeck((currentDeck) => rerankRemaining(currentDeck, current, action));
+    setDeck((currentDeck) => rerankRemaining(currentDeck, actedOn, action));
     setSeen((value) => value + 1);
   }
 
@@ -78,9 +100,11 @@ export function HomeHeroSwipe({ vehicles, sourceLabel, sourceCount, inTransitCou
         <div className="space-y-3 p-4 sm:p-5">
           <div className="grid grid-cols-3 gap-2.5">
             <button onClick={() => act("pass")} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-rose-400/25 bg-rose-400/10 text-xs font-black text-rose-200 transition hover:bg-rose-400/15"><X size={18} /> Pass</button>
-            <button onClick={() => act("keep")} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 text-xs font-black text-emerald-200 transition hover:bg-emerald-400/15"><Heart size={17} /> Keep</button>
+            <button onClick={() => act("keep")} disabled={isSaving} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 text-xs font-black text-emerald-200 transition hover:bg-emerald-400/15 disabled:opacity-60"><Heart size={17} /> Keep</button>
             <button onClick={() => act("next")} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-amber-300/25 bg-amber-300/10 text-xs font-black text-amber-200 transition hover:bg-amber-300/15"><Shuffle size={16} /> Mix</button>
           </div>
+
+          {saveNotice && <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[.025] px-3 py-2 text-[10px] text-white/55"><span>{saveNotice}</span>{saveNotice.includes("sign in") && <Link href="/login?next=%2Fgarage" className="shrink-0 font-black text-amber-300">Sign in</Link>}</div>}
 
           <div className="grid grid-cols-[1.15fr_.85fr] gap-2.5">
             <Link href={`/vehicles/${current.id}`} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-amber-300 px-4 text-xs font-black text-black shadow-[0_0_24px_rgba(252,211,77,.12)]"><CarFront size={16} /> Full details</Link>
