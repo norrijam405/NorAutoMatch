@@ -32,9 +32,26 @@ CREATE TABLE IF NOT EXISTS igniaqua.inventory_provider_current_state (
 ALTER TABLE igniaqua.inventory_provider_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE igniaqua.inventory_provider_current_state ENABLE ROW LEVEL SECURITY;
 
-REVOKE ALL ON TABLE igniaqua.inventory_provider_snapshots FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON TABLE igniaqua.inventory_provider_current_state FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON SEQUENCE igniaqua.inventory_provider_snapshots_id_seq FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE igniaqua.inventory_provider_snapshots FROM PUBLIC;
+REVOKE ALL ON TABLE igniaqua.inventory_provider_current_state FROM PUBLIC;
+REVOKE ALL ON SEQUENCE igniaqua.inventory_provider_snapshots_id_seq FROM PUBLIC;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    REVOKE ALL ON SCHEMA igniaqua FROM anon;
+    REVOKE ALL ON TABLE igniaqua.inventory_provider_snapshots FROM anon;
+    REVOKE ALL ON TABLE igniaqua.inventory_provider_current_state FROM anon;
+    REVOKE ALL ON SEQUENCE igniaqua.inventory_provider_snapshots_id_seq FROM anon;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    REVOKE ALL ON SCHEMA igniaqua FROM authenticated;
+    REVOKE ALL ON TABLE igniaqua.inventory_provider_snapshots FROM authenticated;
+    REVOKE ALL ON TABLE igniaqua.inventory_provider_current_state FROM authenticated;
+    REVOKE ALL ON SEQUENCE igniaqua.inventory_provider_snapshots_id_seq FROM authenticated;
+  END IF;
+END
+$$;
 
 -- Raw snapshots are immutable source evidence. The current-state table is a
 -- reconstructed operational view that may carry inferred missing states across
