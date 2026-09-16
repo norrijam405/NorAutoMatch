@@ -1,16 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useMemo, useState, useTransition } from "react";
 import { AlertTriangle, ArrowLeftRight, Check, Filter, Heart, Search, Shuffle, Sparkles, X } from "lucide-react";
 import type { Vehicle } from "@/lib/inventory";
 import { searchInventory, vehicleHasFeature, type InventorySearchMatch } from "@/lib/inventory-search";
 import { buildGarageBattleStory } from "@/lib/garage-battle";
 import { cn } from "@/lib/cn";
 import { FinanceInterestModal } from "@/components/finance/finance-interest-modal";
+import { recordMatchDnaSignal, removeVehicleFromGarage, saveVehicleToGarage } from "@/app/garage/actions";
 
 type Props = {
   vehicles: Vehicle[];
   fetchedAt?: string;
+  initialSavedVins?: string[];
+  signedIn?: boolean;
 };
 
 type SmartFilter = {
@@ -30,15 +34,17 @@ const smartFilters: SmartFilter[] = [
 const PAGE_SIZE = 12;
 const CLOSE_MATCH_LIMIT = 6;
 
-export function InteractiveInventory({ vehicles, fetchedAt }: Props) {
+export function InteractiveInventory({ vehicles, fetchedAt, initialSavedVins = [], signedIn = false }: Props) {
   const [query, setQuery] = useState("");
   const [bodyType, setBodyType] = useState("All");
   const [activeSmartFilters, setActiveSmartFilters] = useState<string[]>([]);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [shortlist, setShortlist] = useState<string[]>([]);
+  const [shortlist, setShortlist] = useState<string[]>(initialSavedVins);
   const [battle, setBattle] = useState<string[]>([]);
   const [swipeSeed, setSwipeSeed] = useState<string | null>(null);
   const [financeVehicle, setFinanceVehicle] = useState<Vehicle | null>(null);
+  const [garageNotice, setGarageNotice] = useState<string | null>(null);
+  const [isPersisting, startPersisting] = useTransition();
 
   const bodyTypes = useMemo(() => ["All", ...new Set(vehicles.map((vehicle) => vehicle.type))], [vehicles]);
   const availableSmartFilters = useMemo(() => smartFilters.filter((filter) => vehicles.some((vehicle) => smartFilterMatches(vehicle, filter.id))), [vehicles]);
@@ -73,15 +79,72 @@ export function InteractiveInventory({ vehicles, fetchedAt }: Props) {
   }
 
   function toggleShortlist(id: string) {
-    setShortlist((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+    const adding = !shortlist.includes(id);
+    setShortlist((current) => adding ? [...current, id] : current.filter((item) => item !== id));
+
+    if (!signedIn) {
+      setGarageNotice(adding ? "Saved for this session. Sign in to keep it in your Garage." : "Removed from this session shortlist.");
+      return;
+    }
+
+    setGarageNotice(adding ? "Saving to your Garage…" : "Removing from your Garage…");
+    startPersisting(async () => {
+      const result = adding
+        ? await saveVehicleToGarage(id, "inventory_card", "garage_save")
+        : await removeVehicleFromGarage(id, "inventory_card");
+
+      if (!result.ok) {
+        setShortlist((current) => adding ? current.filter((item) => item !== id) : current.includes(id) ? current : [...current, id]);
+        setGarageNotice("Garage update did not stick. Try again.");
+        return;
+      }
+
+      setGarageNotice(adding
+        ? result.scoutQueued ? "Saved to Garage · Market Scout queued" : "Saved to Garage"
+        : "Removed from Garage");
+    });
+  }
+
+  function keepFromMini(id: string) {
+    if (!shortlist.includes(id)) setShortlist((current) => [...current, id]);
+
+    if (!signedIn) {
+      setGarageNotice("Kept for this session. Sign in to save it to Garage.");
+      return;
+    }
+
+    setGarageNotice("Saving this Keep to your Garage…");
+    startPersisting(async () => {
+      const result = await saveVehicleToGarage(id, "inventory_mini_swipe", "keep");
+      if (!result.ok) {
+        setShortlist((current) => current.filter((item) => item !== id));
+        setGarageNotice("Keep was not saved. Try again.");
+        return;
+      }
+      setGarageNotice(result.scoutQueued ? "Saved to Garage · Market Scout queued" : "Saved to Garage");
+    });
+  }
+
+  function passFromMini(id: string) {
+    if (!signedIn) return;
+    startPersisting(async () => {
+      await recordMatchDnaSignal(id, "pass", "inventory_mini_swipe");
+    });
   }
 
   function toggleBattle(id: string) {
+    const adding = !battle.includes(id);
     setBattle((current) => {
       if (current.includes(id)) return current.filter((item) => item !== id);
       if (current.length >= 2) return [current[1], id];
       return [...current, id];
     });
+
+    if (signedIn && adding) {
+      startPersisting(async () => {
+        await recordMatchDnaSignal(id, "battle", "inventory_battle");
+      });
+    }
   }
 
   function toggleSmartFilter(id: string) {
@@ -136,13 +199,15 @@ export function InteractiveInventory({ vehicles, fetchedAt }: Props) {
         </div>}
       </section>
 
+      {garageNotice && <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[.025] px-4 py-3 text-xs text-slate-400"><span>{garageNotice}{isPersisting ? "" : ""}</span>{!signedIn && <Link href="/login?next=%2Finventory" className="font-black text-amber-300">Sign in →</Link>}</div>}
+
       {shortlistVehicles.length > 0 && <section className="rounded-[24px] border border-emerald-400/20 bg-emerald-400/[.04] p-4 sm:p-5">
-        <div className="flex items-center justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-[.22em] text-emerald-300">Your Garage</p><p className="mt-1 text-sm font-bold text-white">{shortlistVehicles.length} survivor{shortlistVehicles.length === 1 ? "" : "s"} saved from this session</p></div>{shortlistVehicles.length >= 2 && <p className="text-xs font-black text-amber-300">Pick any two → Battle</p>}</div>
+        <div className="flex items-center justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-[.22em] text-emerald-300">{signedIn ? "Your Garage" : "Session shortlist"}</p><p className="mt-1 text-sm font-bold text-white">{shortlistVehicles.length} vehicle{shortlistVehicles.length === 1 ? "" : "s"} {signedIn ? "saved to your account" : "kept on this device for now"}</p></div>{shortlistVehicles.length >= 2 && <p className="text-xs font-black text-amber-300">Pick any two → Battle</p>}</div>
       </section>}
 
       {battleVehicles.length === 2 && battleStory && <GarageBattle vehicles={battleVehicles} story={battleStory} />}
 
-      {swipeSeed && seededDeck.length > 0 && <SwipeMiniGame deck={seededDeck} onClose={() => setSwipeSeed(null)} onKeep={(id) => { if (!shortlist.includes(id)) setShortlist((current) => [...current, id]); }} />}
+      {swipeSeed && seededDeck.length > 0 && <SwipeMiniGame deck={seededDeck} onClose={() => setSwipeSeed(null)} onKeep={keepFromMini} onPass={passFromMini} />}
 
       <section>
         <div className="flex items-end justify-between gap-4">
@@ -157,6 +222,7 @@ export function InteractiveInventory({ vehicles, fetchedAt }: Props) {
               vehicle={match.vehicle}
               shortlisted={shortlist.includes(match.vehicle.id)}
               battling={battle.includes(match.vehicle.id)}
+              signedIn={signedIn}
               onShortlist={() => toggleShortlist(match.vehicle.id)}
               onBattle={() => toggleBattle(match.vehicle.id)}
               onSwipe={() => setSwipeSeed(match.vehicle.id)}
@@ -176,6 +242,7 @@ export function InteractiveInventory({ vehicles, fetchedAt }: Props) {
             match={match}
             shortlisted={shortlist.includes(match.vehicle.id)}
             battling={battle.includes(match.vehicle.id)}
+            signedIn={signedIn}
             onShortlist={() => toggleShortlist(match.vehicle.id)}
             onBattle={() => toggleBattle(match.vehicle.id)}
             onSwipe={() => setSwipeSeed(match.vehicle.id)}
@@ -226,7 +293,8 @@ function GarageBattle({ vehicles, story }: { vehicles: Vehicle[]; story: ReturnT
   </section>;
 }
 
-function InventoryPlayCard({ vehicle, match, shortlisted, battling, onShortlist, onBattle, onSwipe, onFinance }: { vehicle: Vehicle; match?: InventorySearchMatch; shortlisted: boolean; battling: boolean; onShortlist: () => void; onBattle: () => void; onSwipe: () => void; onFinance: () => void }) {
+function InventoryPlayCard({ vehicle, match, shortlisted, battling, signedIn, onShortlist, onBattle, onSwipe, onFinance }: { vehicle: Vehicle; match?: InventorySearchMatch; shortlisted: boolean; battling: boolean; signedIn: boolean; onShortlist: () => void; onBattle: () => void; onSwipe: () => void; onFinance: () => void }) {
+  const saveLabel = signedIn ? (shortlisted ? "In Garage" : "Garage") : (shortlisted ? "Saved this session" : "Save");
   return <article className={cn("overflow-hidden rounded-[24px] border bg-[#0d131b]", match?.kind === "close" ? "border-amber-300/25" : shortlisted ? "border-emerald-400/35" : "border-white/10")}>
     <div className="relative aspect-[16/9] overflow-hidden bg-[#111923]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -241,7 +309,7 @@ function InventoryPlayCard({ vehicle, match, shortlisted, battling, onShortlist,
       <p className="mt-4 text-[10px] leading-5 text-slate-600">VIN {vehicle.id}</p>
       <div className="mt-5 grid grid-cols-2 gap-2">
         <button onClick={onSwipe} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-600 text-xs font-black text-white"><Sparkles size={15} /> SwipeMatch</button>
-        <button onClick={onShortlist} className={cn("inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border text-xs font-black", shortlisted ? "border-emerald-400/35 bg-emerald-400/10 text-emerald-200" : "border-white/10 text-slate-300")}><Heart size={15} /> {shortlisted ? "In Garage" : "Garage"}</button>
+        <button onClick={onShortlist} className={cn("inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border text-xs font-black", shortlisted ? "border-emerald-400/35 bg-emerald-400/10 text-emerald-200" : "border-white/10 text-slate-300")}><Heart size={15} /> {saveLabel}</button>
         <button onClick={onBattle} className={cn("inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border text-xs font-black", battling ? "border-amber-300/40 bg-amber-300/10 text-amber-200" : "border-white/10 text-slate-300")}><ArrowLeftRight size={15} /> Battle</button>
         <button onClick={onFinance} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/10 text-xs font-black text-slate-300">Finance next step</button>
       </div>
@@ -249,13 +317,13 @@ function InventoryPlayCard({ vehicle, match, shortlisted, battling, onShortlist,
   </article>;
 }
 
-function SwipeMiniGame({ deck, onClose, onKeep }: { deck: Vehicle[]; onClose: () => void; onKeep: (id: string) => void }) {
+function SwipeMiniGame({ deck, onClose, onKeep, onPass }: { deck: Vehicle[]; onClose: () => void; onKeep: (id: string) => void; onPass: (id: string) => void }) {
   const [index, setIndex] = useState(0);
   const current = deck[index];
   if (!current) return <section className="rounded-[28px] border border-emerald-400/20 bg-emerald-400/[.05] p-7 text-center"><p className="text-2xl font-black text-white">Deck complete.</p><button onClick={onClose} className="mt-4 rounded-full border border-white/10 px-5 py-3 text-sm font-black text-white">Close deck</button></section>;
   return <section className="rounded-[28px] border border-red-500/25 bg-black p-5 sm:p-7">
     <div className="flex items-center justify-between"><div><p className="text-[10px] font-black uppercase tracking-[.3em] text-red-400">Mini SwipeMatch</p><p className="mt-1 text-xs text-slate-500">{index + 1} / {deck.length}</p></div><button onClick={onClose} className="grid size-10 place-items-center rounded-full border border-white/10 text-slate-400"><X size={17} /></button></div>
-    <div className="mx-auto mt-6 max-w-2xl overflow-hidden rounded-[26px] border border-white/15 bg-[#0d131b]"><div className="aspect-[16/9] bg-[#111923]">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={current.image} alt={`${current.year} ${current.make} ${current.model}`} className="h-full w-full object-cover" /></div><div className="p-6 text-center"><p className="text-xs font-bold text-emerald-300">VIN {current.id}</p><h3 className="mt-3 text-3xl font-black text-white">{current.year} {current.make} {current.model}</h3><p className="mt-2 text-sm text-slate-400">{current.trim} · {current.type} · {current.drivetrain}</p><div className="mt-7 grid grid-cols-2 gap-3"><button onClick={() => setIndex((value) => value + 1)} className="min-h-12 rounded-xl border border-rose-400/25 bg-rose-400/10 font-black text-rose-200"><X size={17} className="mr-2 inline" />Pass</button><button onClick={() => { onKeep(current.id); setIndex((value) => value + 1); }} className="min-h-12 rounded-xl border border-emerald-400/25 bg-emerald-400/10 font-black text-emerald-200"><Check size={17} className="mr-2 inline" />Keep</button></div></div></div>
+    <div className="mx-auto mt-6 max-w-2xl overflow-hidden rounded-[26px] border border-white/15 bg-[#0d131b]"><div className="aspect-[16/9] bg-[#111923]">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={current.image} alt={`${current.year} ${current.make} ${current.model}`} className="h-full w-full object-cover" /></div><div className="p-6 text-center"><p className="text-xs font-bold text-emerald-300">VIN {current.id}</p><h3 className="mt-3 text-3xl font-black text-white">{current.year} {current.make} {current.model}</h3><p className="mt-2 text-sm text-slate-400">{current.trim} · {current.type} · {current.drivetrain}</p><div className="mt-7 grid grid-cols-2 gap-3"><button onClick={() => { onPass(current.id); setIndex((value) => value + 1); }} className="min-h-12 rounded-xl border border-rose-400/25 bg-rose-400/10 font-black text-rose-200"><X size={17} className="mr-2 inline" />Pass</button><button onClick={() => { onKeep(current.id); setIndex((value) => value + 1); }} className="min-h-12 rounded-xl border border-emerald-400/25 bg-emerald-400/10 font-black text-emerald-200"><Check size={17} className="mr-2 inline" />Keep</button></div></div></div>
   </section>;
 }
 
