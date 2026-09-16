@@ -1,64 +1,58 @@
-# NorAutoMatch Supabase Auth R1 — Candidate Receipt
+# NorAutoMatch Supabase Auth R1 Receipt
 
-Date: 2026-09-15
-Status: IMPLEMENTED CANDIDATE / DATABASE VERIFIED / EXTERNAL BUILD VERIFIED / USER-LIVE OPEN
-Authority effect: NONE
-Production effect: NONE
+Date: 2026-09-16
+Current branch: `feature/2026-09-15-supabase-auth-r1`
+Auth UX live code SHA: `e78802ec06b194c05e1e6e4c835cd1edf3c57145`
+Truth state: **IMPLEMENTED / BUILD-VERIFIED / OUTSIDE-IN UI + ROUTE VERIFIED / HUMAN EMAIL LOOP STILL OPEN**
 
-## Live Supabase foundation
+## Implemented
 
-- Project: `igniaqua-norautomatch`
-- Project ref: `xiqfmaibhhtffrxibiov`
-- Region: `us-east-2`
-- Cost at creation: `$0/month`
-- TOAT project intentionally not used.
+- separate Supabase project `igniaqua-norautomatch` (`xiqfmaibhhtffrxibiov`)
+- browser/server SSR clients
+- server-side verified identity checks
+- protected `/account` and `/garage`
+- RLS owner-scoped profiles and saved vehicles
+- membership roles with ordinary new users bootstrapped only to `norautomatch/member`
+- `/manager` requires elevated NorAutoMatch membership before page entry
+- sensitive manager APIs continue to require the pre-existing signed short-lived manager session and durable revocation checks
+- Sign in is now directly discoverable in the public header
+- Garage is directly discoverable in primary navigation
+- mobile account access is explicit
+- Sign in and Create account are distinct UI modes rather than two competing submit buttons in one form
+- signup UI explains email confirmation before account creation
+- resend confirmation recovery is exposed
+- unconfirmed-email handling is explicit
+- confirmation callback supports both PKCE auth-code and token-hash confirmation flows
 
-## Database controls verified
+## Outside-in verification
 
-- RLS enabled on every exposed `public` table.
-- `profiles`: authenticated users may select/insert/update only their own row.
-- `saved_vehicles`: authenticated users may select/insert/delete only their own rows.
-- `app_memberships`: authenticated users have SELECT only and can see only their own memberships; users cannot self-promote.
-- `inventory_vehicles`: browser roles have SELECT only and can see only `ACTIVE_CURRENT` or `ACTIVE_STALE` rows.
-- `igniaqua.evidence_events`: private schema; no browser grants or policies by design.
-- New Auth users receive a profile plus `norautomatch/member`; no operator/admin/founder role is auto-issued.
-- A post-DDL privilege audit found broader default authenticated grants on user tables; these were removed and least-privilege grants were independently re-queried afterward.
+Hardened public smoke against `https://norautomatch-live.onrender.com` verified:
+- `/login` -> 200
+- sign-in mode present
+- create-account mode present
+- create-account link present
+- one primary submit action present
+- resend-confirmation recovery present
+- header Sign in present
+- header Garage present
+- unauthenticated `/account` -> 307 to login
+- unauthenticated `/garage` -> 307 to login
+- unauthenticated `/manager` -> 307 to login
 
-## Application controls implemented on this branch
+The public smoke also verified that the NorAuto Match badge/brand remains visible after the auth/navigation changes.
 
-- Supabase SSR browser/server clients.
-- Next.js 16 root `proxy.ts` session refresh using `getClaims()`.
-- `/login` password sign-in and signup actions.
-- email confirmation route.
-- sign-out route.
-- `/account` protected by verified Supabase identity.
-- `/garage` protected by verified Supabase identity and owner-scoped RLS.
-- `/manager` additionally requires active NorAutoMatch `operator`, `admin`, or `founder` membership.
-- Existing manager API HMAC/session + durable-revocation boundary remains in place; Supabase membership does not replace it.
+## Security / authority boundary
 
-## External Cost/Darwin verification receipt
+- normal users cannot self-assign operator/admin/founder roles
+- browser-facing authorization relies on RLS and scoped membership rather than trusting user-controlled metadata
+- service/elevated secrets are not exposed in the browser
+- TOAT infrastructure is not used by NorAutoMatch
+- authentication does not grant deal, pricing, financing, or manager authority
 
-GitHub-hosted Actions capacity was exhausted, so verification was routed to a temporary free Render service rather than purchasing additional CI capacity.
+## Open user-live proof
 
-Validated candidate SHA: `cdf606df984f6adea3c37ca117f266abfe1c7e96`
-Validator service: `norautomatch-auth-r1-validator`
-Render deploy: `dep-dakqdcnf3r2c73du8hi0`
+A complete successful real-user sequence remains open:
 
-Observed build evidence:
-- `npm install --package-lock-only --ignore-scripts` completed.
-- dependency audit covered 521 packages and reported 0 vulnerabilities.
-- `npm ci` completed.
-- `npm run typecheck` completed with no TypeScript error.
-- `npm run build` completed successfully under Next.js 16.3.3.
-- all 28 application routes generated successfully, including `/login`, `/account`, `/garage`, `/manager`, `/auth/confirm`, and `/auth/signout`.
-- Render reported `Build successful` and the temporary validator became live.
+`Create account -> receive confirmation email -> click confirmation -> sign in -> open Garage -> save vehicle -> sign out -> sign back in -> verify saved vehicle persists`
 
-This verifies the application build behavior for the exact candidate SHA above. It does not equal deployment to the customer-facing NorAutoMatch service or user-live authentication proof.
-
-## Remaining gates
-
-1. The generated `package-lock.json` exists in the external validator build but has not yet been banked back into GitHub because the current execution environment cannot directly retrieve the validator-hosted artifact. This is a packaging/provenance gap, not a failed build.
-2. Render's existing customer-facing NorAutoMatch service tracks `main` with auto-deploy enabled, while the verified inventory canonical branch is `reactivation/2026-09-08`; do not inject auth env vars or deploy until that branch boundary is deliberately reconciled.
-3. User-live signup, email confirmation, login, logout, customer-route protection, and manager-role denial/allow behavior remain to be proven after a safe preview/deployment path is prepared.
-
-No completion claim beyond the states above is authorized by this receipt.
+The prior user-live attempt exposed UX ambiguity and confirmation-flow issues. Those defects were corrected afterward, but the corrected end-to-end mailbox exercise has not yet been independently completed by a human. It must not be called user-live PASS until that occurs.
