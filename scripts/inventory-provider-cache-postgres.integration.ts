@@ -47,8 +47,8 @@ const currentStateTable = "igniaqua.inventory_provider_current_state";
 const snapshotsTable = "igniaqua.inventory_provider_snapshots";
 
 async function main() {
-  const connectionString = process.env.NORAUTO_CRM_DATABASE_URL;
-  if (!connectionString) throw new Error("NORAUTO_CRM_DATABASE_URL is required for inventory cache persistence integration test.");
+  const connectionString = process.env.NORAUTO_INVENTORY_DATABASE_URL;
+  if (!connectionString) throw new Error("NORAUTO_INVENTORY_DATABASE_URL is required for inventory cache persistence integration test.");
 
   const pool = new Pool({ connectionString, max: 2, connectionTimeoutMillis: 5_000 });
 

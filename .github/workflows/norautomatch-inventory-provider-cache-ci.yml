@@ -68,22 +68,27 @@ jobs:
         run: node .tmp-inventory-provider-cache-tests/scripts/inventory-provider-cache.behavior.js
       - name: Execute Postgres persistence challenges
         env:
-          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_INVENTORY_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
         run: node .tmp-inventory-provider-cache-tests/scripts/inventory-provider-cache-postgres.integration.js
+      - name: Enforce inventory persistence isolation
+        run: |
+          if grep -n -F 'NORAUTO_CRM_DATABASE_URL' src/lib/orr-cached-customer-catalog.ts scripts/run-inventory-provider-sync.ts scripts/inventory-provider-cache-postgres.integration.ts; then
+            echo 'Inventory persistence regressed onto the CRM database authority boundary.' >&2
+            exit 1
+          fi
+          grep -F 'NORAUTO_INVENTORY_DATABASE_URL' src/lib/orr-cached-customer-catalog.ts
+          grep -F 'NORAUTO_INVENTORY_DATABASE_URL' scripts/run-inventory-provider-sync.ts
+          grep -F 'NORAUTO_INVENTORY_DATABASE_URL' scripts/inventory-provider-cache-postgres.integration.ts
       - name: Enforce customer-path source isolation
         run: |
           if grep -R -n -F 'loadOrrCustomerCatalog' src/app src/components; then
             echo 'Customer request path regressed to direct request-time dealership source discovery.' >&2
             exit 1
           fi
-          # R1 customer browsing uses the proven resilient boundary: verified durable
-          # cache first, then the bounded single-flight live fallback recorded in the
-          # R1 closure receipt. Lead evidence remains cache-only.
           grep -F 'loadOrrResilientCustomerCatalog' src/app/api/inventory/route.ts
           grep -F 'loadOrrResilientCustomerCatalog' src/app/inventory/page.tsx
           grep -F 'loadOrrResilientCustomerCatalog' src/components/inventory/home-inventory-spotlight.tsx
           grep -F 'loadOrrCachedCustomerCatalog' src/app/api/leads/route.ts
-          # Keep the live fallback contained inside one auditable library boundary.
           grep -F 'loadOrrCachedCustomerCatalog' src/lib/orr-resilient-customer-catalog.ts
           grep -F 'loadOrrCustomerCatalog' src/lib/orr-resilient-customer-catalog.ts
           grep -F 'export const dynamic = "force-dynamic"' src/app/page.tsx
