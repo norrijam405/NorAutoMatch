@@ -43,6 +43,9 @@ const snapshot: InventoryProviderSnapshot = {
   ],
 };
 
+const currentStateTable = "igniaqua.inventory_provider_current_state";
+const snapshotsTable = "igniaqua.inventory_provider_snapshots";
+
 async function main() {
   const connectionString = process.env.NORAUTO_CRM_DATABASE_URL;
   if (!connectionString) throw new Error("NORAUTO_CRM_DATABASE_URL is required for inventory cache persistence integration test.");
@@ -50,8 +53,8 @@ async function main() {
   const pool = new Pool({ connectionString, max: 2, connectionTimeoutMillis: 5_000 });
 
   try {
-    await pool.query("DELETE FROM inventory_provider_current_state WHERE provider_id=$1 AND dealership_id=$2", [snapshot.providerId, snapshot.dealershipId]);
-    await pool.query("DELETE FROM inventory_provider_snapshots WHERE provider_id=$1 AND dealership_id=$2", [snapshot.providerId, snapshot.dealershipId]);
+    await pool.query(`DELETE FROM ${currentStateTable} WHERE provider_id=$1 AND dealership_id=$2`, [snapshot.providerId, snapshot.dealershipId]);
+    await pool.query(`DELETE FROM ${snapshotsTable} WHERE provider_id=$1 AND dealership_id=$2`, [snapshot.providerId, snapshot.dealershipId]);
 
     const firstState = reconcileInventoryProviderCurrentState({ previous: null, currentSnapshot: snapshot }).state;
     const committed = await persistInventoryProviderSnapshotAndState({ pool, snapshot, state: firstState });
@@ -120,8 +123,8 @@ async function main() {
 
     console.log("PASS_PROVIDER_NEUTRAL_INVENTORY_CACHE_POSTGRES");
   } finally {
-    await pool.query("DELETE FROM inventory_provider_current_state WHERE provider_id=$1 AND dealership_id=$2", [snapshot.providerId, snapshot.dealershipId]).catch(() => undefined);
-    await pool.query("DELETE FROM inventory_provider_snapshots WHERE provider_id=$1 AND dealership_id=$2", [snapshot.providerId, snapshot.dealershipId]).catch(() => undefined);
+    await pool.query(`DELETE FROM ${currentStateTable} WHERE provider_id=$1 AND dealership_id=$2`, [snapshot.providerId, snapshot.dealershipId]).catch(() => undefined);
+    await pool.query(`DELETE FROM ${snapshotsTable} WHERE provider_id=$1 AND dealership_id=$2`, [snapshot.providerId, snapshot.dealershipId]).catch(() => undefined);
     await pool.end();
   }
 }
