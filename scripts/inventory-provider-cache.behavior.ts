@@ -102,6 +102,26 @@ assert.equal(inTransitCached.vehicles[0].inTransit, true);
 assert.equal(inTransitCached.vehicles[0].sourceStockStatus, "In Transit");
 assert.equal(inTransitCached.rejected.length, 0);
 
+const coupeSnapshot = buildOrrProviderSnapshot(discovery([
+  hit({
+    objectID: "obj-coupe",
+    vin: "1N4AA6EV0GC444444",
+    stock_number: "444444C",
+    model: "Z",
+    car_trim: "Performance",
+    category: "Coupe",
+  }),
+], "2026-09-14T18:45:00.000Z", "snapshot-hash-coupe"));
+const coupeState = reconcileInventoryProviderCurrentState({ previous: null, currentSnapshot: coupeSnapshot });
+const coupeCached = buildCachedCustomerInventory({
+  state: coupeState.state,
+  nowMs: Date.parse("2026-09-14T19:00:00.000Z"),
+  maxAgeMs: 2 * 60 * 60 * 1000,
+});
+assert.equal(coupeCached.vehicles.length, 1, "source-supported body styles must not be discarded by cache normalization");
+assert.equal(coupeCached.vehicles[0].type, "Coupe");
+assert.equal(coupeCached.rejected.length, 0);
+
 const inactiveRuntime = resolveInventoryRuntime({ mode: "live-enabled" });
 assert.throws(() => buildProviderCachedCatalog({ runtime: inactiveRuntime, cached }), /INVENTORY_CACHE_RUNTIME_NOT_ACTIVATED/);
 const activeRuntime = resolveInventoryRuntime({ mode: "live-enabled", liveActivation: LIVE_INVENTORY_ACTIVATION_VALUE });
