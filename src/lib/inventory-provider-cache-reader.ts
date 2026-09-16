@@ -18,12 +18,13 @@ export type CachedInventoryReadResult = {
 };
 
 function normalizeBodyType(value?: string): Vehicle["type"] | undefined {
-  if (!value) return undefined;
-  const text = value.toLowerCase();
+  const sourceValue = value?.trim();
+  if (!sourceValue) return undefined;
+  const text = sourceValue.toLowerCase();
   if (text.includes("suv") || text.includes("crossover")) return "SUV";
   if (text.includes("truck") || text.includes("pickup")) return "Truck";
-  if (text.includes("sedan") || text.includes("car")) return "Sedan";
-  return undefined;
+  if (text.includes("sedan")) return "Sedan";
+  return sourceValue;
 }
 
 function recordToVehicle(record: InventoryProviderRecord): Vehicle | undefined {
