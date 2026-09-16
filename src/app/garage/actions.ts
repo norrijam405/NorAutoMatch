@@ -70,6 +70,7 @@ export async function recordMatchDnaSignal(
 export async function saveVehicleToGarage(
   vinInput: string,
   surface = "unknown",
+  dnaAction: Extract<MatchDnaAction, "keep" | "garage_save"> = "garage_save",
 ): Promise<ActionResult> {
   const vin = vinInput.trim().toUpperCase();
   if (!VIN_RE.test(vin)) return { ok: false, error: "invalid_vin" };
@@ -84,7 +85,7 @@ export async function saveVehicleToGarage(
   if (saveError) return { ok: false, error: "garage_save_failed" };
 
   const [dnaResult, scoutResult] = await Promise.all([
-    insertMatchDnaEvent(supabase, userId, vin, "garage_save", surface),
+    insertMatchDnaEvent(supabase, userId, vin, dnaAction, surface),
     supabase
       .from("market_scout_jobs")
       .upsert(
