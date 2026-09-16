@@ -105,10 +105,14 @@ Customer-facing copy was tightened so that:
 
 Authority effect: **NONE**.
 
+## Durable inventory-cache closure finding
+
+The live warning `INVENTORY_CACHE_DATABASE_UNAVAILABLE` was traced to the current cache loader requiring `NORAUTO_CRM_DATABASE_URL`. The NorAuto Supabase project was checked directly and does **not** currently contain the cache tables expected by this reader: `inventory_provider_snapshots` and `inventory_provider_current_state`. No proven migration defining those exact tables was found in the repository. Therefore R1 intentionally keeps the already-proven bounded process-local TTL + single-flight Orr fallback rather than wiring a database URL into an absent schema. Durable caching remains V1.1 work and must be introduced through an explicit reviewed migration before activation.
+
 ## R1 follow-on hardening — not blockers to customer-showable status
 
-1. Bank the externally generated deterministic `package-lock.json` into canonical Git history.
-2. Replace the current verified-live process cache with durable Supabase inventory caching when the database path is available and proven.
+1. Bank the externally generated deterministic `package-lock.json` into canonical Git history. The correct lock is generated and `npm ci`-proven externally; the committed lock remains the older pre-Supabase tree.
+2. Design, review, migrate, and then activate durable Supabase inventory caching. The expected cache tables are not yet present; do not configure `NORAUTO_CRM_DATABASE_URL` until the schema is proven.
 3. Complete a real human signup -> email confirmation -> login -> Garage persistence exercise.
 4. Enrich/recover the seven quarantined source rows where Orr/VDP evidence supports it.
 5. Build the operator UI for VIN-bound lot-photo upload/reorder/cover selection.
