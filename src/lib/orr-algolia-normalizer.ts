@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import type { LiveInventoryRecord } from "./live-inventory";
+import { resolveOrrIdentityEvidence } from "./orr-identity-evidence";
 import type { OrrAlgoliaDiscovery, OrrAlgoliaHit } from "./orr-public-algolia";
 
 const SOURCE_NAME = "orrnissanwest_public_algolia";
-const PARSER_VERSION = "orr-algolia-v7";
+const PARSER_VERSION = "orr-algolia-v8";
 const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/i;
 const DEALER_ID = 2175;
 const RIDEMOTIVE_IMAGE_BASE = "https://images.app.ridemotive.com/";
@@ -17,11 +18,13 @@ export type OrrAlgoliaNormalizationIssue = {
     | "DEALER_MISMATCH"
     | "VIN_INVALID"
     | "IDENTITY_INCOMPLETE"
+    | "IDENTITY_EVIDENCE_ENRICHED"
     | "STOCK_NUMBER_MISSING"
     | "PRICE_INVALID"
     | "DUPLICATE_VIN"
     | "INACTIVE_HIT";
   message: string;
+  evidenceUrl?: string;
 };
 
 export type OrrAlgoliaNormalizationResult = {
@@ -136,7 +139,9 @@ export function normalizeOrrAlgoliaHit(
   const year = numberValue(hit.make_year);
   const make = stringValue(hit.make);
   const model = stringValue(hit.model);
-  const trim = stringValue(hit.car_trim);
+  const sourceTrim = stringValue(hit.car_trim);
+  const identityEvidence = !sourceTrim ? resolveOrrIdentityEvidence(hit) : undefined;
+  const trim = sourceTrim ?? identityEvidence?.trim;
   const stockNumber = stringValue(hit.stock_number);
   const price = positiveMoney(hit.price) ?? positiveMoney(hit.functional_price);
 
@@ -187,6 +192,20 @@ export function normalizeOrrAlgoliaHit(
     parserVersion: PARSER_VERSION,
     consecutiveHealthyMisses: 0,
   };
+
+  if (identityEvidence) {
+    return {
+      record,
+      issue: {
+        objectID,
+        vin,
+        severity: "WARNING",
+        code: "IDENTITY_EVIDENCE_ENRICHED",
+        message: `Trim '${identityEvidence.trim}' recovered from exact VIN-specific public Orr VDP evidence observed ${identityEvidence.observedAt}.`,
+        evidenceUrl: identityEvidence.evidenceUrl,
+      },
+    };
+  }
 
   return stockNumber
     ? { record }

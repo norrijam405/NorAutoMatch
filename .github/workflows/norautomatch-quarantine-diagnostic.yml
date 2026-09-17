@@ -1,0 +1,52 @@
+name: NorAutoMatch Orr Quarantine Diagnostic
+
+on:
+  push:
+    branches:
+      - "feature/2026-09-16-quarantine-recovery-v1-1"
+    paths:
+      - ".github/workflows/norautomatch-quarantine-diagnostic.yml"
+      - "scripts/orr-normalized-shadow.ts"
+      - "scripts/orr-quarantine-recovery-test.ts"
+      - "src/lib/orr-public-algolia.ts"
+      - "src/lib/orr-algolia-normalizer.ts"
+      - "src/lib/orr-identity-evidence.ts"
+      - "src/lib/live-inventory.ts"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Compile read-only Orr diagnostic and recovery test
+        run: |
+          rm -rf .tmp-quarantine
+          npx tsc scripts/orr-normalized-shadow.ts scripts/orr-quarantine-recovery-test.ts src/lib/orr-public-algolia.ts src/lib/orr-algolia-normalizer.ts src/lib/orr-identity-evidence.ts src/lib/live-inventory.ts --target ES2022 --module commonjs --moduleResolution node --esModuleInterop --strict --skipLibCheck --outDir .tmp-quarantine
+
+      - name: Prove evidence recovery fails closed
+        run: node .tmp-quarantine/scripts/orr-quarantine-recovery-test.js
+
+      - name: Capture current normalized quarantine receipt
+        run: node .tmp-quarantine/scripts/orr-normalized-shadow.js | tee /tmp/orr-quarantine-receipt.json
+
+      - name: Upload diagnostic receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: orr-quarantine-diagnostic
+          path: /tmp/orr-quarantine-receipt.json
+          if-no-files-found: error
