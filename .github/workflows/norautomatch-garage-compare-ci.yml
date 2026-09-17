@@ -1,0 +1,57 @@
+name: NorAutoMatch Garage Compare CI
+
+on:
+  push:
+    branches:
+      - "feature/2026-09-16-garage-saved-compare-v1-1"
+    paths:
+      - ".github/workflows/norautomatch-garage-compare-ci.yml"
+      - "scripts/garage-change-signals-test.ts"
+      - "src/app/garage/page.tsx"
+      - "src/components/garage/**"
+      - "src/lib/garage-change-signals.ts"
+      - "src/lib/supabase/**"
+  pull_request:
+    paths:
+      - ".github/workflows/norautomatch-garage-compare-ci.yml"
+      - "scripts/garage-change-signals-test.ts"
+      - "src/app/garage/page.tsx"
+      - "src/components/garage/**"
+      - "src/lib/garage-change-signals.ts"
+      - "src/lib/supabase/**"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Compile and run deterministic Garage change proof
+        run: |
+          rm -rf .tmp-garage-change
+          npx tsc scripts/garage-change-signals-test.ts src/lib/garage-change-signals.ts --target ES2022 --module commonjs --moduleResolution node --esModuleInterop --strict --skipLibCheck --outDir .tmp-garage-change
+          node .tmp-garage-change/scripts/garage-change-signals-test.js
+          rm -rf .tmp-garage-change
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
