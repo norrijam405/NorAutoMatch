@@ -1,0 +1,56 @@
+name: NorAutoMatch Lot Photo Public CI
+
+on:
+  push:
+    branches:
+      - "feature/2026-09-16-lot-photo-public-consumption-v1-1"
+    paths:
+      - ".github/workflows/norautomatch-lot-photo-public-ci.yml"
+      - "scripts/lot-photo-merge-test.ts"
+      - "src/app/vehicles/[vin]/page.tsx"
+      - "src/lib/lot-photo-merge.ts"
+      - "src/lib/lot-photo-public.ts"
+      - "src/lib/supabase/**"
+  pull_request:
+    paths:
+      - ".github/workflows/norautomatch-lot-photo-public-ci.yml"
+      - "scripts/lot-photo-merge-test.ts"
+      - "src/app/vehicles/[vin]/page.tsx"
+      - "src/lib/lot-photo-merge.ts"
+      - "src/lib/lot-photo-public.ts"
+      - "src/lib/supabase/**"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Compile and run deterministic photo merge proof
+        run: |
+          rm -rf .tmp-lot-photo-public
+          npx tsc scripts/lot-photo-merge-test.ts src/lib/lot-photo-merge.ts --target ES2022 --module commonjs --moduleResolution node --esModuleInterop --strict --skipLibCheck --outDir .tmp-lot-photo-public
+          node .tmp-lot-photo-public/scripts/lot-photo-merge-test.js
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
