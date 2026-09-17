@@ -8,7 +8,7 @@ import pg from "pg";
 
 const { Client } = pg;
 
-const migrations = [
+const crmMigrations = [
   "infrastructure/norautomatch-crm-v1.sql",
   "infrastructure/norautomatch-crm-v2-manager-handoffs.sql",
   "infrastructure/norautomatch-crm-v3-outbox-relay.sql",
@@ -20,6 +20,9 @@ const migrations = [
   "infrastructure/norautomatch-crm-v9-lifecycle-audit-hardening.sql",
   "infrastructure/norautomatch-crm-v10-legal-hold-dispositions.sql",
   "infrastructure/norautomatch-crm-v11-manager-session-revocation.sql",
+];
+
+const inventoryMigrations = [
   "infrastructure/norautomatch-crm-v12-inventory-provider-cache.sql",
   "infrastructure/norautomatch-crm-v13-private-inventory-provider-cache.sql",
 ];
@@ -28,7 +31,7 @@ function sha256(text) {
   return createHash("sha256").update(text).digest("hex");
 }
 
-async function applyMigrations(connectionString) {
+async function applyMigrations(connectionString, migrationNames, authorityName) {
   const client = new Client({ connectionString });
   await client.connect();
 
@@ -42,7 +45,7 @@ async function applyMigrations(connectionString) {
       )
     `);
 
-    for (const migrationName of migrations) {
+    for (const migrationName of migrationNames) {
       const sql = await readFile(migrationName, "utf8");
       const digest = sha256(sql);
       const existing = await client.query(
@@ -53,9 +56,9 @@ async function applyMigrations(connectionString) {
       if (existing.rowCount === 1) {
         const recorded = existing.rows[0].sha256.trim();
         if (recorded !== digest) {
-          throw new Error(`MIGRATION_CHECKSUM_MISMATCH:${migrationName}:recorded=${recorded}:current=${digest}`);
+          throw new Error(`MIGRATION_CHECKSUM_MISMATCH:${authorityName}:${migrationName}:recorded=${recorded}:current=${digest}`);
         }
-        console.log(`MIGRATION_ALREADY_APPLIED ${migrationName} ${digest}`);
+        console.log(`MIGRATION_ALREADY_APPLIED ${authorityName} ${migrationName} ${digest}`);
         continue;
       }
 
@@ -74,7 +77,7 @@ async function applyMigrations(connectionString) {
         throw error;
       }
 
-      console.log(`MIGRATION_APPLIED ${migrationName} ${digest}`);
+      console.log(`MIGRATION_APPLIED ${authorityName} ${migrationName} ${digest}`);
     }
   } finally {
     await client.end();
@@ -100,12 +103,23 @@ async function prepareStandaloneRuntime() {
 }
 
 async function main() {
-  const connectionString = process.env.NORAUTO_CRM_DATABASE_URL?.trim();
+  const crmConnectionString = process.env.NORAUTO_CRM_DATABASE_URL?.trim();
+  const inventoryConnectionString = process.env.NORAUTO_INVENTORY_DATABASE_URL?.trim();
 
-  if (connectionString) {
-    await applyMigrations(connectionString);
+  if (crmConnectionString && inventoryConnectionString && crmConnectionString === inventoryConnectionString) {
+    throw new Error("INVENTORY_DATABASE_MUST_BE_SEPARATE_FROM_CRM");
+  }
+
+  if (crmConnectionString) {
+    await applyMigrations(crmConnectionString, crmMigrations, "CRM");
   } else {
     console.log("MIGRATION_SKIPPED NORAUTO_CRM_DATABASE_URL_NOT_CONFIGURED");
+  }
+
+  if (inventoryConnectionString) {
+    await applyMigrations(inventoryConnectionString, inventoryMigrations, "INVENTORY");
+  } else {
+    console.log("MIGRATION_SKIPPED NORAUTO_INVENTORY_DATABASE_URL_NOT_CONFIGURED");
   }
 
   if (process.env.NORAUTO_MIGRATION_ONLY === "1") {
