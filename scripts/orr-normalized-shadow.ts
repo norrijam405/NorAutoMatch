@@ -5,6 +5,12 @@ function present(value: unknown) {
   return value !== undefined && value !== null && !(typeof value === "string" && value.trim() === "");
 }
 
+function boundedString(value: unknown, max = 240) {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  return trimmed.length > max ? `${trimmed.slice(0, max)}…` : trimmed;
+}
+
 async function main() {
   const discovery = await discoverOrrAlgoliaInventory({ hitsPerPage: 100, maxPages: 10 });
   const normalized = normalizeOrrAlgoliaDiscovery(discovery);
@@ -66,6 +72,50 @@ async function main() {
     };
   });
 
+  const errorEvidence = normalized.issues
+    .filter((issue) => issue.severity === "ERROR")
+    .map((issue) => {
+      const hit = discovery.hits.find((candidate) =>
+        (issue.objectID && String(candidate.objectID ?? candidate.id) === issue.objectID) ||
+        (issue.vin && candidate.vin === issue.vin),
+      );
+      if (!hit) return { code: issue.code, objectID: issue.objectID, vin: issue.vin, hitFound: false };
+      return {
+        code: issue.code,
+        objectID: issue.objectID,
+        vin: issue.vin,
+        hitFound: true,
+        stockNumber: hit.stock_number,
+        year: hit.make_year,
+        make: hit.make,
+        model: hit.model,
+        carTrim: hit.car_trim,
+        alternateIdentity: {
+          trim: boundedString(hit.trim),
+          series: boundedString(hit.series),
+          style: boundedString(hit.style),
+          title: boundedString(hit.title),
+          vehicleName: boundedString(hit.vehicle_name),
+          displayName: boundedString(hit.display_name),
+          name: boundedString(hit.name),
+        },
+        pricing: {
+          price: hit.price,
+          functionalPrice: hit.functional_price,
+          msrp: hit.msrp,
+          rebatePrice: hit.rebate_price,
+          salePrice: hit.sale_price,
+          internetPrice: hit.internet_price,
+          dealerPrice: hit.dealer_price,
+        },
+        stockStatus: hit.stock_status,
+        inTransit: hit.in_transit,
+        isActive: hit.is_active,
+        archived: hit.archived,
+        onHold: hit.on_hold,
+      };
+    });
+
   const identityGapPatterns = normalized.issues
     .filter((issue) => issue.code === "IDENTITY_INCOMPLETE")
     .reduce<Record<string, number>>((counts, issue) => {
@@ -109,6 +159,7 @@ async function main() {
     issueCounts,
     identityGapPatterns,
     issueSamples,
+    errorEvidence,
     sample: normalized.records.slice(0, 10).map((record) => ({
       vin: record.vin,
       stockNumber: record.stockNumber,
