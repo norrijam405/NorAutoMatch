@@ -74,21 +74,11 @@ export async function setCoverPhoto(formData: FormData) {
   if (!photoId) throw new Error("Missing photo id.");
   const { supabase } = await operatorContext();
 
-  const { error: clearError } = await supabase
-    .from("vehicle_photo_overrides")
-    .update({ is_cover: false })
-    .eq("vin", vin)
-    .eq("active", true)
-    .eq("is_cover", true);
-  if (clearError) throw clearError;
-
-  const { error: setError } = await supabase
-    .from("vehicle_photo_overrides")
-    .update({ is_cover: true })
-    .eq("id", photoId)
-    .eq("vin", vin)
-    .eq("active", true);
-  if (setError) throw setError;
+  const { error } = await supabase.rpc("set_vehicle_photo_cover", {
+    p_vin: vin,
+    p_photo_id: photoId,
+  });
+  if (error) throw error;
 
   revalidatePath(`/manager/photos?vin=${vin}`);
   revalidatePath(`/vehicles/${vin}`);
@@ -135,39 +125,11 @@ export async function deactivateLotPhoto(formData: FormData) {
   if (!photoId) throw new Error("Missing photo id.");
   const { supabase } = await operatorContext();
 
-  const { data: target, error: targetError } = await supabase
-    .from("vehicle_photo_overrides")
-    .select("id, is_cover")
-    .eq("id", photoId)
-    .eq("vin", vin)
-    .eq("active", true)
-    .maybeSingle();
-  if (targetError) throw targetError;
-  if (!target) return;
-
-  const { error: deactivateError } = await supabase
-    .from("vehicle_photo_overrides")
-    .update({ active: false, is_cover: false })
-    .eq("id", photoId)
-    .eq("vin", vin);
-  if (deactivateError) throw deactivateError;
-
-  if (target.is_cover) {
-    const { data: replacement, error: replacementError } = await supabase
-      .from("vehicle_photo_overrides")
-      .select("id")
-      .eq("vin", vin)
-      .eq("active", true)
-      .order("sort_order", { ascending: true })
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (replacementError) throw replacementError;
-    if (replacement) {
-      const { error: coverError } = await supabase.from("vehicle_photo_overrides").update({ is_cover: true }).eq("id", replacement.id).eq("vin", vin);
-      if (coverError) throw coverError;
-    }
-  }
+  const { error } = await supabase.rpc("deactivate_vehicle_photo", {
+    p_vin: vin,
+    p_photo_id: photoId,
+  });
+  if (error) throw error;
 
   revalidatePath(`/manager/photos?vin=${vin}`);
   revalidatePath(`/vehicles/${vin}`);
