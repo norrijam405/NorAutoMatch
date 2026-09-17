@@ -32,8 +32,9 @@ export default async function LotPhotoDesk({ searchParams }: { searchParams: Pro
 
   if (error) throw error;
 
-  const activePhotos = photos.filter((photo) => photo.active);
-  const inactivePhotos = photos.filter((photo) => !photo.active);
+  const photoRows = photos ?? [];
+  const activePhotos = photoRows.filter((photo) => photo.active);
+  const inactivePhotos = photoRows.filter((photo) => !photo.active);
 
   return (
     <main className="min-h-[72vh] border-b border-white/5 bg-slate-950/35 py-12 sm:py-16">
