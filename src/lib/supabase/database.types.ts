@@ -80,7 +80,16 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      set_vehicle_photo_cover: {
+        Args: { p_vin: string; p_photo_id: string };
+        Returns: boolean;
+      };
+      deactivate_vehicle_photo: {
+        Args: { p_vin: string; p_photo_id: string };
+        Returns: boolean;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
