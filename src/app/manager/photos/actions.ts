@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { requireNorAutoMembership } from "@/lib/supabase/authz";
-import { createClient } from "@/lib/supabase/server";
 
 const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/;
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -18,8 +17,7 @@ function normalizeVin(value: FormDataEntryValue | null) {
 
 async function operatorContext() {
   const membership = await requireNorAutoMembership(["operator", "admin", "founder"], "/manager/photos");
-  const supabase = await createClient();
-  return { membership, supabase };
+  return { userId: membership.userId, supabase: membership.supabase };
 }
 
 export async function uploadLotPhoto(formData: FormData) {
@@ -29,7 +27,7 @@ export async function uploadLotPhoto(formData: FormData) {
   if (!ALLOWED_TYPES.has(file.type)) throw new Error("Use a JPG, PNG, or WebP image.");
   if (file.size > MAX_BYTES) throw new Error("Photo must be 12 MB or smaller.");
 
-  const { membership, supabase } = await operatorContext();
+  const { userId, supabase } = await operatorContext();
   const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
   const path = `${vin}/${randomUUID()}.${extension}`;
 
@@ -58,7 +56,7 @@ export async function uploadLotPhoto(formData: FormData) {
     sort_order: nextSort,
     is_cover: shouldCover,
     active: true,
-    uploaded_by: membership.user.id,
+    uploaded_by: userId,
   });
 
   if (insertError) {
