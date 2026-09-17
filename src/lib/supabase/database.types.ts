@@ -49,6 +49,18 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["vehicle_scout_dossiers"]["Row"]>;
         Relationships: [];
       };
+      vehicle_photo_overrides: {
+        Row: {
+          id: string; vin: string; storage_path: string; sort_order: number; is_cover: boolean;
+          active: boolean; uploaded_by: string; created_at: string; updated_at: string;
+        };
+        Insert: {
+          id?: string; vin: string; storage_path: string; sort_order?: number; is_cover?: boolean;
+          active?: boolean; uploaded_by: string; created_at?: string; updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["vehicle_photo_overrides"]["Row"]>;
+        Relationships: [];
+      };
       inventory_vehicles: {
         Row: {
           vin: string; workspace_id: string; dealer_id: number; provider: string; source_url: string;
@@ -68,7 +80,16 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      set_vehicle_photo_cover: {
+        Args: { p_vin: string; p_photo_id: string };
+        Returns: boolean;
+      };
+      deactivate_vehicle_photo: {
+        Args: { p_vin: string; p_photo_id: string };
+        Returns: boolean;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
