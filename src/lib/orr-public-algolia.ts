@@ -41,10 +41,13 @@ export type OrrAlgoliaHit = Record<string, unknown> & {
   parsed_features?: string[];
   features?: string;
   rebate_price?: number | string;
+  images?: string[];
+  webp_images?: string[];
   is_active?: boolean;
   archived?: boolean;
   on_hold?: boolean;
   stock_status?: string;
+  in_transit?: boolean;
 };
 
 export type OrrAlgoliaDiscovery = {
@@ -99,6 +102,14 @@ export function extractOrrAlgoliaConfig(html: string): OrrAlgoliaConfig {
   return { appId, apiKey, indexPrefix };
 }
 
+function hitBelongsToOrrWest(hit: OrrAlgoliaHit) {
+  const associated = Array.isArray(hit.dealer_ids)
+    ? hit.dealer_ids.map((value) => Number(value)).filter(Number.isFinite)
+    : [];
+  if (associated.length > 0) return associated.includes(ORR_DEALER_ID);
+  return Number(hit.dealer_id) === ORR_DEALER_ID;
+}
+
 async function fetchTextBounded(url: string, timeoutMs: number, maxBytes: number) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -132,8 +143,11 @@ async function queryPage(input: {
   timeoutMs: number;
   maxResponseBytes: number;
 }) {
+  // Match the public Orr Nissan West inventory semantics observed in the site itself:
+  // active vehicles associated with dealer_ids 2175. Primary dealer_id may differ for
+  // inventory the store can still sell, so dealer_id alone is too narrow.
   const params = new URLSearchParams({
-    filters: `dealer_id:${ORR_DEALER_ID}`,
+    filters: `is_active:true AND dealer_ids:"${ORR_DEALER_ID}"`,
     hitsPerPage: String(input.hitsPerPage),
     page: String(input.page),
   });
@@ -168,8 +182,11 @@ async function queryPage(input: {
       throw new OrrAlgoliaError("Public Algolia response lacked required pagination metadata.", "ALGOLIA_RESPONSE_INVALID");
     }
     for (const hit of parsed.hits) {
-      if (Number(hit.dealer_id) !== ORR_DEALER_ID) {
-        throw new OrrAlgoliaError("A returned inventory hit crossed the dealer_id 2175 boundary.", "DEALER_BOUNDARY_VIOLATION");
+      if (!hitBelongsToOrrWest(hit)) {
+        throw new OrrAlgoliaError("A returned inventory hit crossed the Orr Nissan West dealer association boundary.", "DEALER_BOUNDARY_VIOLATION");
+      }
+      if (hit.is_active === false) {
+        throw new OrrAlgoliaError("A returned inventory hit was not active despite the active-inventory query.", "DEALER_BOUNDARY_VIOLATION");
       }
     }
     return parsed as { hits: OrrAlgoliaHit[]; nbHits: number; nbPages: number; page: number };

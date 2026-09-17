@@ -66,13 +66,19 @@ jobs:
       - name: Enforce customer-path source isolation
         run: |
           if grep -R -n -F 'loadOrrCustomerCatalog' src/app src/components; then
-            echo 'Customer request path regressed to request-time dealership source discovery.' >&2
+            echo 'Customer request path regressed to direct request-time dealership source discovery.' >&2
             exit 1
           fi
-          grep -F 'loadOrrCachedCustomerCatalog' src/app/api/inventory/route.ts
-          grep -F 'loadOrrCachedCustomerCatalog' src/app/inventory/page.tsx
-          grep -F 'loadOrrCachedCustomerCatalog' src/components/inventory/home-inventory-spotlight.tsx
+          # R1 customer browsing uses the proven resilient boundary: verified durable
+          # cache first, then the bounded single-flight live fallback recorded in the
+          # R1 closure receipt. Lead evidence remains cache-only.
+          grep -F 'loadOrrResilientCustomerCatalog' src/app/api/inventory/route.ts
+          grep -F 'loadOrrResilientCustomerCatalog' src/app/inventory/page.tsx
+          grep -F 'loadOrrResilientCustomerCatalog' src/components/inventory/home-inventory-spotlight.tsx
           grep -F 'loadOrrCachedCustomerCatalog' src/app/api/leads/route.ts
+          # Keep the live fallback contained inside one auditable library boundary.
+          grep -F 'loadOrrCachedCustomerCatalog' src/lib/orr-resilient-customer-catalog.ts
+          grep -F 'loadOrrCustomerCatalog' src/lib/orr-resilient-customer-catalog.ts
           grep -F 'export const dynamic = "force-dynamic"' src/app/page.tsx
           grep -F 'norautomatch-crm-v12-inventory-provider-cache.sql' scripts/start-production.mjs
       - name: Typecheck customer application
