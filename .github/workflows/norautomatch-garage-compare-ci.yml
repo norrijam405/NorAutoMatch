@@ -1,0 +1,46 @@
+name: NorAutoMatch Garage Compare CI
+
+on:
+  push:
+    branches:
+      - "feature/2026-09-16-garage-saved-compare-v1-1"
+    paths:
+      - ".github/workflows/norautomatch-garage-compare-ci.yml"
+      - "src/app/garage/page.tsx"
+      - "src/components/garage/**"
+      - "src/lib/supabase/**"
+  pull_request:
+    paths:
+      - ".github/workflows/norautomatch-garage-compare-ci.yml"
+      - "src/app/garage/page.tsx"
+      - "src/components/garage/**"
+      - "src/lib/supabase/**"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
