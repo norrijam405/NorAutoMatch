@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LogIn, Menu, MessageSquareText, Phone, X } from "lucide-react";
+import { LogIn, LogOut, Menu, MessageSquareText, Phone, X } from "lucide-react";
 import { useState } from "react";
 import { brand } from "@/lib/brand";
 import { NAM_BADGE_DATA_URI } from "@/lib/brand-images";
@@ -28,7 +28,7 @@ const links = [
   { href: "/terms", label: "Disclosures" },
 ];
 
-export function Header() {
+export function Header({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -39,13 +39,19 @@ export function Header() {
           {links.map((link) => <Link key={link.href} href={link.href} className="text-sm font-semibold text-slate-300 hover:text-white">{link.label}</Link>)}
         </nav>
         <div className="hidden items-center gap-2 sm:flex">
-          <Link href="/login" className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm font-black text-white hover:border-red-300/50 hover:text-red-200"><LogIn size={16} /> Sign in</Link>
+          {isAuthenticated ? (
+            <form action="/auth/signout" method="post">
+              <button type="submit" className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm font-black text-white hover:border-red-300/50 hover:text-red-200"><LogOut size={16} /> Sign out</button>
+            </form>
+          ) : (
+            <Link href="/login" className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm font-black text-white hover:border-red-300/50 hover:text-red-200"><LogIn size={16} /> Sign in</Link>
+          )}
           <a href={brand.textHref} className="btn-secondary min-h-10 px-4 py-2"><MessageSquareText size={16} /> Text me</a>
           <a href={`tel:${brand.phoneRaw}`} className="btn-primary min-h-10 px-4 py-2"><Phone size={16} /> {brand.phoneDisplay}</a>
         </div>
         <button className="grid size-10 shrink-0 place-items-center rounded-xl border border-white/10 md:hidden" onClick={() => setOpen(!open)} aria-label="Toggle menu" aria-expanded={open}>{open ? <X size={20} /> : <Menu size={20} />}</button>
       </div>
-      {open && <div className="border-t border-white/10 bg-slate-950 px-4 py-4 md:hidden"><nav className="shell flex flex-col gap-1.5">{links.map((link) => <Link key={link.href} href={link.href} onClick={() => setOpen(false)} className="rounded-xl px-3 py-3 text-base font-semibold text-slate-200 hover:bg-white/5">{link.label}</Link>)}<Link href="/login" onClick={() => setOpen(false)} className="mt-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-300/30 bg-red-300/10 px-4 font-black text-red-200"><LogIn size={16} /> Sign in / Create account</Link><div className="mt-3 grid grid-cols-2 gap-2"><a href={brand.textHref} className="btn-secondary min-h-11"><MessageSquareText size={16} /> Text</a><a href={`tel:${brand.phoneRaw}`} className="btn-primary min-h-11"><Phone size={16} /> Call</a></div></nav></div>}
+      {open && <div className="border-t border-white/10 bg-slate-950 px-4 py-4 md:hidden"><nav className="shell flex flex-col gap-1.5">{links.map((link) => <Link key={link.href} href={link.href} onClick={() => setOpen(false)} className="rounded-xl px-3 py-3 text-base font-semibold text-slate-200 hover:bg-white/5">{link.label}</Link>)}{isAuthenticated ? <form action="/auth/signout" method="post" className="mt-2"><button type="submit" className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-300/30 bg-red-300/10 px-4 font-black text-red-200"><LogOut size={16} /> Sign out</button></form> : <Link href="/login" onClick={() => setOpen(false)} className="mt-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-300/30 bg-red-300/10 px-4 font-black text-red-200"><LogIn size={16} /> Sign in / Create account</Link>}<div className="mt-3 grid grid-cols-2 gap-2"><a href={brand.textHref} className="btn-secondary min-h-11"><MessageSquareText size={16} /> Text</a><a href={`tel:${brand.phoneRaw}`} className="btn-primary min-h-11"><Phone size={16} /> Call</a></div></nav></div>}
     </header>
   );
 }
