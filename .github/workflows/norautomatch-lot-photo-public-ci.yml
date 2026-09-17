@@ -45,6 +45,7 @@ jobs:
           rm -rf .tmp-lot-photo-public
           npx tsc scripts/lot-photo-merge-test.ts src/lib/lot-photo-merge.ts --target ES2022 --module commonjs --moduleResolution node --esModuleInterop --strict --skipLibCheck --outDir .tmp-lot-photo-public
           node .tmp-lot-photo-public/scripts/lot-photo-merge-test.js
+          rm -rf .tmp-lot-photo-public
 
       - name: Typecheck
         run: npm run typecheck
