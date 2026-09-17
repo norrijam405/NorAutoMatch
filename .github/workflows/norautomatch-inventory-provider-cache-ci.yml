@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - "architecture/**"
+      - "feature/2026-09-16-durable-inventory-cache-v1-1"
   pull_request:
     branches:
       - "reactivation/2026-09-08"
+      - "feature/2026-09-15-supabase-auth-r1"
       - main
 
 permissions:
@@ -42,17 +44,29 @@ jobs:
         run: npm ci
       - name: Dependency security gate
         run: npm audit --audit-level=high
-      - name: Apply checksum-bound production schema twice
+      - name: Apply checksum-bound schemas to separate authorities twice
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_INVENTORY_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_inventory_ci
           NORAUTO_MIGRATION_ONLY: "1"
           NORAUTO_RELEASE_SHA: ${{ github.sha }}
         run: |
+          docker exec ${{ job.services.postgres.id }} createdb -U norauto norauto_inventory_ci
           node scripts/start-production.mjs
           node scripts/start-production.mjs
-          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '12'
-          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.inventory_provider_snapshots') IS NOT NULL" | grep -qx 't'
-          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.inventory_provider_current_state') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '11'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.inventory_provider_snapshots') IS NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('igniaqua.inventory_provider_snapshots') IS NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_inventory_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '2'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_inventory_ci -tAc "SELECT to_regclass('public.inventory_provider_snapshots') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_inventory_ci -tAc "SELECT to_regclass('public.inventory_provider_current_state') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_inventory_ci -tAc "SELECT to_regclass('igniaqua.inventory_provider_snapshots') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_inventory_ci -tAc "SELECT to_regclass('igniaqua.inventory_provider_current_state') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_inventory_ci -tAc "SELECT has_schema_privilege('public', 'igniaqua', 'USAGE')" | grep -qx 'f'
+          grep -F 'const crmMigrations' scripts/start-production.mjs
+          grep -F 'const inventoryMigrations' scripts/start-production.mjs
+          grep -F 'NORAUTO_INVENTORY_DATABASE_URL' scripts/start-production.mjs
+          grep -F 'INVENTORY_DATABASE_MUST_BE_SEPARATE_FROM_CRM' scripts/start-production.mjs
       - name: Compile provider-neutral cache verification surface
         run: |
           rm -rf .tmp-inventory-provider-cache-tests
@@ -61,26 +75,31 @@ jobs:
         run: node .tmp-inventory-provider-cache-tests/scripts/inventory-provider-cache.behavior.js
       - name: Execute Postgres persistence challenges
         env:
-          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_INVENTORY_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_inventory_ci
         run: node .tmp-inventory-provider-cache-tests/scripts/inventory-provider-cache-postgres.integration.js
+      - name: Enforce inventory persistence isolation
+        run: |
+          if grep -n -F 'NORAUTO_CRM_DATABASE_URL' src/lib/orr-cached-customer-catalog.ts scripts/run-inventory-provider-sync.ts scripts/inventory-provider-cache-postgres.integration.ts; then
+            echo 'Inventory persistence regressed onto the CRM database authority boundary.' >&2
+            exit 1
+          fi
+          grep -F 'NORAUTO_INVENTORY_DATABASE_URL' src/lib/orr-cached-customer-catalog.ts
+          grep -F 'NORAUTO_INVENTORY_DATABASE_URL' scripts/run-inventory-provider-sync.ts
+          grep -F 'NORAUTO_INVENTORY_DATABASE_URL' scripts/inventory-provider-cache-postgres.integration.ts
+          grep -F 'NORAUTO_INVENTORY_DATABASE_URL' scripts/start-production.mjs
       - name: Enforce customer-path source isolation
         run: |
           if grep -R -n -F 'loadOrrCustomerCatalog' src/app src/components; then
             echo 'Customer request path regressed to direct request-time dealership source discovery.' >&2
             exit 1
           fi
-          # R1 customer browsing uses the proven resilient boundary: verified durable
-          # cache first, then the bounded single-flight live fallback recorded in the
-          # R1 closure receipt. Lead evidence remains cache-only.
           grep -F 'loadOrrResilientCustomerCatalog' src/app/api/inventory/route.ts
           grep -F 'loadOrrResilientCustomerCatalog' src/app/inventory/page.tsx
           grep -F 'loadOrrResilientCustomerCatalog' src/components/inventory/home-inventory-spotlight.tsx
           grep -F 'loadOrrCachedCustomerCatalog' src/app/api/leads/route.ts
-          # Keep the live fallback contained inside one auditable library boundary.
           grep -F 'loadOrrCachedCustomerCatalog' src/lib/orr-resilient-customer-catalog.ts
           grep -F 'loadOrrCustomerCatalog' src/lib/orr-resilient-customer-catalog.ts
           grep -F 'export const dynamic = "force-dynamic"' src/app/page.tsx
-          grep -F 'norautomatch-crm-v12-inventory-provider-cache.sql' scripts/start-production.mjs
       - name: Typecheck customer application
         run: npm run typecheck
       - name: Production build cache-backed customer application

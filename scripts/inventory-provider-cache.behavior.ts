@@ -75,11 +75,52 @@ assert.equal(cached.vehicles.length, 1);
 assert.equal(cached.vehicles[0].id, "1N4BL4DV9SN320880");
 assert.equal(cached.vehicles[0].year, 2026.5);
 assert.equal(cached.vehicles[0].image, "https://example.com/rogue-1.jpg");
+assert.equal(cached.vehicles[0].inTransit, false);
 assert.equal(cached.rejected.length, 0);
 assert.throws(
   () => buildCachedCustomerInventory({ state: firstReconciled.state, nowMs: Date.parse("2026-09-15T06:00:00.000Z"), maxAgeMs: 2 * 60 * 60 * 1000 }),
   /INVENTORY_CACHE_STALE/,
 );
+
+const inTransitSnapshot = buildOrrProviderSnapshot(discovery([
+  hit({
+    objectID: "obj-transit",
+    vin: "5N1DR3DF7SC222222",
+    stock_number: "222222T",
+    in_transit: true,
+  }),
+], "2026-09-14T18:30:00.000Z", "snapshot-hash-transit"));
+const inTransitState = reconcileInventoryProviderCurrentState({ previous: null, currentSnapshot: inTransitSnapshot });
+const inTransitCached = buildCachedCustomerInventory({
+  state: inTransitState.state,
+  nowMs: Date.parse("2026-09-14T19:00:00.000Z"),
+  maxAgeMs: 2 * 60 * 60 * 1000,
+});
+assert.equal(inTransitCached.vehicles.length, 1, "sellable in-transit inventory must remain customer-eligible");
+assert.equal(inTransitCached.vehicles[0].id, "5N1DR3DF7SC222222");
+assert.equal(inTransitCached.vehicles[0].inTransit, true);
+assert.equal(inTransitCached.vehicles[0].sourceStockStatus, "In Transit");
+assert.equal(inTransitCached.rejected.length, 0);
+
+const coupeSnapshot = buildOrrProviderSnapshot(discovery([
+  hit({
+    objectID: "obj-coupe",
+    vin: "1N4AA6EV0GC444444",
+    stock_number: "444444C",
+    model: "Z",
+    car_trim: "Performance",
+    category: "Coupe",
+  }),
+], "2026-09-14T18:45:00.000Z", "snapshot-hash-coupe"));
+const coupeState = reconcileInventoryProviderCurrentState({ previous: null, currentSnapshot: coupeSnapshot });
+const coupeCached = buildCachedCustomerInventory({
+  state: coupeState.state,
+  nowMs: Date.parse("2026-09-14T19:00:00.000Z"),
+  maxAgeMs: 2 * 60 * 60 * 1000,
+});
+assert.equal(coupeCached.vehicles.length, 1, "source-supported body styles must not be discarded by cache normalization");
+assert.equal(coupeCached.vehicles[0].type, "Coupe");
+assert.equal(coupeCached.rejected.length, 0);
 
 const inactiveRuntime = resolveInventoryRuntime({ mode: "live-enabled" });
 assert.throws(() => buildProviderCachedCatalog({ runtime: inactiveRuntime, cached }), /INVENTORY_CACHE_RUNTIME_NOT_ACTIVATED/);
