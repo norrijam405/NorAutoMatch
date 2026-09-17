@@ -44,22 +44,29 @@ jobs:
         run: npm ci
       - name: Dependency security gate
         run: npm audit --audit-level=high
-      - name: Apply checksum-bound production schema twice
+      - name: Apply checksum-bound schemas to separate authorities twice
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_INVENTORY_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_inventory_ci
           NORAUTO_MIGRATION_ONLY: "1"
           NORAUTO_RELEASE_SHA: ${{ github.sha }}
         run: |
+          docker exec ${{ job.services.postgres.id }} createdb -U norauto norauto_inventory_ci
           node scripts/start-production.mjs
           node scripts/start-production.mjs
-          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '13'
-          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.inventory_provider_snapshots') IS NOT NULL" | grep -qx 't'
-          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.inventory_provider_current_state') IS NOT NULL" | grep -qx 't'
-          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('igniaqua.inventory_provider_snapshots') IS NOT NULL" | grep -qx 't'
-          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('igniaqua.inventory_provider_current_state') IS NOT NULL" | grep -qx 't'
-          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT has_schema_privilege('public', 'igniaqua', 'USAGE')" | grep -qx 'f'
-          grep -F 'norautomatch-crm-v12-inventory-provider-cache.sql' scripts/start-production.mjs
-          grep -F 'norautomatch-crm-v13-private-inventory-provider-cache.sql' scripts/start-production.mjs
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '11'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('public.inventory_provider_snapshots') IS NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT to_regclass('igniaqua.inventory_provider_snapshots') IS NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_inventory_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '2'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_inventory_ci -tAc "SELECT to_regclass('public.inventory_provider_snapshots') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_inventory_ci -tAc "SELECT to_regclass('public.inventory_provider_current_state') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_inventory_ci -tAc "SELECT to_regclass('igniaqua.inventory_provider_snapshots') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_inventory_ci -tAc "SELECT to_regclass('igniaqua.inventory_provider_current_state') IS NOT NULL" | grep -qx 't'
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_inventory_ci -tAc "SELECT has_schema_privilege('public', 'igniaqua', 'USAGE')" | grep -qx 'f'
+          grep -F 'const crmMigrations' scripts/start-production.mjs
+          grep -F 'const inventoryMigrations' scripts/start-production.mjs
+          grep -F 'NORAUTO_INVENTORY_DATABASE_URL' scripts/start-production.mjs
+          grep -F 'INVENTORY_DATABASE_MUST_BE_SEPARATE_FROM_CRM' scripts/start-production.mjs
       - name: Compile provider-neutral cache verification surface
         run: |
           rm -rf .tmp-inventory-provider-cache-tests
@@ -68,7 +75,7 @@ jobs:
         run: node .tmp-inventory-provider-cache-tests/scripts/inventory-provider-cache.behavior.js
       - name: Execute Postgres persistence challenges
         env:
-          NORAUTO_INVENTORY_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_INVENTORY_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_inventory_ci
         run: node .tmp-inventory-provider-cache-tests/scripts/inventory-provider-cache-postgres.integration.js
       - name: Enforce inventory persistence isolation
         run: |
@@ -79,6 +86,7 @@ jobs:
           grep -F 'NORAUTO_INVENTORY_DATABASE_URL' src/lib/orr-cached-customer-catalog.ts
           grep -F 'NORAUTO_INVENTORY_DATABASE_URL' scripts/run-inventory-provider-sync.ts
           grep -F 'NORAUTO_INVENTORY_DATABASE_URL' scripts/inventory-provider-cache-postgres.integration.ts
+          grep -F 'NORAUTO_INVENTORY_DATABASE_URL' scripts/start-production.mjs
       - name: Enforce customer-path source isolation
         run: |
           if grep -R -n -F 'loadOrrCustomerCatalog' src/app src/components; then
