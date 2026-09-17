@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { SavedVehicleComparison } from "@/components/garage/saved-vehicle-comparison";
 import { requireAuthenticatedUser } from "@/lib/supabase/authz";
 import { buildMatchDnaSummary } from "@/lib/match-dna";
 import type { Json } from "@/lib/supabase/database.types";
@@ -40,6 +41,10 @@ export default async function GaragePage() {
   const jobsByVin = new Map((scoutJobs ?? []).map((job) => [job.vin, job]));
   const dossiersByVin = new Map((dossiers ?? []).map((dossier) => [dossier.vin, dossier]));
   const dna = buildMatchDnaSummary(dnaEvents ?? []);
+  const savedComparisonVehicles = vins.flatMap((vin) => {
+    const vehicle = byVin.get(vin);
+    return vehicle ? [vehicle] : [];
+  });
 
   return (
     <section className="min-h-[72vh] border-b border-white/5 bg-slate-950/35 py-12 sm:py-16">
@@ -63,6 +68,8 @@ export default async function GaragePage() {
             <p className="mt-2 text-[10px] leading-4 text-slate-600">DNA is behavioral guidance, not a claim that you must buy a certain vehicle. It changes as your choices change.</p>
           </details>
         </div>
+
+        <SavedVehicleComparison vehicles={savedComparisonVehicles} />
 
         <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {saved?.length ? saved.map((item) => {
