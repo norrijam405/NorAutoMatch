@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { login, resendConfirmation, signup } from "./actions";
+import { login, resendConfirmation } from "./actions";
+import { SignupForm } from "./signup-form";
 
 export const metadata: Metadata = {
   title: "Sign in",
@@ -42,21 +43,24 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         {params.error ? <p className="mt-5 rounded-xl border border-red-400/30 bg-red-400/10 p-4 text-sm leading-6 text-red-200">{params.error}</p> : null}
         {params.message ? <p className="mt-5 rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm leading-6 text-emerald-200">{params.message}</p> : null}
 
-        <form action={creatingAccount ? signup : login} className="mt-6 space-y-5 rounded-2xl border border-white/10 bg-slate-950/70 p-6">
-          <input type="hidden" name="next" value={nextPath} />
-          <label className="block text-sm font-bold text-slate-200">
-            Email
-            <input name="email" type="email" autoComplete="email" required className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none focus:border-amber-300/60" />
-          </label>
-          <label className="block text-sm font-bold text-slate-200">
-            Password
-            <input name="password" type="password" autoComplete={creatingAccount ? "new-password" : "current-password"} minLength={8} required className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none focus:border-amber-300/60" />
-            {creatingAccount ? <span className="mt-2 block text-xs font-normal text-slate-500">Use at least 8 characters. You will use this same password after email confirmation.</span> : null}
-          </label>
-          <button type="submit" className="w-full rounded-xl bg-amber-300 px-5 py-3.5 font-black text-slate-950 hover:bg-amber-200">
-            {creatingAccount ? "Create my account" : "Sign in"}
-          </button>
-        </form>
+        {creatingAccount ? (
+          <SignupForm nextPath={nextPath} />
+        ) : (
+          <form action={login} className="mt-6 space-y-5 rounded-2xl border border-white/10 bg-slate-950/70 p-6">
+            <input type="hidden" name="next" value={nextPath} />
+            <label className="block text-sm font-bold text-slate-200">
+              Email
+              <input name="email" type="email" autoComplete="email" required className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none focus:border-amber-300/60" />
+            </label>
+            <label className="block text-sm font-bold text-slate-200">
+              Password
+              <input name="password" type="password" autoComplete="current-password" minLength={8} required className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none focus:border-amber-300/60" />
+            </label>
+            <button type="submit" className="w-full rounded-xl bg-amber-300 px-5 py-3.5 font-black text-slate-950 hover:bg-amber-200">
+              Sign in
+            </button>
+          </form>
+        )}
 
         {!creatingAccount ? (
           <details className="mt-5 rounded-2xl border border-white/10 bg-slate-950/45 p-4 text-sm text-slate-300">
