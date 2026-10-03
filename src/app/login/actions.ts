@@ -16,6 +16,22 @@ function productionSiteUrl() {
   return process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "http://localhost:3000";
 }
 
+function signupMessageForCode(code?: string) {
+  switch (code) {
+    case "signup_disabled":
+      return "New account registration is currently unavailable. Please try again later.";
+    case "email_address_invalid":
+      return "That email address could not be accepted. Check it and try again.";
+    case "weak_password":
+      return "That password does not meet the account security requirements. Choose a stronger password and try again.";
+    case "over_email_send_rate_limit":
+    case "email_rate_limit_exceeded":
+      return "Too many confirmation emails were requested recently. Wait a few minutes, then try again.";
+    default:
+      return "We could not create the account. The account service returned an error; please try again.";
+  }
+}
+
 export async function login(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
@@ -46,18 +62,30 @@ export async function signup(formData: FormData) {
     authError("Enter a valid email and choose a password with at least 8 characters.", nextPath, "signup");
   }
 
-  const supabase = await createClient();
-  const siteUrl = productionSiteUrl();
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: { emailRedirectTo: `${siteUrl}/auth/confirm?next=${encodeURIComponent(nextPath)}` },
-  });
+  try {
+    const supabase = await createClient();
+    const siteUrl = productionSiteUrl();
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${siteUrl}/auth/confirm?next=${encodeURIComponent(nextPath)}` },
+    });
 
-  if (error) authError("We could not create the account. Check the email/password and try again.", nextPath, "signup");
-  if (data.session) redirect(nextPath);
+    if (error) {
+      const code = "code" in error ? error.code : undefined;
+      const status = "status" in error ? error.status : undefined;
+      console.error("NORAUTO_SIGNUP_ERROR", JSON.stringify({ code, status, message: error.message }));
+      authError(signupMessageForCode(code), nextPath, "signup");
+    }
 
-  redirect(`/login?mode=signin&message=${encodeURIComponent("Account request received. Check the inbox for the email you just used, open the NorAuto Match confirmation link, then return here and sign in with that same email and password.")}&next=${encodeURIComponent(nextPath)}`);
+    if (data.session) redirect(nextPath);
+
+    redirect(`/login?mode=signin&message=${encodeURIComponent("Account request received. Check the inbox for the email you just used, open the NorAuto Match confirmation link, then return here and sign in with that same email and password.")}&next=${encodeURIComponent(nextPath)}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("NORAUTO_SIGNUP_THROWN", JSON.stringify({ message }));
+    authError("The account service could not complete the request. Please try again in a moment.", nextPath, "signup");
+  }
 }
 
 export async function resendConfirmation(formData: FormData) {
