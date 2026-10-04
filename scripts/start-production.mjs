@@ -100,8 +100,11 @@ async function prepareStandaloneRuntime() {
 
 async function main() {
   const connectionString = process.env.NORAUTO_CRM_DATABASE_URL?.trim();
+  const skipMigrations = process.env.NORAUTO_SKIP_CRM_MIGRATIONS === "1";
 
-  if (connectionString) {
+  if (skipMigrations) {
+    console.log("MIGRATION_SKIPPED NORAUTO_SKIP_CRM_MIGRATIONS");
+  } else if (connectionString) {
     await applyMigrations(connectionString);
   } else {
     console.log("MIGRATION_SKIPPED NORAUTO_CRM_DATABASE_URL_NOT_CONFIGURED");
