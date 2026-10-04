@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Search, ShieldCheck, Shuffle } from "lucide-react";
 import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
-import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
+import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";\nimport { VehicleImage } from "@/components/inventory/vehicle-image";
 
 export async function HomeInventorySpotlight() {
   const runtime = resolveInventoryRuntime({
