@@ -18,17 +18,17 @@ export type CachedInventoryReadResult = {
 };
 
 function normalizeBodyType(value?: string): Vehicle["type"] | undefined {
-  if (!value) return undefined;
-  const text = value.toLowerCase();
+  const sourceValue = value?.trim();
+  if (!sourceValue) return undefined;
+  const text = sourceValue.toLowerCase();
   if (text.includes("suv") || text.includes("crossover")) return "SUV";
   if (text.includes("truck") || text.includes("pickup")) return "Truck";
-  if (text.includes("sedan") || text.includes("car")) return "Sedan";
-  return undefined;
+  if (text.includes("sedan")) return "Sedan";
+  return sourceValue;
 }
 
 function recordToVehicle(record: InventoryProviderRecord): Vehicle | undefined {
   if (record.availabilityState !== "active" && record.availabilityState !== "observed") return undefined;
-  if (record.inTransit === true) return undefined;
 
   const year = Number(record.modelYear);
   const type = normalizeBodyType(record.bodyType);
@@ -55,6 +55,8 @@ function recordToVehicle(record: InventoryProviderRecord): Vehicle | undefined {
     fuelType: record.fuelType,
     cityMpg: record.cityMpg,
     highwayMpg: record.highwayMpg,
+    inTransit: record.inTransit === true,
+    sourceStockStatus: record.inTransit === true ? "In Transit" : "Available",
   };
 }
 
@@ -83,10 +85,6 @@ export function buildCachedCustomerInventory(input: {
   for (const record of state.records) {
     if (record.providerId !== state.providerId) throw new Error(`INVENTORY_CACHE_RECORD_PROVIDER_DRIFT:${record.vin}`);
     if (record.dealershipId !== state.dealershipId) throw new Error(`INVENTORY_CACHE_RECORD_DEALERSHIP_DRIFT:${record.vin}`);
-    if (record.inTransit === true) {
-      rejected.push({ vin: record.vin, reason: "source_status:in_transit" });
-      continue;
-    }
     if (record.availabilityState !== "active" && record.availabilityState !== "observed") {
       rejected.push({ vin: record.vin, reason: `availability:${record.availabilityState}` });
       continue;
