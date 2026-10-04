@@ -3,6 +3,8 @@ import type { InventoryProviderSnapshot } from "./inventory-provider-contract";
 import { assertProviderSnapshotBoundary } from "./inventory-provider-contract";
 import type { InventoryProviderCurrentState } from "./inventory-provider-current-state";
 
+const INVENTORY_CACHE_SCHEMA = "igniaqua";
+
 export type PersistInventoryProviderSnapshotResult = {
   status: "COMMITTED" | "DEDUPLICATED";
   providerId: string;
@@ -16,7 +18,7 @@ export type PersistInventoryProviderSnapshotResult = {
 async function persistSnapshotWithClient(client: PoolClient, snapshot: InventoryProviderSnapshot): Promise<"COMMITTED" | "DEDUPLICATED"> {
   const existing = await client.query<{ source_hash: string }>(
     `SELECT source_hash
-       FROM inventory_provider_snapshots
+       FROM ${INVENTORY_CACHE_SCHEMA}.inventory_provider_snapshots
       WHERE provider_id=$1 AND dealership_id=$2 AND fetched_at=$3::timestamptz
       FOR UPDATE`,
     [snapshot.providerId, snapshot.dealershipId, snapshot.fetchedAt],
@@ -29,7 +31,7 @@ async function persistSnapshotWithClient(client: PoolClient, snapshot: Inventory
   }
 
   await client.query(
-    `INSERT INTO inventory_provider_snapshots (
+    `INSERT INTO ${INVENTORY_CACHE_SCHEMA}.inventory_provider_snapshots (
        provider_id, dealership_id, dealership_name, fetched_at, source_url, source_hash, normalized_snapshot
      ) VALUES ($1,$2,$3,$4::timestamptz,$5,$6,$7::jsonb)`,
     [snapshot.providerId, snapshot.dealershipId, snapshot.dealershipName, snapshot.fetchedAt, snapshot.sourceUrl, snapshot.sourceHash, JSON.stringify(snapshot)],
@@ -39,7 +41,7 @@ async function persistSnapshotWithClient(client: PoolClient, snapshot: Inventory
 
 async function upsertCurrentStateWithClient(client: PoolClient, state: InventoryProviderCurrentState) {
   await client.query(
-    `INSERT INTO inventory_provider_current_state (
+    `INSERT INTO ${INVENTORY_CACHE_SCHEMA}.inventory_provider_current_state (
        provider_id, dealership_id, dealership_name, as_of, source_url, source_hash, state_json, updated_at
      ) VALUES ($1,$2,$3,$4::timestamptz,$5,$6,$7::jsonb,NOW())
      ON CONFLICT (provider_id, dealership_id) DO UPDATE SET
@@ -130,7 +132,7 @@ export async function loadLatestInventoryProviderSnapshot(input: {
 }): Promise<InventoryProviderSnapshot | null> {
   const result = await input.pool.query<{ normalized_snapshot: InventoryProviderSnapshot }>(
     `SELECT normalized_snapshot
-       FROM inventory_provider_snapshots
+       FROM ${INVENTORY_CACHE_SCHEMA}.inventory_provider_snapshots
       WHERE provider_id=$1 AND dealership_id=$2
       ORDER BY fetched_at DESC
       LIMIT 1`,
@@ -147,7 +149,7 @@ export async function loadInventoryProviderCurrentState(input: {
 }): Promise<InventoryProviderCurrentState | null> {
   const result = await input.pool.query<{ state_json: InventoryProviderCurrentState }>(
     `SELECT state_json
-       FROM inventory_provider_current_state
+       FROM ${INVENTORY_CACHE_SCHEMA}.inventory_provider_current_state
       WHERE provider_id=$1 AND dealership_id=$2
       LIMIT 1`,
     [input.providerId, input.dealershipId],
