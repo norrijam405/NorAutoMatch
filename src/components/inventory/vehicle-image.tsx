@@ -1,7 +1,7 @@
 "use client";
 
 import { ImageOff } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 type VehicleImageProps = {
   src?: string | null;
@@ -12,11 +12,8 @@ type VehicleImageProps = {
 
 export function VehicleImage({ src, alt, className = "", loading }: VehicleImageProps) {
   const normalizedSrc = src?.trim() ?? "";
-  const [failed, setFailed] = useState(!normalizedSrc);
-
-  useEffect(() => {
-    setFailed(!normalizedSrc);
-  }, [normalizedSrc]);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const failed = !normalizedSrc || failedSrc === normalizedSrc;
 
   if (failed) {
     return (
@@ -40,7 +37,7 @@ export function VehicleImage({ src, alt, className = "", loading }: VehicleImage
       alt={alt}
       className={className}
       loading={loading}
-      onError={() => setFailed(true)}
+      onError={() => setFailedSrc(normalizedSrc)}
     />
   );
 }
