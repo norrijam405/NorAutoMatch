@@ -11,7 +11,7 @@ import {
 let inventoryCachePool: Pool | undefined;
 
 function getInventoryCachePool() {
-  const connectionString = process.env.NORAUTO_CRM_DATABASE_URL?.trim();
+  const connectionString = process.env.NORAUTO_INVENTORY_DATABASE_URL?.trim();
   if (!connectionString) throw new Error("INVENTORY_CACHE_DATABASE_UNAVAILABLE");
   inventoryCachePool ??= createPostgresCrmPool(connectionString);
   return inventoryCachePool;
