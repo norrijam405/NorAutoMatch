@@ -5,8 +5,8 @@ import { OrrInventoryProviderAdapter } from "../src/lib/orr-inventory-provider-a
 const SYNC_ACTIVATION_VALUE = "ENABLE_AUTHORIZED_INVENTORY_SYNC";
 
 async function main() {
-  const connectionString = process.env.NORAUTO_CRM_DATABASE_URL;
-  if (!connectionString?.trim()) throw new Error("NORAUTO_CRM_DATABASE_URL is required for inventory provider sync.");
+  const connectionString = process.env.NORAUTO_INVENTORY_DATABASE_URL;
+  if (!connectionString?.trim()) throw new Error("NORAUTO_INVENTORY_DATABASE_URL is required for inventory provider sync.");
   if (process.env.NORAUTO_INVENTORY_SYNC_ACTIVATION !== SYNC_ACTIVATION_VALUE) {
     throw new Error("INVENTORY_SYNC_ACTIVATION_MISSING");
   }
