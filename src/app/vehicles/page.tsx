@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, ShieldCheck } from "lucide-react";
 import { formatMoney } from "@/lib/inventory";
-import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";\nimport { VehicleImage } from "@/components/inventory/vehicle-image";
+import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
+import { VehicleImage } from "@/components/inventory/vehicle-image";
 
 export const dynamic = "force-dynamic";
 
