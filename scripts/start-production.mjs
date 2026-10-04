@@ -106,6 +106,7 @@ async function main() {
   const crmConnectionString = process.env.NORAUTO_CRM_DATABASE_URL?.trim();
   const inventoryConnectionString = process.env.NORAUTO_INVENTORY_DATABASE_URL?.trim();
   const skipCrmMigrations = process.env.NORAUTO_SKIP_CRM_MIGRATIONS === "1";
+  const skipInventoryMigrations = process.env.NORAUTO_SKIP_INVENTORY_MIGRATIONS === "1";
 
   if (crmConnectionString && inventoryConnectionString && crmConnectionString === inventoryConnectionString) {
     throw new Error("INVENTORY_DATABASE_MUST_BE_SEPARATE_FROM_CRM");
@@ -119,7 +120,9 @@ async function main() {
     console.log("MIGRATION_SKIPPED NORAUTO_CRM_DATABASE_URL_NOT_CONFIGURED");
   }
 
-  if (inventoryConnectionString) {
+  if (skipInventoryMigrations) {
+    console.log("MIGRATION_SKIPPED NORAUTO_SKIP_INVENTORY_MIGRATIONS");
+  } else if (inventoryConnectionString) {
     await applyMigrations(inventoryConnectionString, inventoryMigrations, "INVENTORY");
   } else {
     console.log("MIGRATION_SKIPPED NORAUTO_INVENTORY_DATABASE_URL_NOT_CONFIGURED");
