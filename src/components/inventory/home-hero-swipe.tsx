@@ -4,7 +4,8 @@ import Link from "next/link";
 import { CarFront, Check, Heart, Shuffle, Sparkles, X } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import type { Vehicle } from "@/lib/inventory";
-import { recordMatchDnaSignal, saveVehicleToGarage } from "@/app/garage/actions";\nimport { VehicleImage } from "@/components/inventory/vehicle-image";
+import { recordMatchDnaSignal, saveVehicleToGarage } from "@/app/garage/actions";
+import { VehicleImage } from "@/components/inventory/vehicle-image";
 
 type Props = {
   vehicles: Vehicle[];
@@ -78,7 +79,7 @@ export function HomeHeroSwipe({ vehicles, sourceLabel, sourceCount, inTransitCou
 
         <div className="relative aspect-[16/11] overflow-hidden bg-[#111923]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={current.image} alt={`${current.year} ${current.make} ${current.model}`} className="h-full w-full object-cover" />
+          <VehicleImage src={current.image} alt={`${current.year} ${current.make} ${current.model}`} className="h-full w-full object-cover" />
           <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/75 to-transparent p-4 pb-14">
             <span className="rounded-full border border-emerald-300/20 bg-black/55 px-3 py-1.5 text-[9px] font-black uppercase tracking-[.16em] text-emerald-200 backdrop-blur">Verified VIN</span>
             <div className="flex flex-wrap justify-end gap-1.5">
