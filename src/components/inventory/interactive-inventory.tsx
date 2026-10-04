@@ -7,7 +7,8 @@ import type { Vehicle } from "@/lib/inventory";
 import { searchInventory, vehicleHasFeature, type InventorySearchMatch } from "@/lib/inventory-search";
 import { buildGarageBattleStory } from "@/lib/garage-battle";
 import { cn } from "@/lib/cn";
-import { FinanceInterestModal } from "@/components/finance/finance-interest-modal";\nimport { VehicleImage } from "@/components/inventory/vehicle-image";
+import { FinanceInterestModal } from "@/components/finance/finance-interest-modal";
+import { VehicleImage } from "@/components/inventory/vehicle-image";
 import { recordMatchDnaSignal, removeVehicleFromGarage, saveVehicleToGarage } from "@/app/garage/actions";
 
 type Props = {
@@ -298,7 +299,7 @@ function InventoryPlayCard({ vehicle, match, shortlisted, battling, signedIn, on
   return <article className={cn("overflow-hidden rounded-[24px] border bg-[#0d131b]", match?.kind === "close" ? "border-amber-300/25" : shortlisted ? "border-emerald-400/35" : "border-white/10")}>
     <div className="relative aspect-[16/9] overflow-hidden bg-[#111923]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={vehicle.image} alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`} className="h-full w-full object-cover" loading="lazy" />
+      <VehicleImage src={vehicle.image} alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`} className="h-full w-full object-cover" loading="lazy" />
       <span className={cn("absolute left-3 top-3 rounded-full border bg-black/70 px-2.5 py-1 text-[9px] font-black uppercase tracking-[.14em] backdrop-blur", match?.kind === "close" ? "border-amber-300/25 text-amber-200" : "border-white/10 text-emerald-300")}>{match?.kind === "close" ? "Close match" : "Verified live"}</span>
     </div>
     <div className="p-5">
