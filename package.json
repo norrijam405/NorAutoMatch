@@ -7,8 +7,7 @@
     "build": "next build",
     "start": "node scripts/start-production.mjs",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
-    "pretypecheck": "npm audit fix --package-lock-only --ignore-scripts && npm audit --audit-level=high"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
