@@ -8,7 +8,7 @@
     "start": "node scripts/start-production.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "pretypecheck": "npm audit --json || true"
+    "pretypecheck": "npm audit fix --package-lock-only --ignore-scripts && npm audit --audit-level=high"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
