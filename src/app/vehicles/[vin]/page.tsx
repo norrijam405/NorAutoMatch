@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, Fuel, Gauge, ImageIcon, Palette, ShieldCheck, Sparkles, Wrench } from "lucide-react";
 import { notFound } from "next/navigation";
 import { formatMoney } from "@/lib/inventory";
-import { loadVerifiedOrrVehicleDetail } from "@/lib/orr-vehicle-detail";
+import { loadVerifiedOrrVehicleDetail } from "@/lib/orr-vehicle-detail";\nimport { VehicleImage } from "@/components/inventory/vehicle-image";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +24,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
   const vehicle = detail.vehicle;
   if (!vehicle.year || !vehicle.make || !vehicle.model || !vehicle.trim || !vehicle.price) notFound();
 
-  const photos = vehicle.photos?.length ? vehicle.photos : ["/images/vehicle-placeholder.jpg"];
+  const photos = vehicle.photos?.filter((photo) => photo.trim().length > 0) ?? [];
   const specs = [
     { label: "Mileage", value: vehicle.mileage !== undefined ? `${vehicle.mileage.toLocaleString()} mi` : undefined, icon: Gauge },
     { label: "Drivetrain", value: vehicle.drivetrain, icon: Wrench },
@@ -46,9 +46,9 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       <div className="mt-8 grid gap-8 lg:grid-cols-[1.2fr_.8fr] lg:items-start">
         <div>
           <div className="overflow-hidden rounded-[30px] border border-white/10 bg-[#111923]">
-            <div className="aspect-[16/10]">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={photos[0]} alt={`${vehicle.year} ${vehicle.make} ${vehicle.model} ${vehicle.trim}`} className="h-full w-full object-cover" /></div>
+            <div className="aspect-[16/10]"><VehicleImage src={photos[0]} alt={`${vehicle.year} ${vehicle.make} ${vehicle.model} ${vehicle.trim}`} className="h-full w-full object-cover" /></div>
           </div>
-          {photos.length > 1 && <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6">{photos.slice(1, 7).map((photo, index) => <div key={`${photo}-${index}`} className="aspect-[4/3] overflow-hidden rounded-xl border border-white/10 bg-[#111923]">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={photo} alt={`${vehicle.model} view ${index + 2}`} className="h-full w-full object-cover" loading="lazy" /></div>)}</div>}
+          {photos.length > 1 && <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6">{photos.slice(1, 7).map((photo, index) => <div key={`${photo}-${index}`} className="aspect-[4/3] overflow-hidden rounded-xl border border-white/10 bg-[#111923]"><VehicleImage src={photo} alt={`${vehicle.model} view ${index + 2}`} className="h-full w-full object-cover" loading="lazy" /></div>)}</div>}
         </div>
 
         <section className="rounded-[30px] border border-white/10 bg-white/[.025] p-6 sm:p-8">
@@ -67,7 +67,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
 
       <section className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {specs.map(({ label, value, icon: Icon }) => <article key={label} className="rounded-2xl border border-white/10 bg-white/[.025] p-4"><Icon size={16} className="text-amber-300" /><p className="mt-3 text-[9px] font-black uppercase tracking-[.16em] text-slate-600">{label}</p><p className="mt-1 text-sm font-bold text-white">{value}</p></article>)}
-        <article className="rounded-2xl border border-white/10 bg-white/[.025] p-4"><ImageIcon size={16} className="text-amber-300" /><p className="mt-3 text-[9px] font-black uppercase tracking-[.16em] text-slate-600">Source photos</p><p className="mt-1 text-sm font-bold text-white">{photos[0].startsWith("/images/") ? "Not supplied" : `${photos.length} image${photos.length === 1 ? "" : "s"}`}</p></article>
+        <article className="rounded-2xl border border-white/10 bg-white/[.025] p-4"><ImageIcon size={16} className="text-amber-300" /><p className="mt-3 text-[9px] font-black uppercase tracking-[.16em] text-slate-600">Source photos</p><p className="mt-1 text-sm font-bold text-white">{photos.length === 0 ? "Not supplied" : `${photos.length} image${photos.length === 1 ? "" : "s"}`}</p></article>
       </section>
 
       <section className="mt-8 rounded-[28px] border border-white/10 bg-[#0d131b] p-6 sm:p-8">
