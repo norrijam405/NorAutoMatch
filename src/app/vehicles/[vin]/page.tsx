@@ -2,7 +2,8 @@ import Link from "next/link";
 import { ArrowLeft, Fuel, Gauge, ImageIcon, Palette, ShieldCheck, Sparkles, Wrench } from "lucide-react";
 import { notFound } from "next/navigation";
 import { formatMoney } from "@/lib/inventory";
-import { loadVerifiedOrrVehicleDetail } from "@/lib/orr-vehicle-detail";\nimport { VehicleImage } from "@/components/inventory/vehicle-image";
+import { loadVerifiedOrrVehicleDetail } from "@/lib/orr-vehicle-detail";
+import { VehicleImage } from "@/components/inventory/vehicle-image";
 
 export const dynamic = "force-dynamic";
 
