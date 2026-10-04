@@ -1,0 +1,62 @@
+name: NorAutoMatch Request Body Abuse CI
+
+on:
+  push:
+    branches:
+      - "reactivation/**"
+  pull_request:
+    branches:
+      - main
+      - "reactivation/**"
+
+permissions:
+  contents: read
+
+jobs:
+  request-body-abuse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+
+      - name: Compile verification surface
+        run: |
+          rm -rf .tmp-inventory-tests
+          npx tsc -p tsconfig.inventory-tests.json
+
+      - name: Challenge actual-byte request ceilings
+        run: node .tmp-inventory-tests/scripts/request-body-limit.behavior.js
+
+      - name: Enforce route byte-limit policy
+        run: |
+          grep -q 'MAX_CONVERSATION_EVENT_BYTES = 128 \* 1024' src/app/api/internal/conversation-events/route.ts
+          grep -q 'MAX_LEAD_REQUEST_BYTES = 32 \* 1024' src/app/api/leads/route.ts
+          grep -q 'readJsonBodyWithByteLimit' src/app/api/internal/conversation-events/route.ts
+          grep -q 'readJsonBodyWithByteLimit' src/app/api/leads/route.ts
+          ! grep -q 'await request.json()' src/app/api/internal/conversation-events/route.ts
+          ! grep -q 'await request.json()' src/app/api/leads/route.ts
+
+      - name: Clean generated verification output
+        run: rm -rf .tmp-inventory-tests
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build

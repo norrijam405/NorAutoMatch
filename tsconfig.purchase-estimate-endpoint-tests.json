@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "outDir": ".tmp-purchase-estimate-endpoint"
+  },
+  "include": [
+    "scripts/purchase-estimate-endpoint-policy.behavior.ts",
+    "src/lib/purchase-estimate-endpoint-policy.ts",
+    "src/lib/state-purchase-cost-evidence-gate.ts",
+    "src/lib/state-purchase-cost.ts"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "outDir": ".tmp-user-live"
+  },
+  "include": [
+    "scripts/norautomatch-user-live-validation.ts",
+    "src/lib/manager-session-auth.ts",
+    "src/lib/manager-review-receipt.ts"
+  ]
+}

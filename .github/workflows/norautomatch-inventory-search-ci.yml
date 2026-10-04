@@ -1,0 +1,41 @@
+name: NorAutoMatch Inventory Search CI
+
+on:
+  push:
+    branches:
+      - "reactivation/**"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-search:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Compile inventory verification surface
+        run: |
+          rm -rf .tmp-inventory-tests
+          npx tsc -p tsconfig.inventory-tests.json
+      - name: Execute deterministic structured search challenges
+        run: node .tmp-inventory-tests/scripts/inventory-search.behavior.js
+      - name: Compile Garage Battle evidence surface
+        run: |
+          rm -rf .tmp-garage-battle-tests
+          npx tsc -p tsconfig.garage-battle-tests.json
+      - name: Execute Garage Battle evidence challenges
+        run: node .tmp-garage-battle-tests/scripts/garage-battle.behavior.js
+      - name: Typecheck customer application
+        run: npm run typecheck

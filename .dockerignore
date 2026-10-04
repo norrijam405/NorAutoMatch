@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.github
+.env
+.env.*
+!.env.example
+validation_receipts
+validation_logs
+.tmp-user-live
+.tmp-inventory-tests
+npm-debug.log*
+*.md

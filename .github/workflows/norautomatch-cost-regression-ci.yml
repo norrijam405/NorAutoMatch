@@ -1,0 +1,54 @@
+name: NorAutoMatch Cost Regression CI
+
+on:
+  push:
+    branches:
+      - "candidate/**"
+      - "reactivation/**"
+  pull_request:
+    branches:
+      - main
+      - "reactivation/**"
+
+permissions:
+  contents: read
+
+jobs:
+  cost-regression-truth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+
+      - name: Compile cost regression verification surface
+        run: |
+          rm -rf .tmp-cost-regression-tests
+          npx tsc -p tsconfig.cost-regression-tests.json
+
+      - name: Challenge cost regression truth and review boundaries
+        run: node .tmp-cost-regression-tests/scripts/cost-regression.behavior.js
+
+      - name: Clean generated verification output
+        run: rm -rf .tmp-cost-regression-tests
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build

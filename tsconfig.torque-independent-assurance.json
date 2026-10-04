@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "outDir": ".tmp-torque-independent-assurance"
+  },
+  "include": [
+    "scripts/torque-independent-assurance.behavior.ts",
+    "src/lib/crm-core.ts",
+    "src/lib/workspace-policy-runtime.ts",
+    "src/lib/crm-relay-retry-policy.ts",
+    "src/lib/customer-commitment.ts",
+    "src/lib/response-evidence-claim.ts",
+    "src/lib/authority-precedence.ts",
+    "src/lib/lead-schema.ts",
+    "src/lib/lead-inventory-evidence.ts",
+    "src/lib/manager-handoff.ts",
+    "src/lib/manager-review-receipt.ts",
+    "src/lib/inventory-catalog.ts",
+    "src/lib/inventory-runtime.ts",
+    "src/lib/inventory.ts"
+  ]
+}

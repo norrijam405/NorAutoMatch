@@ -1,0 +1,53 @@
+name: NorAutoMatch Response Evidence CI
+
+on:
+  push:
+    branches:
+      - "candidate/**"
+      - "reactivation/**"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  response-evidence-truth-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+
+      - name: Compile response evidence verification surface
+        run: |
+          rm -rf .tmp-response-evidence-tests
+          npx tsc -p tsconfig.response-evidence-tests.json
+
+      - name: Challenge freshness, workspace, and authority boundaries
+        run: node .tmp-response-evidence-tests/scripts/conversation-response-enrichment.behavior.js
+
+      - name: Clean generated verification output
+        run: rm -rf .tmp-response-evidence-tests
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build

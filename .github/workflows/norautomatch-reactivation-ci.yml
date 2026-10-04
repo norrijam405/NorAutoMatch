@@ -1,0 +1,220 @@
+name: NorAutoMatch Reactivation CI
+
+on:
+  push:
+    branches:
+      - "reactivation/**"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify-repeat-${{ matrix.repeat }}
+    strategy:
+      fail-fast: false
+      matrix:
+        repeat: [1, 2, 3, 4]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+
+      - name: Execute checksum-bound production migrations twice
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          node scripts/start-production.mjs
+          node scripts/start-production.mjs
+          docker exec ${{ job.services.postgres.id }} psql -U norauto -d norauto_ci -tAc "SELECT COUNT(*) FROM norautomatch_schema_migrations" | grep -qx '11'
+          cat infrastructure/norautomatch-crm-v1.behavior.sql | docker exec -i ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U norauto -d norauto_ci
+
+      - name: Compile NorAutoMatch verification surface
+        run: |
+          rm -rf .tmp-inventory-tests
+          npx tsc -p tsconfig.inventory-tests.json
+
+      - name: Compile user-live receipt verifier without executing it
+        run: |
+          rm -rf .tmp-user-live
+          npx tsc -p tsconfig.user-live.json
+          rm -rf .tmp-user-live
+
+      - name: Parse Windows user-live launcher without executing it
+        shell: pwsh
+        run: |
+          [scriptblock]::Create((Get-Content -Raw 'scripts/run-norautomatch-user-live.ps1')) | Out-Null
+          Write-Host 'PASS_POWERSHELL_USER_LIVE_LAUNCHER_PARSE'
+
+      - name: Execute production configuration preflight challenges
+        run: node .tmp-inventory-tests/scripts/production-readiness.behavior.js
+
+      - name: Execute inventory shadow receipt challenges
+        run: node .tmp-inventory-tests/scripts/inventory-shadow-receipt.behavior.js
+
+      - name: Execute inventory shadow drift challenges
+        run: node .tmp-inventory-tests/scripts/inventory-shadow-drift.behavior.js
+
+      - name: Execute inventory activation readiness challenges
+        run: node .tmp-inventory-tests/scripts/inventory-activation-readiness.behavior.js
+
+      - name: Execute relay trigger authentication checks
+        run: node .tmp-inventory-tests/scripts/relay-trigger-auth.behavior.js
+
+      - name: Execute provider-neutral conversation truth challenges
+        run: node .tmp-inventory-tests/scripts/conversation-gateway.behavior.js
+
+      - name: Execute durable conversation event roundtrip
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/conversation-gateway-persistence.integration.js
+
+      - name: Execute real Node Postgres adapter roundtrip
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/crm-postgres-adapter.integration.js
+
+      - name: Execute persisted lead intake roundtrip
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/crm-lead-intake.integration.js
+
+      - name: Execute follow-up obligation queue roundtrip
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/crm-follow-up.integration.js
+
+      - name: Execute evidence-bound first-contact command roundtrip
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/crm-follow-up-command.integration.js
+
+      - name: Execute idempotent follow-up due event roundtrip
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/crm-follow-up-due.integration.js
+
+      - name: Execute evidence-gated contact confirmation roundtrip
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/crm-contact-confirmation.integration.js
+
+      - name: Execute appointment and outcome attribution roundtrip
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/crm-sales-progression.integration.js
+
+      - name: Execute manager handoff persistence roundtrip
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/crm-manager-handoff-persistence.integration.js
+
+      - name: Execute leased outbox relay roundtrip
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/crm-outbox-relay.integration.js
+
+      - name: Execute manager queue read model roundtrip
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/crm-manager-queue.integration.js
+
+      - name: Execute atomic manager review command roundtrip
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-inventory-tests/scripts/crm-manager-review-command.integration.js
+
+      - name: Full NorAutoMatch domain and persistence verification suite
+        run: |
+          node .tmp-inventory-tests/scripts/live-inventory.behavior.js
+          node .tmp-inventory-tests/scripts/orr-parser.behavior.js
+          node .tmp-inventory-tests/scripts/inventory-bridge.behavior.js
+          node .tmp-inventory-tests/scripts/inventory-runtime.behavior.js
+          node .tmp-inventory-tests/scripts/orr-algolia-sync.behavior.js
+          node .tmp-inventory-tests/scripts/orr-customer-catalog.behavior.js
+          node .tmp-inventory-tests/scripts/inventory-catalog-integrity.behavior.js
+          node .tmp-inventory-tests/scripts/lead-inventory-evidence.behavior.js
+          node .tmp-inventory-tests/scripts/desk-prep.behavior.js
+          node .tmp-inventory-tests/scripts/manager-handoff.behavior.js
+          node .tmp-inventory-tests/scripts/manager-review-receipt.behavior.js
+          node .tmp-inventory-tests/scripts/crm-core.behavior.js
+          node .tmp-inventory-tests/scripts/crm-persistence.behavior.js
+          rm -rf .tmp-inventory-tests
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
+
+      - name: Exercise exact production startup path
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_RELEASE_SHA: ${{ github.sha }}
+          NORAUTO_INVENTORY_MODE: demo
+          NORAUTO_LIVE_INVENTORY_ACTIVATION: ""
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3321
+          HOSTNAME: 127.0.0.1
+          PORT: "3321"
+        run: |
+          npm start > /tmp/norauto-production-start.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3321/api/health > /tmp/norauto-production-health.json; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:3321/api/health > /tmp/norauto-production-health.json
+          grep -F 'STANDALONE_RUNTIME_PREPARED' /tmp/norauto-production-start.log
+          if grep -F '"next start" does not work with "output: standalone"' /tmp/norauto-production-start.log; then
+            echo 'Standalone warning regressed into exact production startup path.' >&2
+            exit 1
+          fi
+          node - <<'NODE'
+          const fs = require('fs');
+          const health = JSON.parse(fs.readFileSync('/tmp/norauto-production-health.json', 'utf8'));
+          if (health.service !== 'norauto-match' || health.status !== 'SERVING') throw new Error('Production startup health boundary failed.');
+          if (health.releaseSha !== process.env.GITHUB_SHA) throw new Error(`Production startup release identity drifted: ${health.releaseSha}`);
+          if (health.inventory?.effectiveMode !== 'demo' || health.inventory?.customerVisibleLiveInventory !== false) throw new Error('Production startup inventory truth boundary failed.');
+          if (health.authorityEffect !== 'NONE') throw new Error('Production startup health granted authority.');
+          NODE
+          kill "$server_pid"
+          wait "$server_pid" || true
+          trap - EXIT

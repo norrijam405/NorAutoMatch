@@ -1,0 +1,31 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# next
+/.next/
+/out/
+
+# production
+/build
+
+# local
+.DS_Store
+*.pem
+.env*
+!.env.example
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.vercel
+
+# user-live validation local artifacts
+/.tmp-user-live/
+/validation_receipts/
+/validation_logs/
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts

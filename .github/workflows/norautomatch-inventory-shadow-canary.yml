@@ -1,0 +1,81 @@
+name: NorAutoMatch Inventory Shadow Canary
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "reactivation/2026-09-09-inventory-shadow-receipt"
+    paths:
+      - ".github/workflows/norautomatch-inventory-shadow-canary.yml"
+      - "src/lib/orr-public-algolia.ts"
+      - "src/lib/orr-algolia-normalizer.ts"
+      - "src/lib/inventory-shadow-receipt.ts"
+      - "scripts/run-orr-inventory-shadow.ts"
+
+permissions:
+  contents: read
+
+jobs:
+  observe-public-orr-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Compile shadow runner
+        run: |
+          rm -rf .tmp-inventory-tests validation_receipts
+          npx tsc -p tsconfig.inventory-tests.json
+
+      - name: Observe Orr public inventory in shadow mode
+        id: observe
+        continue-on-error: true
+        run: node .tmp-inventory-tests/scripts/run-orr-inventory-shadow.js
+
+      - name: Resolve shadow gate reason
+        id: gate
+        if: always()
+        shell: bash
+        run: |
+          receipt="$(find validation_receipts -maxdepth 1 -type f -name 'norautomatch_inventory_shadow_*.json' -print -quit 2>/dev/null || true)"
+          if [ -z "$receipt" ]; then
+            echo "status=FAIL" >> "$GITHUB_OUTPUT"
+            echo "reason=SOURCE_OBSERVATION_EXCEPTION" >> "$GITHUB_OUTPUT"
+            echo "details=NO_RECEIPT" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          status="$(node -e 'const fs=require("fs");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(r.gate.status)' "$receipt")"
+          reason="$(node -e 'const fs=require("fs");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write((r.gate.reasons||[]).join("+")||"NONE")' "$receipt")"
+          details="$(node -e 'const fs=require("fs");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const c=r.normalization.issueCounts||{};const issues=Object.keys(c).sort().map(k=>`${k}=${c[k]}`).join("+")||"NO_ISSUES";process.stdout.write(`raw=${r.source.rawHitCount}+normalized=${r.normalization.normalizedCount}+eligible=${r.normalization.eligibleCount}+${issues}`)' "$receipt")"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          echo "details=$details" >> "$GITHUB_OUTPUT"
+
+      - name: "Shadow evidence — ${{ steps.gate.outputs.details }}"
+        if: always()
+        run: echo "Inventory shadow evidence surfaced in step name."
+
+      - name: "Shadow gate — ${{ steps.gate.outputs.status }} — ${{ steps.gate.outputs.reason }}"
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.gate.outputs.status }}" = "PASS"
+
+      - name: Upload observation receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: norautomatch-inventory-shadow-${{ github.sha }}
+          path: validation_receipts/*.json
+          if-no-files-found: ignore
+          retention-days: 14

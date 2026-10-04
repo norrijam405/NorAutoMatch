@@ -1,0 +1,157 @@
+name: NorAutoMatch Public Launch Smoke
+
+on:
+  push:
+    branches:
+      - "reactivation/**"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  public-launch-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build standalone public image
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3311 \
+            --build-arg NORAUTO_RELEASE_SHA=${{ github.sha }} \
+            -t norautomatch-public:${{ github.sha }} .
+
+      - name: Verify container is non-root
+        run: |
+          image_user="$(docker inspect --format='{{.Config.User}}' norautomatch-public:${{ github.sha }})"
+          test -n "$image_user"
+          test "$image_user" != "root"
+          test "$image_user" != "0"
+          echo "CONTAINER_USER=$image_user"
+
+      - name: Boot public image in representative-inventory mode
+        run: |
+          docker run -d --rm \
+            --name norautomatch-public-smoke \
+            -p 127.0.0.1:3311:3000 \
+            -e NORAUTO_INVENTORY_MODE=demo \
+            -e NORAUTO_LIVE_INVENTORY_ACTIVATION= \
+            -e NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3311 \
+            norautomatch-public:${{ github.sha }}
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3311/api/health > /tmp/norauto-health.json; then
+              break
+            fi
+            sleep 1
+          done
+
+          curl --fail --silent http://127.0.0.1:3311/api/health > /tmp/norauto-health.json
+          cat /tmp/norauto-health.json
+
+      - name: Verify public health truth boundary
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const health = JSON.parse(fs.readFileSync('/tmp/norauto-health.json', 'utf8'));
+          if (health.service !== 'norauto-match') throw new Error('Unexpected public service identity');
+          if (health.status !== 'SERVING') throw new Error('Public service is not reporting SERVING');
+          if (health.releaseSha !== process.env.EXPECTED_SHA) throw new Error(`Release identity drifted: ${health.releaseSha}`);
+          if (health.inventory?.effectiveMode !== 'demo') throw new Error('Smoke launch must remain in demo inventory mode');
+          if (health.inventory?.customerVisibleLiveInventory !== false) throw new Error('Smoke launch must not expose live inventory');
+          if (health.truthScope !== 'PUBLIC_SERVING_HEALTH_ONLY') throw new Error('Health truth scope drifted');
+          if (health.authorityEffect !== 'NONE') throw new Error('Health endpoint must not grant authority');
+          NODE
+
+      - name: Verify customer-facing pages and disclosures
+        run: |
+          curl --fail --silent http://127.0.0.1:3311/ > /tmp/norauto-home.html
+          curl --fail --silent http://127.0.0.1:3311/terms > /tmp/norauto-terms.html
+          grep -F "Representative matcher inventory" /tmp/norauto-home.html
+          grep -F "Independent shopping line" /tmp/norauto-home.html
+          grep -F "Know what this site is" /tmp/norauto-terms.html
+          grep -F "not presented as the official website" /tmp/norauto-terms.html
+          grep -F "http://127.0.0.1:3311" /tmp/norauto-home.html
+
+      - name: Verify internal documentation is not public
+        run: |
+          for path in /playbook /master-build-prompt /master-build-prompt/download; do
+            status="$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:3311${path}")"
+            test "$status" = "404"
+          done
+
+      - name: Verify unconfigured production lead intake fails closed
+        run: |
+          status="$(curl --silent --output /tmp/norauto-lead-response.json --write-out '%{http_code}' \
+            -H 'content-type: application/json' \
+            --data '{"firstName":"Test","lastName":"Buyer","email":"test@example.com","phone":"4055550123","budgetRange":"$500-$700/month","paymentMethod":"Financing","tradeIn":"","notes":"synthetic launch smoke","source":"PUBLIC_LAUNCH_SMOKE","trigger":"trapdoor","pipeline":"Vehicle Sourcing","shortlistedVehicleIds":[],"monthlyTarget":600,"downPayment":5000,"termMonths":60,"consent":true}' \
+            http://127.0.0.1:3311/api/leads)"
+          cat /tmp/norauto-lead-response.json
+          test "$status" = "503"
+          grep -F "Call or text" /tmp/norauto-lead-response.json
+
+      - name: Verify baseline response security headers
+        run: |
+          curl --fail --silent --head http://127.0.0.1:3311/ > /tmp/norauto-headers.txt
+          grep -i '^x-content-type-options: nosniff' /tmp/norauto-headers.txt
+          grep -i '^x-frame-options: DENY' /tmp/norauto-headers.txt
+          grep -i '^referrer-policy: strict-origin-when-cross-origin' /tmp/norauto-headers.txt
+          grep -i '^permissions-policy:' /tmp/norauto-headers.txt
+
+      - name: Verify reusable public deployment checker
+        run: node scripts/verify-public-deployment.mjs http://127.0.0.1:3311 ${{ github.sha }}
+
+      - name: Emit exact launch candidate receipt
+        run: |
+          mkdir -p validation_receipts
+          image_id="$(docker inspect --format='{{.Id}}' norautomatch-public:${{ github.sha }})"
+          export IMAGE_ID="$image_id"
+          node - <<'NODE'
+          const fs = require('fs');
+          const receipt = {
+            protocol: 'NORAUTO_PUBLIC_LAUNCH_CANDIDATE_RECEIPT_V1',
+            truthState: 'CI_CONTAINER_PUBLIC_LAUNCH_CANDIDATE',
+            gitHead: process.env.GITHUB_SHA,
+            imageId: process.env.IMAGE_ID,
+            servingReleaseSha: process.env.GITHUB_SHA,
+            inventoryMode: 'demo',
+            customerVisibleLiveInventory: false,
+            publicServingHealthVerified: true,
+            exactReleaseIdentityVerified: true,
+            independentProductDisclosureVerified: true,
+            internalDocumentationPubliclyUnavailable: true,
+            unconfiguredLeadIntakeFailsClosed: true,
+            baselineSecurityHeadersVerified: true,
+            reusableDeploymentVerifierPassed: true,
+            authorityEffect: 'NONE',
+            proves: ['EXACT_SOURCE_CONTAINER_BUILDS', 'LOCAL_CONTAINER_PUBLIC_SURFACE_SERVES', 'EXACT_RELEASE_IDENTITY_SERVES', 'REPRESENTATIVE_INVENTORY_FAIL_CLOSED_POSTURE'],
+            doesNotProve: ['PRODUCTION_DEPLOYMENT', 'PUBLIC_DNS_OR_TLS', 'PRODUCTION_DATABASE_CONNECTIVITY', 'REAL_CUSTOMER_LEAD_PERSISTENCE', 'LIVE_INVENTORY_ACTIVATION', 'EXTERNAL_CRM_DELIVERY', 'DEALERSHIP_AUTHORITY'],
+          };
+          fs.writeFileSync(`validation_receipts/public_launch_candidate_${process.env.GITHUB_SHA}.json`, JSON.stringify(receipt, null, 2) + '\n');
+          NODE
+          sha256sum validation_receipts/public_launch_candidate_${GITHUB_SHA}.json | tee validation_receipts/public_launch_candidate_${GITHUB_SHA}.sha256
+
+      - name: Upload launch candidate receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: norautomatch-public-launch-candidate-${{ github.sha }}
+          path: |
+            validation_receipts/public_launch_candidate_${{ github.sha }}.json
+            validation_receipts/public_launch_candidate_${{ github.sha }}.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Preserve failure evidence
+        if: failure()
+        run: docker logs norautomatch-public-smoke || true
+
+      - name: Stop smoke container
+        if: always()
+        run: docker rm -f norautomatch-public-smoke 2>/dev/null || true

@@ -1,0 +1,90 @@
+name: NorAutoMatch Repository Governance CI
+
+on:
+  push:
+    branches:
+      - "reactivation/**"
+  pull_request:
+    branches:
+      - "reactivation/**"
+
+permissions:
+  contents: read
+
+jobs:
+  repository-governance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify canonical governance contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('fs');
+          const p = '.github/norautomatch-governance.json';
+          const doc = JSON.parse(fs.readFileSync(p, 'utf8'));
+          const expected = 'reactivation/2026-09-08';
+          if (doc.schema !== 'NORAUTOMATCH_REPOSITORY_GOVERNANCE_V1') throw new Error('unexpected governance schema');
+          if (doc.canonicalBranch !== expected) throw new Error(`canonical branch drift: ${doc.canonicalBranch}`);
+          if (doc.staleDefaultBranch !== 'main') throw new Error('stale default branch truth changed without governance migration');
+          for (const key of ['requireExactHeadSha','requireCanonicalBase','requireCandidatePushGate','requirePullRequestGate','requireCanonicalPostMergeGate']) {
+            if (doc.promotion?.[key] !== true) throw new Error(`promotion invariant disabled: ${key}`);
+          }
+          if (doc.authorityEffect !== 'NONE') throw new Error('repository governance must not expand product authority');
+          NODE
+
+      - name: Enforce PR base on canonical-target workflow
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          expected="reactivation/2026-09-08"
+          if [ "$BASE_REF" != "$expected" ]; then
+            echo "ROADMAP_PROMOTION_WRONG_BASE: expected $expected, got $BASE_REF" >&2
+            exit 1
+          fi
+
+      - name: Prevent stale-main authority claims
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const roots = ['scripts', 'src'];
+          const bad = [];
+          const patterns = [
+            /canonicalBranch\s*[:=]\s*["']main["']/,
+            /CANONICAL_BRANCH\s*[:=]\s*["']?main["']?/
+          ];
+          function walk(p) {
+            if (!fs.existsSync(p)) return;
+            const stat = fs.statSync(p);
+            if (stat.isDirectory()) {
+              for (const name of fs.readdirSync(p)) walk(path.join(p, name));
+              return;
+            }
+            if (!/\.(?:js|mjs|cjs|ts|tsx|json|ya?ml|md)$/.test(p)) return;
+            const text = fs.readFileSync(p, 'utf8');
+            if (patterns.some((re) => re.test(text))) bad.push(p);
+          }
+          roots.forEach(walk);
+          if (bad.length) throw new Error(`stale main claimed as canonical in: ${bad.join(', ')}`);
+          NODE
+
+      - name: Verify workflow keeps least privilege
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'permissions:' .github/workflows/norautomatch-repository-governance-ci.yml
+          grep -F 'contents: read' .github/workflows/norautomatch-repository-governance-ci.yml
+          if grep -E '^  (actions|checks|deployments|id-token|issues|packages|pages|pull-requests|security-events|statuses): write' .github/workflows/norautomatch-repository-governance-ci.yml; then
+            echo 'Governance CI unexpectedly requests write authority.' >&2
+            exit 1
+          fi
