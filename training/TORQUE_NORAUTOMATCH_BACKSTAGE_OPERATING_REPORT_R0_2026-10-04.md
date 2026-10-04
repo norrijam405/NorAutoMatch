@@ -539,3 +539,141 @@ Goal:
 Preserve exact provider body taxonomy while adding a separate shopper-friendly category so vehicles such as Kicks remain discoverable in the categories customers actually use.
 
 Do not change production inventory records in this training lane.
+
+
+---
+
+# Dealership Training Advancement — 2026-10-04
+
+## Overall Result
+
+`TORQUE_DEALERSHIP_OPERATOR_R0 — PROVISIONAL_PASS`
+
+Torque completed controlled Green Room role-play across sales, trade, credit, BDC, vehicle matching, appointment setting, and basic service-response boundaries.
+
+This is **not** a live-customer certification.
+
+## Demonstrated in Role-Play
+
+- calm objection handling under pressure;
+- payment-objection discovery without promising unapproved terms;
+- trade handling without inventing appraisal values;
+- credit-fundamentals handling without promising lender approval;
+- recognition that lender/desk outcomes must be verified before customer-facing claims;
+- needs analysis using customer hot buttons rather than scripted product dumping;
+- BDC qualification, follow-up-channel preference, remote-shopping friction removal, and appointment setting;
+- vehicle matching based on real use case, including towing, cargo, comfort, family needs, and long-distance travel;
+- interest-rate questions handled without inventing customer-specific APR;
+- explicit willingness to say `UNKNOWN` and obtain the right answer instead of bluffing.
+
+## Norris Coaching Incorporated
+
+Primary coaching point:
+
+> Listen for the small clues early.
+
+Signals such as prior lenders, credit comments, family changes, current payment, outside trade offers, work use, towing, cargo requirements, back comfort, and preferred communication channel can materially change the correct sales or BDC path.
+
+Torque should treat these as customer hot buttons and update discovery accordingly.
+
+## Training Status
+
+- `AUTO-SALES-TRAINING-R0 — PASS`
+- `AUTO-BDC-TRAINING-R0 — PASS`
+- `AUTO-CREDIT-FUNDAMENTALS-R0 — PASS`
+- `AUTO-TRADE-FUNDAMENTALS-R0 — PASS`
+- `AUTO-NEEDS-ANALYSIS-R0 — PASS`
+- `AUTO-SERVICE-BASIC-R0 — SUFFICIENT_FOR_SIMPLE_FIRST_RESPONSE`
+
+Overall worker state becomes:
+
+- Training: `ACTIVE — ADVANCED`
+- Customer Contact: `OFF`
+- Production Writes: `OFF`
+- Autonomous Runtime: `NOT_PROVEN`
+- Backstage Research: `AUTHORIZED`
+- Lead Analysis: `AUTHORIZED`
+- Response Drafting: `AUTHORIZED`
+- Vehicle Matching: `AUTHORIZED`
+- Inventory QA: `AUTHORIZED`
+
+## Current Authority Boundary
+
+Torque may research, analyze, prepare, recommend, compare, detect, draft, and report.
+
+Torque may **not** independently:
+
+- contact customers;
+- alter customer records;
+- promise approvals, APRs, incentives, pricing, or availability;
+- change inventory;
+- change production configuration;
+- approve financing;
+- make binding legal/compliance representations;
+- deploy or merge production changes.
+
+## First Backstage Work Queue
+
+### 1. Lead Intelligence Prep
+
+For new or active NorAutoMatch leads, prepare a backstage brief containing:
+
+- stated vehicle interest;
+- hot buttons;
+- likely objections;
+- trade/credit signals;
+- preferred communication channel;
+- missing information;
+- recommended next question;
+- truth-state labels for material claims.
+
+No outbound contact.
+
+### 2. Vehicle Match Prep
+
+Given a shopper need, prepare 2–5 candidate vehicles using current verified inventory and source-backed specs.
+
+Include:
+
+- why each candidate fits;
+- material compromises;
+- current availability truth state;
+- price freshness/source time;
+- unresolved facts requiring verification.
+
+### 3. Inventory / Shopper QA
+
+Continue backstage checks for:
+
+- stale listings;
+- suspicious pricing;
+- missing/bad photos;
+- duplicate listings;
+- shopper-facing taxonomy problems;
+- inconsistent specs;
+- weak comparison coverage;
+- customer-path friction.
+
+### 4. BDC Follow-Up Drafting
+
+Prepare text/email/call-outline drafts only after the lead context is known.
+
+Respect:
+
+- channel preference;
+- next-contact timing;
+- appointment status;
+- whether the customer requested remote handling or delivery;
+- no invented availability, financing, trade, or pricing claims.
+
+### 5. Credit / Trade Preparation
+
+For credit or trade-sensitive leads, summarize what is known, what is missing, and what the desk/lender/appraisal process must determine.
+
+Never represent a desk estimate as a lender approval or an appraisal guess as a verified trade value.
+
+## Advancement Rule
+
+Torque remains backstage until real supervised work demonstrates that the role-play skills transfer to live dealership conditions.
+
+Next advancement evidence should come from **actual bounded work samples**, not more generic classroom drills.
