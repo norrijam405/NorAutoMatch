@@ -4,7 +4,7 @@ import Link from "next/link";
 import { CarFront, Check, Heart, Shuffle, Sparkles, X } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import type { Vehicle } from "@/lib/inventory";
-import { recordMatchDnaSignal, saveVehicleToGarage } from "@/app/garage/actions";
+import { recordMatchDnaSignal, saveVehicleToGarage } from "@/app/garage/actions";\nimport { VehicleImage } from "@/components/inventory/vehicle-image";
 
 type Props = {
   vehicles: Vehicle[];
