@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ArrowRight, Search, ShieldCheck, Shuffle } from "lucide-react";
 import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
-import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";\nimport { VehicleImage } from "@/components/inventory/vehicle-image";
+import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
+import { VehicleImage } from "@/components/inventory/vehicle-image";
 
 export async function HomeInventorySpotlight() {
   const runtime = resolveInventoryRuntime({
@@ -50,7 +51,7 @@ export async function HomeInventorySpotlight() {
               <Link href={`/vehicles/${vehicle.id}`} key={vehicle.id} className="w-[78vw] max-w-[310px] shrink-0 snap-start overflow-hidden rounded-[22px] border border-white/10 bg-[#0d131b] transition hover:border-amber-300/30 sm:w-[300px]">
                 <div className="aspect-[16/9] overflow-hidden bg-[#111923]">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={vehicle.image} alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`} className="h-full w-full object-cover" loading="lazy" />
+                  <VehicleImage src={vehicle.image} alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`} className="h-full w-full object-cover" loading="lazy" />
                 </div>
                 <div className="p-4">
                   <p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-300">{unitLabel}</p>
