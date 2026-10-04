@@ -13,6 +13,10 @@ const serverSecretNames = [
   "NORAUTO_MANAGER_SESSION_PREVIOUS_SECRET",
 ] as const;
 
+const approvedClientPublicCredentials = new Set([
+  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+]);
+
 async function sourceFiles(root: string): Promise<string[]> {
   const entries = await readdir(root, { withFileTypes: true });
   const nested = await Promise.all(entries.map(async (entry) => {
@@ -22,6 +26,12 @@ async function sourceFiles(root: string): Promise<string[]> {
     return [];
   }));
   return nested.flat();
+}
+
+function clientExposedSecretLikeNames(text: string): string[] {
+  return [...text.matchAll(/NEXT_PUBLIC_[A-Z0-9_]*(?:SECRET|TOKEN|KEY)[A-Z0-9_]*/g)]
+    .map((match) => match[0])
+    .filter((name) => !approvedClientPublicCredentials.has(name));
 }
 
 async function main() {
@@ -34,8 +44,27 @@ async function main() {
         assert(!text.includes(name), `${name} must not be referenced by client module ${path}`);
       }
     }
-    assert(!/NEXT_PUBLIC_[A-Z0-9_]*(SECRET|TOKEN|KEY)/.test(text), `Client-exposed secret-like environment name detected in ${path}`);
+    const exposedSecretLikeNames = clientExposedSecretLikeNames(text);
+    assert.equal(
+      exposedSecretLikeNames.length,
+      0,
+      `Client-exposed secret-like environment name(s) ${exposedSecretLikeNames.join(", ")} detected in ${path}`,
+    );
   }
+
+  const supabaseClient = await readFile("src/lib/supabase/client.ts", "utf8");
+  assert(
+    supabaseClient.includes("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"),
+    "Supabase browser client must use the explicitly publishable credential name.",
+  );
+  assert(
+    !supabaseClient.includes("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+    "Supabase browser client must not regress to the ambiguous legacy anon-key environment name.",
+  );
+  assert(
+    !supabaseClient.includes("SERVICE_ROLE") && !supabaseClient.includes("SECRET_KEY"),
+    "Supabase browser client must never reference a service-role or secret key.",
+  );
 
   const relayRoute = await readFile("src/app/api/internal/crm-relay/route.ts", "utf8");
   assert(relayRoute.includes("NORAUTO_RELAY_ASSERTION_SECRET"), "Relay route must use the current assertion secret.");
@@ -64,6 +93,14 @@ async function main() {
   for (const name of serverSecretNames) {
     assert(envExample.includes(`${name}=`), `.env.example must document ${name}.`);
   }
+  assert(
+    envExample.includes("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="),
+    ".env.example must explicitly document the approved browser-safe Supabase publishable key.",
+  );
+  assert(
+    envExample.includes("Never put a Supabase secret/service-role key in a NEXT_PUBLIC_ variable."),
+    ".env.example must preserve the browser credential safety warning.",
+  );
 
   console.log("PASS_SECRETS_KEY_SURFACE_CONTRACT");
 }

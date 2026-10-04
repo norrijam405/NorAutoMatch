@@ -39,8 +39,8 @@ export function verifyInventoryCatalogIntegrity(catalog: InventoryCatalog): Cata
     if (!Number.isFinite(vehicle.price) || vehicle.price <= 0) {
       findings.push({ code: "NON_POSITIVE_PRICE", vehicleId: vehicle.id, message: "Customer catalog vehicle must have a positive finite price." });
     }
-    if (!(["SUV", "Sedan", "Truck"] as const).includes(vehicle.type)) {
-      findings.push({ code: "UNSUPPORTED_BODY_TYPE", vehicleId: vehicle.id, message: "Customer matcher received an unsupported body type." });
+    if (typeof vehicle.type !== "string" || vehicle.type.trim().length === 0) {
+      findings.push({ code: "UNSUPPORTED_BODY_TYPE", vehicleId: vehicle.id, message: "Customer matcher requires a non-empty source-supported body type/category." });
     }
   }
 

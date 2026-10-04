@@ -3,9 +3,11 @@ import type { LiveInventoryRecord } from "./live-inventory";
 import type { OrrAlgoliaDiscovery, OrrAlgoliaHit } from "./orr-public-algolia";
 
 const SOURCE_NAME = "orrnissanwest_public_algolia";
-const PARSER_VERSION = "orr-algolia-v5";
+const PARSER_VERSION = "orr-algolia-v7";
 const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/i;
 const DEALER_ID = 2175;
+const RIDEMOTIVE_IMAGE_BASE = "https://images.app.ridemotive.com/";
+const RIDEMOTIVE_IMAGE_ID_RE = /^[a-z0-9]{20,64}$/i;
 
 export type OrrAlgoliaNormalizationIssue = {
   objectID?: string;
@@ -47,6 +49,17 @@ function stringArray(value: unknown) {
   return undefined;
 }
 
+function dealerIds(hit: OrrAlgoliaHit) {
+  const values = Array.isArray(hit.dealer_ids) ? hit.dealer_ids : [];
+  return values.map((value) => Number(value)).filter(Number.isFinite);
+}
+
+function belongsToOrrWest(hit: OrrAlgoliaHit) {
+  const associated = dealerIds(hit);
+  if (associated.length > 0) return associated.includes(DEALER_ID);
+  return Number(hit.dealer_id) === DEALER_ID;
+}
+
 function collectFeatureStrings(hit: OrrAlgoliaHit) {
   const candidates: unknown[] = [
     hit.parsed_features,
@@ -75,10 +88,18 @@ function validHttpUrl(value: string) {
   }
 }
 
+function normalizePhotoValue(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (validHttpUrl(trimmed)) return trimmed;
+  if (RIDEMOTIVE_IMAGE_ID_RE.test(trimmed)) return `${RIDEMOTIVE_IMAGE_BASE}${trimmed}`;
+  return undefined;
+}
+
 function normalizePhotos(hit: OrrAlgoliaHit) {
-  const candidates = [hit.images, hit.image_urls, hit.photos, hit.photo_urls, hit.processed_images];
+  const candidates = [hit.images, hit.webp_images, hit.image_urls, hit.photos, hit.photo_urls, hit.processed_images];
   const values = candidates.flatMap((candidate) => stringArray(candidate) ?? []);
-  return [...new Set(values.filter(validHttpUrl))].slice(0, 30);
+  return [...new Set(values.map(normalizePhotoValue).filter((value): value is string => Boolean(value)))].slice(0, 30);
 }
 
 function hashCanonicalHit(hit: OrrAlgoliaHit) {
@@ -102,8 +123,8 @@ export function normalizeOrrAlgoliaHit(
   const objectID = stringValue(hit.objectID) ?? (numberValue(hit.id)?.toString());
   const vin = stringValue(hit.vin)?.toUpperCase();
 
-  if (Number(hit.dealer_id) !== DEALER_ID) {
-    return { issue: { objectID, vin, severity: "ERROR", code: "DEALER_MISMATCH", message: "Hit is outside dealer_id 2175." } };
+  if (!belongsToOrrWest(hit)) {
+    return { issue: { objectID, vin, severity: "ERROR", code: "DEALER_MISMATCH", message: "Hit is outside the public Orr Nissan West dealer association (dealer_ids includes 2175)." } };
   }
   if (!vin || !VIN_RE.test(vin)) {
     return { issue: { objectID, vin, severity: "ERROR", code: "VIN_INVALID", message: "Hit does not contain a valid 17-character VIN." } };

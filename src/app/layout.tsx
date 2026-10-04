@@ -3,6 +3,7 @@ import "./globals.css";
 import { brand } from "@/lib/brand";
 import { Header } from "@/components/site/header";
 import { Footer } from "@/components/site/footer";
+import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   metadataBase: new URL(brand.baseUrl),
@@ -23,7 +24,11 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  const isAuthenticated = typeof data?.claims?.sub === "string" && data.claims.sub.length > 0;
+
   const schema = {
     "@context": "https://schema.org",
     "@type": "WebSite",
@@ -46,7 +51,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
-        <Header />
+        <Header isAuthenticated={isAuthenticated} />
         <main>{children}</main>
         <Footer />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />

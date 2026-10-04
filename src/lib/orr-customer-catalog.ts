@@ -4,7 +4,8 @@ import { buildDemoCatalog, type InventoryCatalog } from "./inventory-catalog";
 import { selectCustomerInventory, resolveInventoryRuntime } from "./inventory-runtime";
 import { normalizeOrrAlgoliaDiscovery } from "./orr-algolia-normalizer";
 import { buildInventoryShadowReceipt } from "./inventory-shadow-receipt";
-import { discoverOrrAlgoliaInventory, type OrrAlgoliaDiscovery } from "./orr-public-algolia";
+import type { OrrAlgoliaDiscovery } from "./orr-public-algolia";
+import { discoverOrrAlgoliaInventoryCached } from "./orr-public-algolia-cache";
 
 export type OrrCustomerCatalogOptions = {
   mode?: string;
@@ -68,7 +69,7 @@ export async function loadOrrCustomerCatalog(options: OrrCustomerCatalogOptions 
     }));
   }
 
-  const discover = options.discover ?? (() => discoverOrrAlgoliaInventory({ hitsPerPage: 100, maxPages: 10 }));
+  const discover = options.discover ?? (() => discoverOrrAlgoliaInventoryCached({ hitsPerPage: 100, maxPages: 10 }));
   const discovery = await discover();
   const sourceGate = buildInventoryShadowReceipt(discovery);
   if (sourceGate.gate.status !== "PASS") {

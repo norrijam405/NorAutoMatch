@@ -41,6 +41,7 @@ function shadow(overrides: Partial<InventoryShadowReceipt> = {}): InventoryShado
       warningCount: 32,
       errorCount: 3,
       blockingErrorCount: 0,
+      quarantinedErrorCount: 0,
       inactiveExcludedCount: 3,
       issueCounts: { INACTIVE_HIT: 3, STOCK_NUMBER_MISSING: 32 },
     },

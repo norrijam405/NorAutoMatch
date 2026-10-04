@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { MessageSquareText, Phone } from "lucide-react";
 import { brand, cityDetails } from "@/lib/brand";
-import { Logo } from "./header";
+import { NAM_PRIMARY_DATA_URI } from "@/lib/brand-images";
 
 export function Footer() {
   return (
     <footer className="border-t border-white/10 bg-slate-950/80">
       <div className="shell grid gap-10 py-14 md:grid-cols-[1.2fr_.8fr_1fr]">
         <div>
-          <Logo />
+          <Link href="/" aria-label="NorAuto Match home" className="inline-block">
+            <img src={NAM_PRIMARY_DATA_URI} alt="NorAuto Match" className="h-auto w-[220px] max-w-full object-contain sm:w-[260px]" />
+          </Link>
           <p className="mt-5 max-w-md text-sm leading-6 text-slate-400">Independent. Human-guided. Built by someone who actually sells cars. One direct line, one clear buying lane, no lead-queue runaround.</p>
           <div className="mt-6 flex flex-wrap gap-3">
             <a href={`tel:${brand.phoneRaw}`} className="btn-primary min-h-10 px-4 py-2"><Phone size={16} /> {brand.phoneDisplay}</a>
@@ -34,7 +36,7 @@ export function Footer() {
       <div className="border-t border-white/10 bg-white/[.02]">
         <div className="shell flex flex-col gap-4 py-6 text-sm sm:flex-row sm:items-center sm:justify-between">
           <div><p className="font-black text-white">Independent car-shopping guidance</p><p className="mt-1 text-xs text-slate-500">NorAuto Match is not a dealership website. Vehicle sales, financing, paperwork, and delivery are completed by the applicable licensed selling dealership.</p></div>
-          <div className="flex flex-wrap gap-x-5 gap-y-2"><a href={`tel:${brand.phoneRaw}`} className="font-bold text-slate-300 hover:text-white">Call NorAuto Match</a><Link href="/terms" className="font-bold text-amber-300 hover:text-amber-200">Disclosures & terms</Link></div>
+          <div className="flex flex-wrap gap-x-5 gap-y-2"><a href={`tel:${brand.phoneRaw}`} className="font-bold text-slate-300 hover:text-white">Call NorAuto Match</a><Link href="/terms" className="font-bold text-red-300 hover:text-red-200">Disclosures & terms</Link></div>
         </div>
       </div>
       <div className="border-t border-white/5">
