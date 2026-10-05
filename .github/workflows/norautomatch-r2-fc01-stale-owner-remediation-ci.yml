@@ -1,18 +1,18 @@
-name: NorAutoMatch Same-Site Chat Thread CI
+name: NorAutoMatch R2 FC-01 Stale Owner Remediation CI
 
 on:
   push:
     branches:
-      - "feature/2026-10-05-site-chat-reply-thread-r0"
+      - "remediation/2026-10-05-r2-fc01-stale-owner-site-reply"
   pull_request:
     branches:
-      - main
+      - "integration/2026-10-05-r2-customer-workspace-communication-bundle"
 
 permissions:
   contents: read
 
 jobs:
-  site-chat-thread:
+  fc01-stale-owner-remediation:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
@@ -42,24 +42,22 @@ jobs:
         run: npm ci
       - name: Production dependency security gate
         run: npm audit --omit=dev --audit-level=high
-      - name: Apply bounded conversation + site-thread schemas
+      - name: Apply bounded conversation ownership and site-thread schemas
         env:
           PGPASSWORD: norauto-ci-password
         run: |
           psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f infrastructure/norautomatch-crm-v4-conversation-events.sql
           psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f infrastructure/norautomatch-conversation-ownership-r0.sql
           psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f infrastructure/norautomatch-site-chat-thread-r0.sql
-      - name: Compile verification surface
+      - name: Compile site-thread verification surface
         run: |
           rm -rf .tmp-site-chat-thread
           npx tsc -p tsconfig.site-chat-thread.json
-      - name: Challenge Ask Torque intake normalization
-        run: node .tmp-site-chat-thread/scripts/ask-torque-intake.behavior.js
-      - name: Challenge same-site reply transport
+      - name: Reproduce and close FC-01 stale-owner race
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
         run: node .tmp-site-chat-thread/scripts/site-chat-thread.integration.js
-      - name: Clean generated verification output
+      - name: Clean verification output
         run: rm -rf .tmp-site-chat-thread
       - name: Typecheck application
         run: npm run typecheck

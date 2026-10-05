@@ -131,44 +131,79 @@ export async function publishSiteChatReply(input: {
   if (!body || body.length > 3000) throw new Error("SITE_CHAT_REPLY_BODY_INVALID");
   if (input.provider !== "NORAUTO_SITE_CHAT") throw new Error("SITE_CHAT_REPLY_PROVIDER_NOT_ELIGIBLE");
 
-  const event = await input.pool.query<{ conversation_id: string; processing_state: string }>(
-    `select conversation_id, processing_state
-       from crm_conversation_events
-      where workspace_id=$1 and provider=$2 and event_id=$3
-      limit 1`,
-    [input.workspaceId, input.provider, input.eventId],
-  );
-  const row = event.rows[0];
-  if (!row || row.processing_state === "DEAD_LETTER" || row.processing_state === "REDACTED") {
-    throw new Error("SITE_CHAT_REPLY_EVENT_NOT_ELIGIBLE");
+  const client = await input.pool.connect();
+  try {
+    await client.query("begin");
+
+    const event = await client.query<{ conversation_id: string; processing_state: string }>(
+      `select conversation_id, processing_state
+         from crm_conversation_events
+        where workspace_id=$1 and provider=$2 and event_id=$3
+        limit 1`,
+      [input.workspaceId, input.provider, input.eventId],
+    );
+    const row = event.rows[0];
+    if (!row || row.processing_state === "DEAD_LETTER" || row.processing_state === "REDACTED") {
+      throw new Error("SITE_CHAT_REPLY_EVENT_NOT_ELIGIBLE");
+    }
+
+    const ownership = await client.query<{
+      assignment_state: "UNASSIGNED" | "ASSIGNED";
+      assignee_subject_id: string | null;
+    }>(
+      `select assignment_state, assignee_subject_id
+         from crm_conversation_assignments
+        where workspace_id=$1 and provider=$2 and conversation_id=$3
+        for update`,
+      [input.workspaceId, input.provider, row.conversation_id],
+    );
+    const assignment = ownership.rows[0];
+    if (
+      !assignment ||
+      assignment.assignment_state !== "ASSIGNED" ||
+      assignment.assignee_subject_id !== input.publishedBy
+    ) {
+      throw new Error("SITE_CHAT_REPLY_CURRENT_OWNER_REQUIRED");
+    }
+
+    const access = await client.query(
+      `select 1
+         from crm_site_chat_access
+        where workspace_id=$1 and conversation_id=$2 and expires_at > current_timestamp
+        limit 1`,
+      [input.workspaceId, row.conversation_id],
+    );
+    if (access.rowCount !== 1) throw new Error("SITE_CHAT_REPLY_THREAD_NOT_ACTIVE");
+
+    const inserted = await client.query<{ reply_id: string; published_at: Date | string }>(
+      `insert into crm_site_chat_replies (
+         workspace_id, conversation_id, source_event_id, body, published_by
+       ) values ($1,$2,$3,$4,$5)
+       returning reply_id, published_at`,
+      [input.workspaceId, row.conversation_id, input.eventId, body, input.publishedBy],
+    );
+    const reply = inserted.rows[0];
+    if (!reply) throw new Error("SITE_CHAT_REPLY_INSERT_FAILED");
+
+    await client.query("commit");
+
+    return {
+      protocol: "NORAUTO_SITE_CHAT_PUBLISH_RECEIPT_V1" as const,
+      conversationId: row.conversation_id,
+      replyId: reply.reply_id,
+      publishedAt: new Date(reply.published_at).toISOString(),
+      deliveryChannel: "NORAUTO_SITE_THREAD" as const,
+      externalDelivery: "NOT_PERFORMED" as const,
+      authorityEffect: "NONE" as const,
+    };
+  } catch (error) {
+    try {
+      await client.query("rollback");
+    } catch (rollbackError) {
+      throw new AggregateError([error, rollbackError], "Site-chat reply transaction failed and rollback also failed.");
+    }
+    throw error;
+  } finally {
+    client.release();
   }
-
-  const access = await input.pool.query(
-    `select 1
-       from crm_site_chat_access
-      where workspace_id=$1 and conversation_id=$2 and expires_at > current_timestamp
-      limit 1`,
-    [input.workspaceId, row.conversation_id],
-  );
-  if (access.rowCount !== 1) throw new Error("SITE_CHAT_REPLY_THREAD_NOT_ACTIVE");
-
-  const inserted = await input.pool.query<{ reply_id: string; published_at: Date | string }>(
-    `insert into crm_site_chat_replies (
-       workspace_id, conversation_id, source_event_id, body, published_by
-     ) values ($1,$2,$3,$4,$5)
-     returning reply_id, published_at`,
-    [input.workspaceId, row.conversation_id, input.eventId, body, input.publishedBy],
-  );
-  const reply = inserted.rows[0];
-  if (!reply) throw new Error("SITE_CHAT_REPLY_INSERT_FAILED");
-
-  return {
-    protocol: "NORAUTO_SITE_CHAT_PUBLISH_RECEIPT_V1" as const,
-    conversationId: row.conversation_id,
-    replyId: reply.reply_id,
-    publishedAt: new Date(reply.published_at).toISOString(),
-    deliveryChannel: "NORAUTO_SITE_THREAD" as const,
-    externalDelivery: "NOT_PERFORMED" as const,
-    authorityEffect: "NONE" as const,
-  };
 }
