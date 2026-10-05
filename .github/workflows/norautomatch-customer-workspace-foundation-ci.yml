@@ -37,6 +37,8 @@ jobs:
         run: node .tmp-customer-workspace-foundation/scripts/orr-conversation-bridge.behavior.js
       - name: Challenge video publication truth boundary
         run: node .tmp-customer-workspace-foundation/scripts/video-hub.behavior.js
+      - name: Challenge deal readiness boundary
+        run: node .tmp-customer-workspace-foundation/scripts/deal-readiness.behavior.js
       - name: Clean generated verification output
         run: rm -rf .tmp-customer-workspace-foundation
       - name: Typecheck application
