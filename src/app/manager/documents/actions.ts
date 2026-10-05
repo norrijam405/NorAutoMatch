@@ -28,6 +28,9 @@ export async function reviewSecureDocument(formData: FormData) {
   const status = reviewStateSchema.parse(String(formData.get("status") ?? ""));
   const opportunityRaw = String(formData.get("opportunityId") ?? "").trim();
   const opportunityId = opportunityRaw ? opportunityIdSchema.parse(opportunityRaw) : null;
+  if (status === "ACCEPTED" && !opportunityId) {
+    throw new Error("Accepted documents must be linked to a verified NorAutoMatch opportunity.");
+  }
 
   const { supabase, userId } = await requireNorAutoMembership(
     ["operator", "admin", "founder"],
@@ -45,10 +48,11 @@ export async function reviewSecureDocument(formData: FormData) {
 
   const { data: existing, error: readError } = await supabase
     .from("customer_secure_documents")
-    .select("id,user_id,storage_path")
+    .select("id,user_id,storage_path,raw_deleted_at")
     .eq("id", documentId)
     .maybeSingle();
   if (readError || !existing) throw new Error("Secure document not found.");
+  if (existing.raw_deleted_at) throw new Error("Deleted raw documents cannot be reviewed.");
 
   const { error: updateError } = await supabase
     .from("customer_secure_documents")
@@ -80,10 +84,11 @@ export async function createManagerDocumentViewLink(formData: FormData) {
 
   const { data: doc, error } = await supabase
     .from("customer_secure_documents")
-    .select("id,storage_path")
+    .select("id,storage_path,raw_deleted_at")
     .eq("id", documentId)
     .maybeSingle();
   if (error || !doc) throw new Error("Secure document not found.");
+  if (doc.raw_deleted_at) throw new Error("The raw document has already been deleted.");
 
   const { data: signed, error: signError } = await supabase.storage
     .from("customer-secure-documents")
