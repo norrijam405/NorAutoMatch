@@ -51,6 +51,7 @@ export async function GET(request: Request) {
       protocol: "NORAUTO_CONVERSATION_RESPONSE_QUEUE_V1",
       truthState: "READ_MODEL_ONLY",
       authorityEffect: "NONE",
+      viewerSubjectId: auth.claims.subjectId,
       items,
     }, 200);
   } catch {

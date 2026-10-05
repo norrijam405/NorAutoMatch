@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Clock3, LockKeyhole, Mail, MessageSquareText, PhoneCall, RefreshCw, ShieldCheck } from "lucide-react";
+import { Clock3, Film, Loader2, LockKeyhole, Mail, MessageSquareText, PhoneCall, RefreshCw, ShieldCheck } from "lucide-react";
 
 type ConversationQueueItem = {
   workspaceId: string;
@@ -38,7 +38,33 @@ type ConversationQueueItem = {
     sourceRef: string | null;
     sourceHash: string | null;
   };
+  ownership: {
+    state: "UNASSIGNED" | "ASSIGNED";
+    assigneeSubjectId: string | null;
+    assignedAt: string | null;
+    authorityEffect: "NONE";
+  };
   authorityEffect: "NONE";
+};
+
+type PreparedResponse = {
+  truthState: "DRAFT_ONLY" | "EVIDENCE_BOUND_DRAFT_ONLY";
+  authorityEffect: "NONE";
+  draft: {
+    text: string;
+    unresolvedEvidence: string[];
+    outboundExecution: "NOT_PERFORMED";
+    deliveryState: "NOT_SENT";
+  };
+  videoRecommendations: Array<{
+    protocol: "NORAUTO_TORQUE_VIDEO_RECOMMENDATION_V1";
+    videoId: string;
+    title: string;
+    canonicalUrl: string;
+    matchedVins: string[];
+    topics: string[];
+    authorityEffect: "NONE";
+  }>;
 };
 
 type DeskState = "LOCKED" | "LOADING" | "READY" | "ERROR";
@@ -55,6 +81,12 @@ export function ConversationResponseDesk() {
   const [state, setState] = useState<DeskState>("LOCKED");
   const [items, setItems] = useState<ConversationQueueItem[]>([]);
   const [message, setMessage] = useState("Manager credentials remain only in this browser tab's memory.");
+  const [viewerSubjectId, setViewerSubjectId] = useState("");
+  const [ownershipBusyId, setOwnershipBusyId] = useState<string>();
+  const [siteReplyDrafts, setSiteReplyDrafts] = useState<Record<string, string>>({});
+  const [publishingReplyId, setPublishingReplyId] = useState<string>();
+  const [preparations, setPreparations] = useState<Record<string, PreparedResponse>>({});
+  const [preparingId, setPreparingId] = useState<string>();
 
   async function loadQueue(token: string) {
     setState("LOADING");
@@ -71,6 +103,7 @@ export function ConversationResponseDesk() {
         body?.protocol !== "NORAUTO_CONVERSATION_RESPONSE_QUEUE_V1" ||
         body?.truthState !== "READ_MODEL_ONLY" ||
         body?.authorityEffect !== "NONE" ||
+        typeof body?.viewerSubjectId !== "string" ||
         !Array.isArray(body?.items)
       ) {
         setItems([]);
@@ -79,6 +112,7 @@ export function ConversationResponseDesk() {
         return false;
       }
       setItems(body.items as ConversationQueueItem[]);
+      setViewerSubjectId(body.viewerSubjectId);
       setState("READY");
       setMessage(body.items.length ? `${body.items.length} conversation response item${body.items.length === 1 ? "" : "s"} require attention.` : "No authorized conversation-response items are currently queued.");
       return true;
@@ -87,6 +121,117 @@ export function ConversationResponseDesk() {
       setState("ERROR");
       setMessage("Conversation response queue is unavailable. No customer state was changed.");
       return false;
+    }
+  }
+
+  async function prepareResponse(item: ConversationQueueItem) {
+    if (!sessionToken || preparingId) return;
+    const key = `${item.provider}:${item.eventId}`;
+    setPreparingId(key);
+    setMessage("Preparing an evidence-aware draft and checking the public Video Hub…");
+    try {
+      const params = new URLSearchParams({ provider: item.provider, eventId: item.eventId });
+      const response = await fetch(`/api/manager/conversations/prepare?${params.toString()}`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${sessionToken}` },
+        cache: "no-store",
+      });
+      const body = await response.json().catch(() => ({}));
+      if (
+        !response.ok ||
+        body?.authorityEffect !== "NONE" ||
+        body?.truthState !== "DRAFT_ONLY" ||
+        typeof body?.draft?.text !== "string" ||
+        !Array.isArray(body?.videoRecommendations)
+      ) {
+        setMessage("Response preparation failed its truth-boundary check.");
+        return;
+      }
+      setPreparations((current) => ({ ...current, [key]: body as PreparedResponse }));
+      setMessage("Draft prepared. Nothing was sent to the customer.");
+    } catch {
+      setMessage("Response preparation is temporarily unavailable.");
+    } finally {
+      setPreparingId(undefined);
+    }
+  }
+
+  async function updateOwnership(item: ConversationQueueItem, action: "CLAIM" | "RELEASE") {
+    if (!sessionToken || ownershipBusyId) return;
+    const key = `${item.provider}:${item.conversationId}`;
+    setOwnershipBusyId(key);
+    setMessage(action === "CLAIM" ? "Claiming conversation…" : "Releasing conversation…");
+    try {
+      const response = await fetch("/api/manager/conversations/ownership", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          provider: item.provider,
+          conversationId: item.conversationId,
+          action,
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (
+        !response.ok ||
+        body?.protocol !== "NORAUTO_CONVERSATION_OWNERSHIP_V1" ||
+        body?.authorityEffect !== "NONE"
+      ) {
+        setMessage(typeof body?.message === "string" ? body.message : "Conversation ownership update failed.");
+        return;
+      }
+      await loadQueue(sessionToken);
+      setMessage(action === "CLAIM" ? "Conversation claimed. Only the current owner can publish a website reply." : "Conversation released back to the shared queue.");
+    } catch {
+      setMessage("Conversation ownership is temporarily unavailable.");
+    } finally {
+      setOwnershipBusyId(undefined);
+    }
+  }
+
+  async function publishSiteReply(item: ConversationQueueItem) {
+    if (!sessionToken || item.provider !== "NORAUTO_SITE_CHAT") return;
+    const key = `${item.provider}:${item.eventId}`;
+    const body = (siteReplyDrafts[key] ?? "").trim();
+    if (!body) {
+      setMessage("Write a same-site reply before publishing.");
+      return;
+    }
+    setPublishingReplyId(key);
+    setMessage("Publishing a human-reviewed reply to the NorAutoMatch website thread…");
+    try {
+      const response = await fetch("/api/manager/conversations/site-reply", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          provider: item.provider,
+          eventId: item.eventId,
+          body,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (
+        !response.ok ||
+        result?.protocol !== "NORAUTO_SITE_CHAT_PUBLISH_RECEIPT_V1" ||
+        result?.deliveryChannel !== "NORAUTO_SITE_THREAD" ||
+        result?.externalDelivery !== "NOT_PERFORMED" ||
+        result?.authorityEffect !== "NONE"
+      ) {
+        setMessage(typeof result?.message === "string" ? result.message : "Same-site reply failed its truth-boundary check.");
+        return;
+      }
+      setSiteReplyDrafts((current) => ({ ...current, [key]: "" }));
+      setMessage("Website reply published. No email, text, phone, Motive, or lender delivery was performed.");
+    } catch {
+      setMessage("Same-site reply publishing is temporarily unavailable.");
+    } finally {
+      setPublishingReplyId(undefined);
     }
   }
 
@@ -107,6 +252,9 @@ export function ConversationResponseDesk() {
     setSessionToken("");
     setDraftToken("");
     setItems([]);
+    setViewerSubjectId("");
+    setSiteReplyDrafts({});
+    setPreparations({});
     setState("LOCKED");
     setMessage("Manager session cleared from this tab. Conversation data is no longer displayed.");
   }
@@ -176,6 +324,30 @@ export function ConversationResponseDesk() {
               <div className="text-left lg:text-right">
                 <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 lg:justify-end"><Clock3 size={14} /> Target {new Date(item.targetAt).toLocaleTimeString()}</div>
                 <code className="mt-2 block text-[11px] text-slate-600">{item.conversationId}</code>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className={item.ownership.state === "ASSIGNED" ? "rounded-full border border-sky-400/20 bg-sky-400/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[.12em] text-sky-300" : "rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[.12em] text-slate-500"}>
+                    {item.ownership.state === "ASSIGNED" ? (item.ownership.assigneeSubjectId === viewerSubjectId ? "Owned by you" : "Assigned") : "Unassigned"}
+                  </span>
+                  {item.ownership.state === "UNASSIGNED" ? (
+                    <button
+                      type="button"
+                      onClick={() => void updateOwnership(item, "CLAIM")}
+                      disabled={ownershipBusyId === `${item.provider}:${item.conversationId}`}
+                      className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.12em] text-white hover:border-amber-300/40 disabled:opacity-50"
+                    >
+                      Claim conversation
+                    </button>
+                  ) : item.ownership.assigneeSubjectId === viewerSubjectId ? (
+                    <button
+                      type="button"
+                      onClick={() => void updateOwnership(item, "RELEASE")}
+                      disabled={ownershipBusyId === `${item.provider}:${item.conversationId}`}
+                      className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.12em] text-white hover:border-amber-300/40 disabled:opacity-50"
+                    >
+                      Release
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </div>
 
@@ -193,6 +365,79 @@ export function ConversationResponseDesk() {
                 <p className="mt-3 text-[11px] leading-5 text-slate-600">Availability, price, incentive, financing, reservation, appointment, SOLD, and LOST claims still require their own current evidence. This queue grants no authority to invent them.</p>
               </div>
             </div>
+
+            <div className="mt-5 border-t border-white/10 pt-5">
+              <button
+                type="button"
+                disabled={Boolean(preparingId)}
+                onClick={() => void prepareResponse(item)}
+                className="btn-secondary px-4 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {preparingId === `${item.provider}:${item.eventId}` ? <Loader2 size={16} className="animate-spin" /> : <MessageSquareText size={16} />}
+                Prepare response
+              </button>
+
+              {preparations[`${item.provider}:${item.eventId}`] ? (
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-[.14em] text-slate-500">Draft only · not sent</p>
+                    <pre className="mt-3 whitespace-pre-wrap font-sans text-sm leading-6 text-slate-300">{preparations[`${item.provider}:${item.eventId}`].draft.text}</pre>
+                    {preparations[`${item.provider}:${item.eventId}`].draft.unresolvedEvidence.length ? (
+                      <p className="mt-3 text-[11px] leading-5 text-amber-300">
+                        Still needs evidence: {preparations[`${item.provider}:${item.eventId}`].draft.unresolvedEvidence.join(" · ")}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.14em] text-slate-500"><Film size={14} /> Relevant public videos</div>
+                    {preparations[`${item.provider}:${item.eventId}`].videoRecommendations.length ? (
+                      <div className="mt-3 grid gap-3">
+                        {preparations[`${item.provider}:${item.eventId}`].videoRecommendations.map((video) => (
+                          <a key={video.videoId} href={video.canonicalUrl} target="_blank" rel="noreferrer" className="rounded-xl border border-white/10 p-3 hover:border-amber-300/40">
+                            <p className="text-sm font-black text-white">{video.title}</p>
+                            <p className="mt-1 text-[11px] text-slate-500">VIN-matched public Video Hub record · no auto-send</p>
+                          </a>
+                        ))}
+                      </div>
+                    ) : <p className="mt-3 text-sm text-slate-500">No public Video Hub record matches the vehicle references in this conversation.</p>}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {item.provider === "NORAUTO_SITE_CHAT" ? (
+              <div className="mt-5 border-t border-white/10 pt-5">
+                <div className="text-[10px] font-black uppercase tracking-[.14em] text-emerald-300">NorAutoMatch website reply</div>
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  This publishes only inside the customer's Ask Torque website thread. It does not send email, SMS, make a phone call, reserve a vehicle, create an appointment, or submit financing.
+                </p>
+                <textarea
+                  value={siteReplyDrafts[`${item.provider}:${item.eventId}`] ?? ""}
+                  onChange={(event) => setSiteReplyDrafts((current) => ({
+                    ...current,
+                    [`${item.provider}:${item.eventId}`]: event.target.value,
+                  }))}
+                  maxLength={3000}
+                  className="field mt-3 min-h-28"
+                  placeholder="Write the human-reviewed reply the customer should see on NorAutoMatch…"
+                />
+                <button
+                  type="button"
+                  onClick={() => void publishSiteReply(item)}
+                  disabled={
+                    publishingReplyId === `${item.provider}:${item.eventId}` ||
+                    item.ownership.assigneeSubjectId !== viewerSubjectId
+                  }
+                  className="btn-primary mt-3 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {publishingReplyId === `${item.provider}:${item.eventId}` ? <RefreshCw size={16} className="animate-spin" /> : <MessageSquareText size={16} />}
+                  Publish to website thread
+                </button>
+                {item.ownership.assigneeSubjectId !== viewerSubjectId ? (
+                  <p className="mt-2 text-[11px] leading-5 text-slate-600">Claim this conversation before publishing a website reply.</p>
+                ) : null}
+              </div>
+            ) : null}
           </article>
         ))}
       </div>

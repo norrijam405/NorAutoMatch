@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "outDir": ".tmp-video-hub-library"
+  },
+  "include": [
+    "scripts/video-hub-library.behavior.ts",
+    "src/lib/video-hub-library.ts",
+    "src/lib/video-hub.ts"
+  ]
+}

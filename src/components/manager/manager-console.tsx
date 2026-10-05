@@ -33,6 +33,16 @@ type QueueItem = {
     authority: { approveDeal?: string };
   };
   createdAt: string;
+  documentReadiness: {
+    protocol: "NORAUTO_DESK_DOCUMENT_READINESS_V1";
+    opportunityId: string;
+    configured: boolean;
+    state: "NOT_CONFIGURED" | "INCOMPLETE" | "READY_FOR_MANAGER_REVIEW";
+    required: Array<{ kind: string; state: "MISSING" | "RECEIVED" | "REVIEW_REQUIRED" | "ACCEPTED" | "REJECTED" | "EXPIRED" }>;
+    rawDocumentsVisible: false;
+    lenderSubmission: "NOT_PERFORMED";
+    authorityEffect: "NONE";
+  };
 };
 
 type QueueResponse = {
@@ -245,6 +255,43 @@ export function ManagerConsole() {
                   {intent.notes && <Fact label="Customer notes" value={intent.notes} wide />}
                 </div>
               )}
+
+              <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-[.14em] text-slate-600">Document readiness</div>
+                    <div className="mt-1 text-sm font-black text-white">
+                      {item.documentReadiness.state === "READY_FOR_MANAGER_REVIEW"
+                        ? "Ready for manager review"
+                        : item.documentReadiness.state === "INCOMPLETE"
+                          ? "Missing or unresolved documents"
+                          : "No document requirements configured"}
+                    </div>
+                  </div>
+                  <div className="text-[10px] font-black uppercase tracking-[.14em] text-slate-500">
+                    Raw files hidden from Torque
+                  </div>
+                </div>
+                {item.documentReadiness.required.length ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {item.documentReadiness.required.map((doc) => (
+                      <span
+                        key={doc.kind}
+                        className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[.12em] ${
+                          doc.state === "ACCEPTED" || doc.state === "RECEIVED"
+                            ? "border-emerald-400/20 bg-emerald-400/[.06] text-emerald-300"
+                            : "border-amber-400/20 bg-amber-400/[.06] text-amber-300"
+                        }`}
+                      >
+                        {doc.kind.replaceAll("_", " ")} · {doc.state.replaceAll("_", " ")}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                <p className="mt-3 text-[11px] leading-5 text-slate-600">
+                  Lender submission: NOT PERFORMED. This status is informational and does not approve financing or a deal.
+                </p>
+              </div>
 
               <div className="mt-6 border-t border-white/10 pt-5">
                 <label htmlFor={`note-${item.opportunityId}`} className="text-xs font-bold uppercase tracking-[.14em] text-slate-500">Manager review note</label>

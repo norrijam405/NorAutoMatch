@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "outDir": ".tmp-r2-customer-workspace-bundle"
+  },
+  "include": [
+    "scripts/ask-torque-intake.behavior.ts",
+    "scripts/site-chat-thread.integration.ts",
+    "scripts/conversation-ownership.integration.ts",
+    "scripts/conversation-response-queue.integration.ts",
+    "scripts/customer-deal-prep.behavior.ts",
+    "scripts/video-hub-library.behavior.ts",
+    "scripts/torque-video-recommendations.behavior.ts",
+    "src/lib/ask-torque-intake.ts",
+    "src/lib/site-chat-thread.ts",
+    "src/lib/conversation-ownership.ts",
+    "src/lib/conversation-response-queue.ts",
+    "src/lib/customer-deal-prep.ts",
+    "src/lib/video-hub.ts",
+    "src/lib/video-hub-library.ts",
+    "src/lib/torque-video-recommendations.ts",
+    "src/lib/conversation-gateway.ts",
+    "src/lib/conversation-gateway-persistence.ts",
+    "src/lib/conversation-response-sla.ts",
+    "src/lib/crm-postgres-adapter.ts"
+  ]
+}
