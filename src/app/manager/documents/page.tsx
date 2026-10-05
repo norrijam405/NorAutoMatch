@@ -17,6 +17,16 @@ export default async function ManagerDocumentsPage() {
     .order("received_at", { ascending: false })
     .limit(100);
 
+  const documentIds = (documents ?? []).map((document) => document.id);
+  const { data: accessEvents } = documentIds.length
+    ? await supabase
+        .from("customer_secure_document_access_events")
+        .select("id,document_id,actor_user_id,action,created_at")
+        .in("document_id", documentIds)
+        .order("created_at", { ascending: false })
+        .limit(300)
+    : { data: [] };
+
   return (
     <section className="min-h-[72vh] border-b border-white/5 bg-slate-950/35 py-16 sm:py-20">
       <div className="shell">
@@ -34,7 +44,7 @@ export default async function ManagerDocumentsPage() {
             <Link href="/manager/conversations" className="text-amber-300 hover:text-amber-200">Conversation desk →</Link>
           </div>
         </div>
-        <SecureDocumentDesk documents={documents ?? []} />
+        <SecureDocumentDesk documents={documents ?? []} accessEvents={accessEvents ?? []} />
       </div>
     </section>
   );
