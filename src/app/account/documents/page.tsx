@@ -57,7 +57,7 @@ export default async function SecureDocumentsPage() {
           </div>
         </div>
 
-        <Link href="/account" className="mt-8 inline-block text-sm font-black text-amber-300 hover:text-amber-200">← Back to account</Link>
+        <div className="mt-8 flex flex-wrap gap-4 text-sm font-black"><Link href="/account/deal-prep" className="text-amber-300 hover:text-amber-200">← Deal Prep Center</Link><Link href="/account" className="text-slate-400 hover:text-white">Account</Link></div>
       </div>
     </section>
   );
