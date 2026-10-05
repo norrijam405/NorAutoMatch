@@ -12,7 +12,7 @@ export default async function SecureDocumentsPage() {
   const { supabase, userId } = await requireAuthenticatedUser("/account/documents");
   const { data: documents } = await supabase
     .from("customer_secure_documents")
-    .select("id,kind,original_filename,status,received_at,opportunity_id,retention_state")
+    .select("id,kind,original_filename,status,received_at,opportunity_id,retention_state,delete_after,raw_deleted_at")
     .eq("user_id", userId)
     .order("received_at", { ascending: false });
 
@@ -48,7 +48,9 @@ export default async function SecureDocumentsPage() {
                 </div>
                 <p className="mt-3 text-[11px] leading-5 text-slate-500">
                   {doc.opportunity_id ? "Attached to a desk-prep opportunity." : "Not yet attached to a desk-prep opportunity."}
-                  {" "}Retention: {doc.retention_state.replaceAll("_", " ").toLowerCase()}.
+                  {" "}Retention: {doc.retention_state.replaceAll("_", " ").toLowerCase()}
+                  {doc.delete_after ? ` · scheduled through ${new Date(doc.delete_after).toLocaleDateString()}` : ""}
+                  {doc.raw_deleted_at ? ` · raw file deleted ${new Date(doc.raw_deleted_at).toLocaleDateString()}` : ""}.
                 </p>
               </article>
             )) : <p className="rounded-2xl border border-white/10 bg-white/[.03] p-5 text-sm text-slate-500">No secure documents uploaded yet.</p>}
