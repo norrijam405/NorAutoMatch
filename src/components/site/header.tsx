@@ -24,6 +24,7 @@ const links = [
   { href: "/#matcher", label: "Find my match" },
   { href: "/inventory", label: "Inventory" },
   { href: "/garage", label: "Garage" },
+  { href: "/ask-torque", label: "Ask Torque" },
   { href: "/how-it-works", label: "How it works" },
   { href: "/terms", label: "Disclosures" },
 ];
