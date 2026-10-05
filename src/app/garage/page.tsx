@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { SavedVehicleComparison } from "@/components/garage/saved-vehicle-comparison";
+import { buildGarageChangeSignals } from "@/lib/garage-change-signals";
 import { requireAuthenticatedUser } from "@/lib/supabase/authz";
 import { buildMatchDnaSummary } from "@/lib/match-dna";
 import type { Json } from "@/lib/supabase/database.types";
@@ -24,7 +26,7 @@ export default async function GaragePage() {
       : Promise.resolve({ data: [] }),
     supabase
       .from("match_dna_events")
-      .select("action,make,body_type,drivetrain,condition,price,mileage")
+      .select("vin,action,make,body_type,drivetrain,condition,price,mileage,created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(250),
@@ -40,6 +42,26 @@ export default async function GaragePage() {
   const jobsByVin = new Map((scoutJobs ?? []).map((job) => [job.vin, job]));
   const dossiersByVin = new Map((dossiers ?? []).map((dossier) => [dossier.vin, dossier]));
   const dna = buildMatchDnaSummary(dnaEvents ?? []);
+  const saveBaselines = (dnaEvents ?? [])
+    .filter((event) => event.action === "keep" || event.action === "garage_save")
+    .map((event) => ({
+      vin: event.vin,
+      price: event.price == null ? null : Number(event.price),
+      mileage: event.mileage == null ? null : Number(event.mileage),
+      created_at: event.created_at,
+    }));
+  const changeSignals = buildGarageChangeSignals(
+    saveBaselines,
+    (vehicles ?? []).map((vehicle) => ({
+      vin: vehicle.vin,
+      price: vehicle.price == null ? null : Number(vehicle.price),
+      mileage: vehicle.mileage == null ? null : Number(vehicle.mileage),
+    })),
+  );
+  const savedComparisonVehicles = vins.flatMap((vin) => {
+    const vehicle = byVin.get(vin);
+    return vehicle ? [vehicle] : [];
+  });
 
   return (
     <section className="min-h-[72vh] border-b border-white/5 bg-slate-950/35 py-12 sm:py-16">
@@ -64,11 +86,14 @@ export default async function GaragePage() {
           </details>
         </div>
 
+        <SavedVehicleComparison vehicles={savedComparisonVehicles} />
+
         <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {saved?.length ? saved.map((item) => {
             const vehicle = byVin.get(item.vin);
             const job = jobsByVin.get(item.vin);
             const dossier = dossiersByVin.get(item.vin);
+            const change = changeSignals.get(item.vin);
             const pros = jsonStrings(dossier?.pros);
             const cons = jsonStrings(dossier?.cons);
             const watch = jsonStrings(dossier?.watch_items);
@@ -83,6 +108,21 @@ export default async function GaragePage() {
                 </div>
                 {vehicle?.price != null ? <p className="mt-3 font-bold text-amber-300">${Number(vehicle.price).toLocaleString()}</p> : null}
                 <p className="mt-1 text-sm text-slate-400">{vehicle?.mileage != null ? `${Number(vehicle.mileage).toLocaleString()} miles` : "Mileage unavailable"}{vehicle?.drivetrain ? ` · ${vehicle.drivetrain}` : ""}</p>
+
+                <div className="mt-4 rounded-xl border border-amber-400/15 bg-amber-400/[.035] p-3">
+                  <p className="text-[10px] font-black uppercase tracking-[.16em] text-amber-300">Since you saved it</p>
+                  {!change?.currentInventoryPresent ? (
+                    <p className="mt-2 text-xs leading-5 text-slate-400">This saved VIN does not have a current inventory row in the data available to Garage. That is not, by itself, proof that the vehicle sold or is unavailable.</p>
+                  ) : change.priceDelta == null && change.mileageDelta == null ? (
+                    <p className="mt-2 text-xs leading-5 text-slate-500">No comparable save-time price or mileage evidence is available yet.</p>
+                  ) : (
+                    <div className="mt-2 space-y-1 text-xs text-slate-400">
+                      {change.priceDelta != null && <p>{formatPriceDelta(change.priceDelta)}</p>}
+                      {change.mileageDelta != null && <p>{formatMileageDelta(change.mileageDelta)}</p>}
+                    </div>
+                  )}
+                  <p className="mt-2 text-[10px] leading-4 text-slate-600">Changes compare the current inventory row with the latest Keep/Garage save event that carried source-backed values.</p>
+                </div>
 
                 <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
                   <div className="flex items-center justify-between gap-3">
@@ -111,6 +151,18 @@ export default async function GaragePage() {
       </div>
     </section>
   );
+}
+
+function formatPriceDelta(delta: number) {
+  if (delta === 0) return "Price matches the saved baseline.";
+  const amount = Math.abs(Math.round(delta)).toLocaleString();
+  return delta < 0 ? `Price is $${amount} lower than the saved baseline.` : `Price is $${amount} higher than the saved baseline.`;
+}
+
+function formatMileageDelta(delta: number) {
+  if (delta === 0) return "Mileage matches the saved baseline.";
+  const amount = Math.abs(Math.round(delta)).toLocaleString();
+  return delta < 0 ? `Mileage is ${amount} miles lower than the saved baseline.` : `Mileage is ${amount} miles higher than the saved baseline.`;
 }
 
 function jsonStrings(value: Json | undefined) {
