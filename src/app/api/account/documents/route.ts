@@ -46,34 +46,35 @@ export async function POST(request: Request) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const sha256 = createHash("sha256").update(bytes).digest("hex");
 
+  const { error: registrationError } = await supabase.rpc("norautomatch_register_customer_secure_document", {
+    p_id: documentId,
+    p_kind: kindParsed.data,
+    p_storage_path: storagePath,
+    p_original_filename: file.name.slice(0, 255) || `document.${extension}`,
+    p_mime_type: file.type,
+    p_byte_size: file.size,
+    p_sha256: sha256,
+  });
+  if (registrationError) {
+    return NextResponse.json({ message: "The document could not be registered safely." }, { status: 503 });
+  }
+
   const { error: uploadError } = await supabase.storage.from(BUCKET).upload(storagePath, bytes, {
     contentType: file.type,
     upsert: false,
   });
   if (uploadError) {
+    await supabase.rpc("norautomatch_abandon_pending_customer_secure_document", { p_id: documentId });
     return NextResponse.json({ message: "Secure storage rejected the upload." }, { status: 503 });
   }
 
-  const { error: metadataError } = await supabase.from("customer_secure_documents").insert({
-    id: documentId,
-    user_id: user.id,
-    opportunity_id: null,
-    kind: kindParsed.data,
-    storage_path: storagePath,
-    original_filename: file.name.slice(0, 255) || `document.${extension}`,
-    mime_type: file.type,
-    byte_size: file.size,
-    sha256,
-    status: "RECEIVED",
-    retention_state: "POLICY_PENDING",
-    delete_after: null,
-    reviewed_at: null,
-    reviewed_by: null,
+  const { error: finalizeError } = await supabase.rpc("norautomatch_finalize_customer_secure_document", {
+    p_id: documentId,
   });
-
-  if (metadataError) {
+  if (finalizeError) {
     await supabase.storage.from(BUCKET).remove([storagePath]);
-    return NextResponse.json({ message: "The document could not be registered safely." }, { status: 503 });
+    await supabase.rpc("norautomatch_abandon_pending_customer_secure_document", { p_id: documentId });
+    return NextResponse.json({ message: "The document upload could not be finalized safely." }, { status: 503 });
   }
 
   return NextResponse.json({
