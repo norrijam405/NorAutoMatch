@@ -2,18 +2,11 @@ import { createHash, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { secureDocumentKindSchema } from "@/lib/customer-secure-document";
+import { validateSecureDocumentFile } from "@/lib/secure-document-file-validation";
 
 export const runtime = "nodejs";
 
 const BUCKET = "customer-secure-documents";
-const MAX_BYTES = 12 * 1024 * 1024;
-const ALLOWED_TYPES = new Map([
-  ["image/jpeg", "jpg"],
-  ["image/png", "png"],
-  ["image/webp", "webp"],
-  ["application/pdf", "pdf"],
-]);
-
 export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -32,18 +25,19 @@ export async function POST(request: Request) {
   if (!(file instanceof File) || file.size <= 0) {
     return NextResponse.json({ message: "Choose a document to upload." }, { status: 400 });
   }
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json({ message: "Document must be 12 MB or smaller." }, { status: 413 });
-  }
-
-  const extension = ALLOWED_TYPES.get(file.type);
-  if (!extension) {
-    return NextResponse.json({ message: "Use PDF, JPG, PNG, or WebP." }, { status: 415 });
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const fileValidation = validateSecureDocumentFile({
+    declaredMime: file.type,
+    byteSize: file.size,
+    bytes,
+  });
+  if (!fileValidation.ok) {
+    const status = fileValidation.reason === "FILE_TOO_LARGE" ? 413 : 415;
+    return NextResponse.json({ message: "Use a genuine PDF, JPG, PNG, or WebP file no larger than 12 MB." }, { status });
   }
 
   const documentId = randomUUID();
-  const storagePath = `${user.id}/${documentId}.${extension}`;
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  const storagePath = `${user.id}/${documentId}.${fileValidation.extension}`;
   const sha256 = createHash("sha256").update(bytes).digest("hex");
 
   const { error: registrationError } = await supabase.rpc("norautomatch_register_customer_secure_document", {
