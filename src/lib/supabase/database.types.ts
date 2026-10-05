@@ -71,6 +71,20 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      video_hub_entries: {
+        Row: {
+          id: string; title: string; summary: string; canonical_url: string; visibility: string;
+          vehicle_vins: string[]; topics: string[]; channels: Json; created_by: string;
+          created_at: string; updated_at: string;
+        };
+        Insert: {
+          id: string; title: string; summary?: string; canonical_url: string; visibility: string;
+          vehicle_vins?: string[]; topics?: string[]; channels?: Json; created_by: string;
+          created_at?: string; updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["video_hub_entries"]["Row"]>;
+        Relationships: [];
+      };
       inventory_vehicles: {
         Row: {
           vin: string; workspace_id: string; dealer_id: number; provider: string; source_url: string;
