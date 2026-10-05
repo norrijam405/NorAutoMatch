@@ -99,3 +99,59 @@ export async function createManagerDocumentViewLink(formData: FormData) {
 
   return { signedUrl: signed.signedUrl, expiresInSeconds: 60 };
 }
+
+
+export async function deleteDueSecureDocument(formData: FormData) {
+  const documentId = documentIdSchema.parse(String(formData.get("documentId") ?? ""));
+  const { supabase, userId } = await requireNorAutoMembership(
+    ["operator", "admin", "founder"],
+    "/manager/documents",
+  );
+
+  const { data: doc, error } = await supabase
+    .from("customer_secure_documents")
+    .select("id,storage_path,status,retention_state,delete_after,raw_deleted_at")
+    .eq("id", documentId)
+    .maybeSingle();
+  if (error || !doc) throw new Error("Secure document not found.");
+  if (doc.raw_deleted_at) return;
+  if (doc.retention_state === "PRESERVED") {
+    throw new Error("Preserved documents cannot be deleted by the retention action.");
+  }
+  if (!doc.delete_after || Date.parse(doc.delete_after) > Date.now()) {
+    throw new Error("This document is not due for retention deletion.");
+  }
+
+  const { error: markError } = await supabase
+    .from("customer_secure_documents")
+    .update({ retention_state: "DELETE_DUE" })
+    .eq("id", documentId);
+  if (markError) throw markError;
+
+  const { error: removeError } = await supabase.storage
+    .from("customer-secure-documents")
+    .remove([doc.storage_path]);
+  if (removeError) throw removeError;
+
+  const deletedAt = new Date().toISOString();
+  const { error: finalizeError } = await supabase
+    .from("customer_secure_documents")
+    .update({
+      status: "EXPIRED",
+      retention_state: "DELETE_DUE",
+      raw_deleted_at: deletedAt,
+    })
+    .eq("id", documentId);
+  if (finalizeError) throw finalizeError;
+
+  const { error: auditError } = await supabase
+    .from("customer_secure_document_access_events")
+    .insert({
+      document_id: documentId,
+      actor_user_id: userId,
+      action: "MANAGER_RAW_DOCUMENT_DELETED",
+    });
+  if (auditError) throw auditError;
+
+  revalidatePath("/manager/documents");
+}
