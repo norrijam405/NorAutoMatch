@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { readPendingManagerQueue } from "@/lib/crm-manager-queue";
 import { authorizeManagerRequest } from "@/lib/manager-route-auth";
 import { createPostgresCrmPool } from "@/lib/crm-postgres-adapter";
+import { parseRequiredDeskDocumentKinds } from "@/lib/crm-document-readiness";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,6 +47,9 @@ export async function GET(request: Request) {
       pool: managerQueuePool,
       workspaceId: auth.claims.workspaceId,
       limit: parseLimit(request),
+      requiredDocumentKinds: parseRequiredDeskDocumentKinds(
+        process.env.NORAUTO_DESK_REQUIRED_DOCUMENTS,
+      ),
     });
 
     return noStore({

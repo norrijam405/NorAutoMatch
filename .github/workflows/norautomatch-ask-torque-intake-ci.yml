@@ -1,0 +1,41 @@
+name: NorAutoMatch Ask Torque Intake CI
+
+on:
+  push:
+    branches:
+      - "feature/2026-10-05-ask-torque-intake-r0"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  ask-torque-intake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Production dependency security gate
+        run: npm audit --omit=dev --audit-level=high
+      - name: Compile intake verification surface
+        run: |
+          rm -rf .tmp-ask-torque-intake
+          npx tsc -p tsconfig.ask-torque-intake.json
+      - name: Challenge Ask Torque normalization boundary
+        run: node .tmp-ask-torque-intake/scripts/ask-torque-intake.behavior.js
+      - name: Clean generated verification output
+        run: rm -rf .tmp-ask-torque-intake
+      - name: Typecheck application
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build

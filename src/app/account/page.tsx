@@ -22,7 +22,9 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         <h1 className="mt-4 text-4xl font-black tracking-[-.04em] text-white">{profile?.display_name || "Your NorAuto Match account"}</h1>
         {params.error === "insufficient_access" ? <p className="mt-6 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-100">Your account is signed in, but it does not have the required operator role.</p> : null}
         <div className="mt-8 grid gap-4 sm:grid-cols-2">
+          <Link href="/account/deal-prep" className="rounded-2xl border border-amber-300/20 bg-amber-300/[.05] p-5 text-white hover:border-amber-300/45">Open Deal Prep Center →</Link>
           <Link href="/garage" className="rounded-2xl border border-white/10 bg-white/[.03] p-5 text-white hover:border-amber-300/40">Open saved-vehicle garage →</Link>
+          <Link href="/account/documents" className="rounded-2xl border border-white/10 bg-white/[.03] p-5 text-white hover:border-amber-300/40">Secure deal documents →</Link>
           <div className="rounded-2xl border border-white/10 bg-white/[.03] p-5 text-slate-300">
             <p className="text-sm font-bold text-white">Access</p>
             <p className="mt-2 text-sm">{memberships?.length ? memberships.filter((m) => m.active).map((m) => `${m.app_id}: ${m.role}`).join(" · ") : "Customer account only"}</p>

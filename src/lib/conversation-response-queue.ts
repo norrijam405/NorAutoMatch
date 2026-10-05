@@ -25,6 +25,12 @@ export type ConversationResponseQueueItem = {
   intent: ConversationEvent["intent"];
   summary: string | null;
   evidence: ConversationEvent["evidence"];
+  ownership: {
+    state: "UNASSIGNED" | "ASSIGNED";
+    assigneeSubjectId: string | null;
+    assignedAt: string | null;
+    authorityEffect: "NONE";
+  };
   authorityEffect: "NONE";
 };
 
@@ -39,6 +45,9 @@ type QueueRow = {
   routing_reasons: unknown;
   processing_state: "RECEIVED";
   normalized_payload: unknown;
+  assignment_state: "UNASSIGNED" | "ASSIGNED" | null;
+  assignee_subject_id: string | null;
+  assigned_at: Date | string | null;
 };
 
 function toIso(value: Date | string): string {
@@ -75,22 +84,29 @@ export async function readConversationResponseQueue(input: {
   if (!Number.isFinite(nowMs)) throw new Error("CONVERSATION_QUEUE_INVALID_NOW");
 
   const result = await input.pool.query<QueueRow>(
-    `SELECT DISTINCT ON (workspace_id, provider, conversation_id)
-       workspace_id,
-       provider,
-       event_id,
-       conversation_id,
-       observed_at,
-       received_at,
-       routing_decision,
-       routing_reasons,
-       processing_state,
-       normalized_payload
-     FROM crm_conversation_events
-     WHERE workspace_id = $1
-       AND processing_state = 'RECEIVED'
-       AND routing_decision IN ('CONTACTABLE', 'HUMAN_REVIEW_REQUIRED')
-     ORDER BY workspace_id, provider, conversation_id, observed_at DESC
+    `SELECT DISTINCT ON (e.workspace_id, e.provider, e.conversation_id)
+       e.workspace_id,
+       e.provider,
+       e.event_id,
+       e.conversation_id,
+       e.observed_at,
+       e.received_at,
+       e.routing_decision,
+       e.routing_reasons,
+       e.processing_state,
+       e.normalized_payload,
+       coalesce(a.assignment_state,'UNASSIGNED') as assignment_state,
+       a.assignee_subject_id,
+       a.assigned_at
+     FROM crm_conversation_events e
+     LEFT JOIN crm_conversation_assignments a
+       ON a.workspace_id=e.workspace_id
+      AND a.provider=e.provider
+      AND a.conversation_id=e.conversation_id
+     WHERE e.workspace_id = $1
+       AND e.processing_state = 'RECEIVED'
+       AND e.routing_decision IN ('CONTACTABLE', 'HUMAN_REVIEW_REQUIRED')
+     ORDER BY e.workspace_id, e.provider, e.conversation_id, e.observed_at DESC
      LIMIT $2`,
     [input.workspaceId, limit],
   );
@@ -140,6 +156,12 @@ export async function readConversationResponseQueue(input: {
       intent: event.intent,
       summary: event.summary,
       evidence: event.evidence,
+      ownership: {
+        state: row.assignment_state ?? "UNASSIGNED",
+        assigneeSubjectId: row.assignee_subject_id,
+        assignedAt: row.assigned_at ? toIso(row.assigned_at) : null,
+        authorityEffect: "NONE" as const,
+      },
       authorityEffect: "NONE" as const,
     };
   });

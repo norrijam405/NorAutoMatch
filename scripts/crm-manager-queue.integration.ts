@@ -86,6 +86,9 @@ async function run() {
     assert(queue.every((item) => item.truthState === "READ_MODEL_ONLY"), "Manager queue must label itself as a read model.");
     assert(queue.every((item) => item.authorityEffect === "NONE"), "Reading manager queue must grant no authority.");
     assert(queue.every((item) => item.managerHandoff.authority.approveDeal === "NOT_AUTHORIZED"), "Queue must preserve handoff authority ceiling.");
+    assert(queue.every((item) => item.documentReadiness.state === "NOT_CONFIGURED"), "Manager queue must fail closed without configured document requirements.");
+    assert(queue.every((item) => item.documentReadiness.rawDocumentsVisible === false), "Manager queue must never expose raw document visibility.");
+    assert(queue.every((item) => item.documentReadiness.lenderSubmission === "NOT_PERFORMED"), "Manager queue must not manufacture lender submission.");
     assert(queue[0].managerHandoff.handoffId === first.opportunity.latestHandoffId, "Queue must reconstruct the exact latest immutable manager handoff.");
     assert(queue[0].pipeline === "Standard Retail" && queue[1].pipeline === "Vehicle Sourcing", "Queue must preserve separate retail and sourcing pipelines.");
 

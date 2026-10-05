@@ -6,6 +6,7 @@ import { createEnrichedResponseDraft } from "@/lib/conversation-response-enrichm
 import { createResponseEvidencePassport } from "@/lib/evidence-passport";
 import { createResponsePreparationCostReceipt } from "@/lib/cost-receipt";
 import { readResponsePreparationPacket } from "@/lib/conversation-response-preparation-store";
+import { readTorqueVideoRecommendations } from "@/lib/torque-video-recommendations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,12 +62,17 @@ export async function GET(request: Request) {
     if (!packet) return noStore({ message: "Response preparation evidence was not found or is not eligible." }, 404);
 
     const draft = createResponseDraft(packet);
+    const videoRecommendations = await readTorqueVideoRecommendations({
+      pool,
+      subjectRefs: packet.customerStated.subjectRefs,
+    });
     return noStore({
       protocol: "NORAUTO_MANAGER_RESPONSE_PREPARATION_V2",
       truthState: "DRAFT_ONLY",
       authorityEffect: "NONE",
       packet,
       draft,
+      videoRecommendations,
     }, 200);
   } catch {
     return noStore({ message: "Response preparation failed safely." }, 503);
@@ -113,6 +119,10 @@ export async function POST(request: Request) {
     const draft = createEnrichedResponseDraft({ packet, claims });
     const evidencePassport = createResponseEvidencePassport({ packet, draft });
     const costReceipt = createResponsePreparationCostReceipt({ passport: evidencePassport });
+    const videoRecommendations = await readTorqueVideoRecommendations({
+      pool,
+      subjectRefs: packet.customerStated.subjectRefs,
+    });
     return noStore({
       protocol: "NORAUTO_MANAGER_RESPONSE_PREPARATION_V5",
       truthState: "EVIDENCE_BOUND_DRAFT_ONLY",
@@ -121,6 +131,7 @@ export async function POST(request: Request) {
       draft,
       evidencePassport,
       costReceipt,
+      videoRecommendations,
     }, 200);
   } catch {
     return noStore({ message: "Response evidence enrichment failed safely." }, 503);
