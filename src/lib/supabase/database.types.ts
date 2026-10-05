@@ -54,13 +54,13 @@ export type Database = {
           id: string; user_id: string; opportunity_id: string | null; kind: string; storage_path: string;
           original_filename: string; mime_type: string; byte_size: number; sha256: string; status: string;
           retention_state: string; delete_after: string | null; reviewed_at: string | null; reviewed_by: string | null;
-          received_at: string; updated_at: string;
+          raw_deleted_at: string | null; received_at: string; updated_at: string;
         };
         Insert: {
           id?: string; user_id: string; opportunity_id?: string | null; kind: string; storage_path: string;
           original_filename: string; mime_type: string; byte_size: number; sha256: string; status?: string;
           retention_state?: string; delete_after?: string | null; reviewed_at?: string | null; reviewed_by?: string | null;
-          received_at?: string; updated_at?: string;
+          raw_deleted_at?: string | null; received_at?: string; updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["customer_secure_documents"]["Row"]>;
         Relationships: [];
@@ -100,6 +100,19 @@ export type Database = {
           p_mime_type: string;
           p_byte_size: number;
           p_sha256: string;
+        };
+        Returns: string;
+      };
+      norautomatch_register_customer_secure_document_v2: {
+        Args: {
+          p_id: string;
+          p_kind: string;
+          p_storage_path: string;
+          p_original_filename: string;
+          p_mime_type: string;
+          p_byte_size: number;
+          p_sha256: string;
+          p_retention_days: number;
         };
         Returns: string;
       };
