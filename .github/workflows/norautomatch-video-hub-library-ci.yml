@@ -1,0 +1,41 @@
+name: NorAutoMatch Video Hub Library CI
+
+on:
+  push:
+    branches:
+      - "feature/2026-10-05-video-hub-library-r0"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  video-hub-library:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Production dependency security gate
+        run: npm audit --omit=dev --audit-level=high
+      - name: Compile video hub verification surface
+        run: |
+          rm -rf .tmp-video-hub-library
+          npx tsc -p tsconfig.video-hub-library.json
+      - name: Challenge video hub metadata truth boundary
+        run: node .tmp-video-hub-library/scripts/video-hub-library.behavior.js
+      - name: Clean generated verification output
+        run: rm -rf .tmp-video-hub-library
+      - name: Typecheck application
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
