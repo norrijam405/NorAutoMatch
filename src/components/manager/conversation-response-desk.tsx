@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Clock3, LockKeyhole, Mail, MessageSquareText, PhoneCall, RefreshCw, ShieldCheck } from "lucide-react";
+import { Clock3, Film, Loader2, LockKeyhole, Mail, MessageSquareText, PhoneCall, RefreshCw, ShieldCheck } from "lucide-react";
 
 type ConversationQueueItem = {
   workspaceId: string;
@@ -41,6 +41,26 @@ type ConversationQueueItem = {
   authorityEffect: "NONE";
 };
 
+type PreparedResponse = {
+  truthState: "DRAFT_ONLY" | "EVIDENCE_BOUND_DRAFT_ONLY";
+  authorityEffect: "NONE";
+  draft: {
+    text: string;
+    unresolvedEvidence: string[];
+    outboundExecution: "NOT_PERFORMED";
+    deliveryState: "NOT_SENT";
+  };
+  videoRecommendations: Array<{
+    protocol: "NORAUTO_TORQUE_VIDEO_RECOMMENDATION_V1";
+    videoId: string;
+    title: string;
+    canonicalUrl: string;
+    matchedVins: string[];
+    topics: string[];
+    authorityEffect: "NONE";
+  }>;
+};
+
 type DeskState = "LOCKED" | "LOADING" | "READY" | "ERROR";
 
 function slaLabel(value: ConversationQueueItem["slaState"]) {
@@ -55,6 +75,8 @@ export function ConversationResponseDesk() {
   const [state, setState] = useState<DeskState>("LOCKED");
   const [items, setItems] = useState<ConversationQueueItem[]>([]);
   const [message, setMessage] = useState("Manager credentials remain only in this browser tab's memory.");
+  const [preparations, setPreparations] = useState<Record<string, PreparedResponse>>({});
+  const [preparingId, setPreparingId] = useState<string>();
 
   async function loadQueue(token: string) {
     setState("LOADING");
@@ -90,6 +112,38 @@ export function ConversationResponseDesk() {
     }
   }
 
+  async function prepareResponse(item: ConversationQueueItem) {
+    if (!sessionToken || preparingId) return;
+    const key = `${item.provider}:${item.eventId}`;
+    setPreparingId(key);
+    setMessage("Preparing an evidence-aware draft and checking the public Video Hub…");
+    try {
+      const params = new URLSearchParams({ provider: item.provider, eventId: item.eventId });
+      const response = await fetch(`/api/manager/conversations/prepare?${params.toString()}`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${sessionToken}` },
+        cache: "no-store",
+      });
+      const body = await response.json().catch(() => ({}));
+      if (
+        !response.ok ||
+        body?.authorityEffect !== "NONE" ||
+        body?.truthState !== "DRAFT_ONLY" ||
+        typeof body?.draft?.text !== "string" ||
+        !Array.isArray(body?.videoRecommendations)
+      ) {
+        setMessage("Response preparation failed its truth-boundary check.");
+        return;
+      }
+      setPreparations((current) => ({ ...current, [key]: body as PreparedResponse }));
+      setMessage("Draft prepared. Nothing was sent to the customer.");
+    } catch {
+      setMessage("Response preparation is temporarily unavailable.");
+    } finally {
+      setPreparingId(undefined);
+    }
+  }
+
   async function unlock() {
     const token = draftToken.trim();
     if (!token) {
@@ -107,6 +161,7 @@ export function ConversationResponseDesk() {
     setSessionToken("");
     setDraftToken("");
     setItems([]);
+    setPreparations({});
     setState("LOCKED");
     setMessage("Manager session cleared from this tab. Conversation data is no longer displayed.");
   }
@@ -192,6 +247,45 @@ export function ConversationResponseDesk() {
                 {item.intent.subjectRefs.length ? <div className="mt-3 text-sm leading-6 text-slate-400">References: {item.intent.subjectRefs.join(" • ")}</div> : null}
                 <p className="mt-3 text-[11px] leading-5 text-slate-600">Availability, price, incentive, financing, reservation, appointment, SOLD, and LOST claims still require their own current evidence. This queue grants no authority to invent them.</p>
               </div>
+            </div>
+
+            <div className="mt-5 border-t border-white/10 pt-5">
+              <button
+                type="button"
+                disabled={Boolean(preparingId)}
+                onClick={() => void prepareResponse(item)}
+                className="btn-secondary px-4 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {preparingId === `${item.provider}:${item.eventId}` ? <Loader2 size={16} className="animate-spin" /> : <MessageSquareText size={16} />}
+                Prepare response
+              </button>
+
+              {preparations[`${item.provider}:${item.eventId}`] ? (
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-[.14em] text-slate-500">Draft only · not sent</p>
+                    <pre className="mt-3 whitespace-pre-wrap font-sans text-sm leading-6 text-slate-300">{preparations[`${item.provider}:${item.eventId}`].draft.text}</pre>
+                    {preparations[`${item.provider}:${item.eventId}`].draft.unresolvedEvidence.length ? (
+                      <p className="mt-3 text-[11px] leading-5 text-amber-300">
+                        Still needs evidence: {preparations[`${item.provider}:${item.eventId}`].draft.unresolvedEvidence.join(" · ")}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.14em] text-slate-500"><Film size={14} /> Relevant public videos</div>
+                    {preparations[`${item.provider}:${item.eventId}`].videoRecommendations.length ? (
+                      <div className="mt-3 grid gap-3">
+                        {preparations[`${item.provider}:${item.eventId}`].videoRecommendations.map((video) => (
+                          <a key={video.videoId} href={video.canonicalUrl} target="_blank" rel="noreferrer" className="rounded-xl border border-white/10 p-3 hover:border-amber-300/40">
+                            <p className="text-sm font-black text-white">{video.title}</p>
+                            <p className="mt-1 text-[11px] text-slate-500">VIN-matched public Video Hub record · no auto-send</p>
+                          </a>
+                        ))}
+                      </div>
+                    ) : <p className="mt-3 text-sm text-slate-500">No public Video Hub record matches the vehicle references in this conversation.</p>}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </article>
         ))}
