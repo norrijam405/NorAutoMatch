@@ -33,6 +33,8 @@ jobs:
           npx tsc -p tsconfig.customer-workspace-foundation.json
       - name: Challenge secure-document metadata boundary
         run: node .tmp-customer-workspace-foundation/scripts/customer-secure-document.behavior.js
+      - name: Challenge secure-document file signature boundary
+        run: node .tmp-customer-workspace-foundation/scripts/secure-document-file-validation.behavior.js
       - name: Challenge Orr conversation bridge boundary
         run: node .tmp-customer-workspace-foundation/scripts/orr-conversation-bridge.behavior.js
       - name: Challenge video publication truth boundary
