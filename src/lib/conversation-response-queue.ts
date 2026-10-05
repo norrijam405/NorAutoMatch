@@ -84,17 +84,17 @@ export async function readConversationResponseQueue(input: {
   if (!Number.isFinite(nowMs)) throw new Error("CONVERSATION_QUEUE_INVALID_NOW");
 
   const result = await input.pool.query<QueueRow>(
-    `SELECT DISTINCT ON (workspace_id, provider, conversation_id)
-       workspace_id,
-       provider,
-       event_id,
-       conversation_id,
-       observed_at,
-       received_at,
-       routing_decision,
-       routing_reasons,
-       processing_state,
-       normalized_payload,
+    `SELECT DISTINCT ON (e.workspace_id, e.provider, e.conversation_id)
+       e.workspace_id,
+       e.provider,
+       e.event_id,
+       e.conversation_id,
+       e.observed_at,
+       e.received_at,
+       e.routing_decision,
+       e.routing_reasons,
+       e.processing_state,
+       e.normalized_payload,
        coalesce(a.assignment_state,'UNASSIGNED') as assignment_state,
        a.assignee_subject_id,
        a.assigned_at
