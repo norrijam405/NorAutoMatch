@@ -1,6 +1,8 @@
 import type { Pool } from "pg";
 import type { CrmOpportunity } from "./crm-core";
 import type { ManagerHandoffEnvelope } from "./manager-handoff";
+import { readDeskDocumentReadiness, type DeskDocumentReadiness } from "./crm-document-readiness";
+import type { SecureDocumentKind } from "./customer-secure-document";
 
 export type ManagerQueueItem = {
   protocol: "NORAUTO_MANAGER_QUEUE_ITEM_V1";
@@ -17,6 +19,7 @@ export type ManagerQueueItem = {
   managerHandoff: ManagerHandoffEnvelope;
   createdAt: string;
   updatedAt: string;
+  documentReadiness: DeskDocumentReadiness;
 };
 
 function requireWorkspaceId(workspaceId: string) {
@@ -30,6 +33,7 @@ export async function readPendingManagerQueue(input: {
   pool: Pool;
   workspaceId: string;
   limit?: number;
+  requiredDocumentKinds?: SecureDocumentKind[];
 }): Promise<ManagerQueueItem[]> {
   const workspaceId = requireWorkspaceId(input.workspaceId);
   const limit = Math.max(1, Math.min(input.limit ?? 25, 100));
@@ -91,6 +95,13 @@ export async function readPendingManagerQueue(input: {
     [workspaceId, limit],
   );
 
+  const documentReadiness = await readDeskDocumentReadiness({
+    pool: input.pool,
+    workspaceId,
+    opportunityIds: result.rows.map((row) => row.opportunity_id),
+    requiredKinds: input.requiredDocumentKinds ?? [],
+  });
+
   return result.rows.map((row) => {
     if (row.workflow_state !== "MANAGER_REVIEW_PENDING") {
       throw new Error("Manager queue refused a handoff outside manager-review-pending state.");
@@ -122,6 +133,16 @@ export async function readPendingManagerQueue(input: {
       },
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
+      documentReadiness: documentReadiness.get(row.opportunity_id) ?? {
+        protocol: "NORAUTO_DESK_DOCUMENT_READINESS_V1",
+        opportunityId: row.opportunity_id,
+        configured: false,
+        state: "NOT_CONFIGURED",
+        required: [],
+        rawDocumentsVisible: false,
+        lenderSubmission: "NOT_PERFORMED",
+        authorityEffect: "NONE",
+      },
     };
   });
 }
