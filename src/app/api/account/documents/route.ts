@@ -7,6 +7,7 @@ import { validateSecureDocumentFile } from "@/lib/secure-document-file-validatio
 export const runtime = "nodejs";
 
 const BUCKET = "customer-secure-documents";
+const MAX_MULTIPART_REQUEST_BYTES = 13 * 1024 * 1024;
 
 function secureDocumentRuntimeConfig() {
   if (process.env.NORAUTO_SECURE_DOCUMENTS_ACTIVATION !== "ACTIVE") return null;
@@ -16,6 +17,20 @@ function secureDocumentRuntimeConfig() {
 }
 
 export async function POST(request: Request) {
+  const requestOrigin = new URL(request.url).origin;
+  const origin = request.headers.get("origin");
+  if (!origin || origin !== requestOrigin) {
+    return NextResponse.json(
+      { message: "Cross-origin document uploads are not accepted." },
+      { status: 403 },
+    );
+  }
+
+  const contentLength = Number.parseInt(request.headers.get("content-length") ?? "", 10);
+  if (Number.isFinite(contentLength) && contentLength > MAX_MULTIPART_REQUEST_BYTES) {
+    return NextResponse.json({ message: "Document request is too large." }, { status: 413 });
+  }
+
   const runtimeConfig = secureDocumentRuntimeConfig();
   if (!runtimeConfig) {
     return NextResponse.json(
