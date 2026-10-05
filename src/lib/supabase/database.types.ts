@@ -90,7 +90,28 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      norautomatch_register_customer_secure_document: {
+        Args: {
+          p_id: string;
+          p_kind: string;
+          p_storage_path: string;
+          p_original_filename: string;
+          p_mime_type: string;
+          p_byte_size: number;
+          p_sha256: string;
+        };
+        Returns: string;
+      };
+      norautomatch_finalize_customer_secure_document: {
+        Args: { p_id: string };
+        Returns: undefined;
+      };
+      norautomatch_abandon_pending_customer_secure_document: {
+        Args: { p_id: string };
+        Returns: undefined;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
