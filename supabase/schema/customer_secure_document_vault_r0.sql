@@ -14,8 +14,10 @@ create table if not exists public.customer_secure_documents (
   mime_type text not null check (mime_type in ('image/jpeg','image/png','image/webp','application/pdf')),
   byte_size bigint not null check (byte_size > 0 and byte_size <= 12582912),
   sha256 char(64) not null check (sha256 ~ '^[a-f0-9]{64}$'),
-  status text not null default 'UPLOAD_PENDING' check (status in ('UPLOAD_PENDING','RECEIVED','REVIEW_REQUIRED','ACCEPTED','REJECTED','EXPIRED')),
-  retention_state text not null default 'POLICY_PENDING' check (retention_state in ('POLICY_PENDING','ACTIVE','DELETE_DUE','PRESERVED')),
+  status text not null default 'UPLOAD_PENDING'
+    check (status in ('UPLOAD_PENDING','RECEIVED','REVIEW_REQUIRED','ACCEPTED','REJECTED','EXPIRED')),
+  retention_state text not null default 'POLICY_PENDING'
+    check (retention_state in ('POLICY_PENDING','ACTIVE','DELETE_DUE','PRESERVED')),
   delete_after timestamptz null,
   reviewed_at timestamptz null,
   reviewed_by uuid null references auth.users(id) on delete set null,
@@ -31,9 +33,11 @@ create table if not exists public.customer_secure_documents (
 
 create index if not exists customer_secure_documents_user_received_idx
   on public.customer_secure_documents (user_id, received_at desc);
+
 create index if not exists customer_secure_documents_opportunity_idx
   on public.customer_secure_documents (opportunity_id, received_at desc)
   where opportunity_id is not null;
+
 create index if not exists customer_secure_documents_retention_idx
   on public.customer_secure_documents (retention_state, delete_after)
   where delete_after is not null;
@@ -42,7 +46,9 @@ create table if not exists public.customer_secure_document_access_events (
   id uuid primary key default gen_random_uuid(),
   document_id uuid not null references public.customer_secure_documents(id) on delete restrict,
   actor_user_id uuid not null references auth.users(id) on delete restrict,
-  action text not null check (action in ('MANAGER_VIEW_LINK_CREATED','CUSTOMER_VIEW_LINK_CREATED','MANAGER_METADATA_REVIEWED')),
+  action text not null check (
+    action in ('MANAGER_VIEW_LINK_CREATED','CUSTOMER_VIEW_LINK_CREATED','MANAGER_METADATA_REVIEWED')
+  ),
   created_at timestamptz not null default now()
 );
 
@@ -60,18 +66,21 @@ grant select, insert on table public.customer_secure_document_access_events to a
 
 drop policy if exists "customer_secure_documents_select_own" on public.customer_secure_documents;
 create policy "customer_secure_documents_select_own"
-on public.customer_secure_documents for select to authenticated
+on public.customer_secure_documents
+for select
+to authenticated
 using ((select auth.uid()) = user_id);
 
--- Customer writes are mediated through bounded SECURITY DEFINER functions below.
--- Direct INSERT/DELETE grants are intentionally absent.
-
+-- Customer inserts/deletes are mediated by bounded SECURITY DEFINER functions.
 drop policy if exists "customer_secure_documents_operator_select" on public.customer_secure_documents;
 create policy "customer_secure_documents_operator_select"
-on public.customer_secure_documents for select to authenticated
+on public.customer_secure_documents
+for select
+to authenticated
 using (
   exists (
-    select 1 from public.app_memberships m
+    select 1
+    from public.app_memberships m
     where m.user_id = (select auth.uid())
       and m.app_id = 'norautomatch'
       and m.active = true
@@ -81,10 +90,13 @@ using (
 
 drop policy if exists "customer_secure_documents_operator_update" on public.customer_secure_documents;
 create policy "customer_secure_documents_operator_update"
-on public.customer_secure_documents for update to authenticated
+on public.customer_secure_documents
+for update
+to authenticated
 using (
   exists (
-    select 1 from public.app_memberships m
+    select 1
+    from public.app_memberships m
     where m.user_id = (select auth.uid())
       and m.app_id = 'norautomatch'
       and m.active = true
@@ -93,7 +105,8 @@ using (
 )
 with check (
   exists (
-    select 1 from public.app_memberships m
+    select 1
+    from public.app_memberships m
     where m.user_id = (select auth.uid())
       and m.app_id = 'norautomatch'
       and m.active = true
@@ -101,12 +114,16 @@ with check (
   )
 );
 
-drop policy if exists "customer_document_access_events_operator_select" on public.customer_secure_document_access_events;
+drop policy if exists "customer_document_access_events_operator_select"
+  on public.customer_secure_document_access_events;
 create policy "customer_document_access_events_operator_select"
-on public.customer_secure_document_access_events for select to authenticated
+on public.customer_secure_document_access_events
+for select
+to authenticated
 using (
   exists (
-    select 1 from public.app_memberships m
+    select 1
+    from public.app_memberships m
     where m.user_id = (select auth.uid())
       and m.app_id = 'norautomatch'
       and m.active = true
@@ -114,13 +131,17 @@ using (
   )
 );
 
-drop policy if exists "customer_document_access_events_operator_insert" on public.customer_secure_document_access_events;
+drop policy if exists "customer_document_access_events_operator_insert"
+  on public.customer_secure_document_access_events;
 create policy "customer_document_access_events_operator_insert"
-on public.customer_secure_document_access_events for insert to authenticated
+on public.customer_secure_document_access_events
+for insert
+to authenticated
 with check (
   actor_user_id = (select auth.uid())
   and exists (
-    select 1 from public.app_memberships m
+    select 1
+    from public.app_memberships m
     where m.user_id = (select auth.uid())
       and m.app_id = 'norautomatch'
       and m.active = true
@@ -128,19 +149,24 @@ with check (
   )
 );
 
-drop policy if exists "customer_document_access_events_customer_insert" on public.customer_secure_document_access_events;
+drop policy if exists "customer_document_access_events_customer_insert"
+  on public.customer_secure_document_access_events;
 create policy "customer_document_access_events_customer_insert"
-on public.customer_secure_document_access_events for insert to authenticated
+on public.customer_secure_document_access_events
+for insert
+to authenticated
 with check (
   actor_user_id = (select auth.uid())
   and action = 'CUSTOMER_VIEW_LINK_CREATED'
   and exists (
-    select 1 from public.customer_secure_documents d
-    where d.id = document_id and d.user_id = (select auth.uid())
+    select 1
+    from public.customer_secure_documents d
+    where d.id = document_id
+      and d.user_id = (select auth.uid())
   )
 );
 
--- Storage bucket remains private. 12 MiB max; no office documents or executables.
+-- Private bucket. 12 MiB max. Executables, Office docs, SVG, and text are not accepted.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'customer-secure-documents',
@@ -156,12 +182,15 @@ on conflict (id) do update set
 
 drop policy if exists "customer_secure_documents_storage_insert_own" on storage.objects;
 create policy "customer_secure_documents_storage_insert_own"
-on storage.objects for insert to authenticated
+on storage.objects
+for insert
+to authenticated
 with check (
   bucket_id = 'customer-secure-documents'
   and (storage.foldername(name))[1] = (select auth.uid())::text
   and exists (
-    select 1 from public.customer_secure_documents d
+    select 1
+    from public.customer_secure_documents d
     where d.user_id = (select auth.uid())
       and d.storage_path = name
       and d.status = 'UPLOAD_PENDING'
@@ -171,7 +200,9 @@ with check (
 
 drop policy if exists "customer_secure_documents_storage_select_own" on storage.objects;
 create policy "customer_secure_documents_storage_select_own"
-on storage.objects for select to authenticated
+on storage.objects
+for select
+to authenticated
 using (
   bucket_id = 'customer-secure-documents'
   and (storage.foldername(name))[1] = (select auth.uid())::text
@@ -179,11 +210,14 @@ using (
 
 drop policy if exists "customer_secure_documents_storage_operator_select" on storage.objects;
 create policy "customer_secure_documents_storage_operator_select"
-on storage.objects for select to authenticated
+on storage.objects
+for select
+to authenticated
 using (
   bucket_id = 'customer-secure-documents'
   and exists (
-    select 1 from public.app_memberships m
+    select 1
+    from public.app_memberships m
     where m.user_id = (select auth.uid())
       and m.app_id = 'norautomatch'
       and m.active = true
@@ -193,19 +227,21 @@ using (
 
 drop policy if exists "customer_secure_documents_storage_delete_pending_own" on storage.objects;
 create policy "customer_secure_documents_storage_delete_pending_own"
-on storage.objects for delete to authenticated
+on storage.objects
+for delete
+to authenticated
 using (
   bucket_id = 'customer-secure-documents'
   and (storage.foldername(name))[1] = (select auth.uid())::text
   and exists (
-    select 1 from public.customer_secure_documents d
+    select 1
+    from public.customer_secure_documents d
     where d.user_id = (select auth.uid())
       and d.storage_path = name
       and d.status = 'UPLOAD_PENDING'
       and d.opportunity_id is null
   )
 );
-
 
 create or replace function public.norautomatch_register_customer_secure_document(
   p_id uuid,
@@ -220,7 +256,7 @@ returns uuid
 language plpgsql
 security definer
 set search_path = pg_catalog, public, storage
-as $
+as $func$
 declare
   v_user_id uuid := auth.uid();
   v_count integer;
@@ -233,7 +269,10 @@ begin
     raise exception 'STORAGE_PATH_OWNER_MISMATCH';
   end if;
 
-  if p_kind not in ('TRADE_OFFER','DRIVER_LICENSE','INSURANCE','PAYOFF_STATEMENT','PROOF_OF_RESIDENCE','DEAL_STIPULATION','OTHER') then
+  if p_kind not in (
+    'TRADE_OFFER','DRIVER_LICENSE','INSURANCE','PAYOFF_STATEMENT',
+    'PROOF_OF_RESIDENCE','DEAL_STIPULATION','OTHER'
+  ) then
     raise exception 'UNSUPPORTED_DOCUMENT_KIND';
   end if;
 
@@ -245,46 +284,12 @@ begin
     raise exception 'DOCUMENT_SIZE_OUT_OF_RANGE';
   end if;
 
-  if p_sha256 !~ '^[a-f0-9]{64}
-returns trigger
-language plpgsql
-set search_path = pg_catalog, public
-as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$;
-
-drop trigger if exists customer_secure_documents_touch_updated_at on public.customer_secure_documents;
-create trigger customer_secure_documents_touch_updated_at
-before update on public.customer_secure_documents
-for each row execute function public.norautomatch_touch_customer_secure_document_updated_at();
-
-create or replace function public.norautomatch_reject_document_access_event_mutation()
-returns trigger
-language plpgsql
-set search_path = pg_catalog, public
-as $$
-begin
-  raise exception 'NorAutoMatch customer document access events are append-only';
-end;
-$$;
-
-drop trigger if exists customer_secure_document_access_events_immutable on public.customer_secure_document_access_events;
-create trigger customer_secure_document_access_events_immutable
-before update or delete on public.customer_secure_document_access_events
-for each row execute function public.norautomatch_reject_document_access_event_mutation();
-
-comment on table public.customer_secure_documents is
-  'Private customer document metadata. Raw files live only in the private customer-secure-documents storage bucket.';
-comment on table public.customer_secure_document_access_events is
-  'Append-only audit evidence for signed document view-link creation and manager metadata review.';
- then
+  if p_sha256 !~ '^[a-f0-9]{64}$' then
     raise exception 'INVALID_DOCUMENT_SHA256';
   end if;
 
-  select count(*) into v_count
+  select count(*)
+    into v_count
   from public.customer_secure_documents d
   where d.user_id = v_user_id
     and d.status not in ('REJECTED','EXPIRED');
@@ -297,7 +302,8 @@ comment on table public.customer_secure_document_access_events is
     id, user_id, opportunity_id, kind, storage_path, original_filename,
     mime_type, byte_size, sha256, status, retention_state, delete_after,
     reviewed_at, reviewed_by
-  ) values (
+  )
+  values (
     p_id, v_user_id, null, p_kind, p_storage_path, left(p_original_filename,255),
     p_mime_type, p_byte_size, p_sha256, 'UPLOAD_PENDING', 'POLICY_PENDING', null,
     null, null
@@ -305,19 +311,21 @@ comment on table public.customer_secure_document_access_events is
 
   return p_id;
 end;
-$;
+$func$;
 
-revoke all on function public.norautomatch_register_customer_secure_document(uuid,text,text,text,text,bigint,text)
-  from public, anon;
-grant execute on function public.norautomatch_register_customer_secure_document(uuid,text,text,text,text,bigint,text)
-  to authenticated;
+revoke all on function public.norautomatch_register_customer_secure_document(
+  uuid,text,text,text,text,bigint,text
+) from public, anon;
+grant execute on function public.norautomatch_register_customer_secure_document(
+  uuid,text,text,text,text,bigint,text
+) to authenticated;
 
 create or replace function public.norautomatch_finalize_customer_secure_document(p_id uuid)
 returns void
 language plpgsql
 security definer
 set search_path = pg_catalog, public, storage
-as $
+as $func$
 declare
   v_user_id uuid := auth.uid();
   v_path text;
@@ -326,7 +334,8 @@ begin
     raise exception 'AUTH_REQUIRED';
   end if;
 
-  select d.storage_path into v_path
+  select d.storage_path
+    into v_path
   from public.customer_secure_documents d
   where d.id = p_id
     and d.user_id = v_user_id
@@ -339,7 +348,8 @@ begin
   end if;
 
   if not exists (
-    select 1 from storage.objects o
+    select 1
+    from storage.objects o
     where o.bucket_id = 'customer-secure-documents'
       and o.name = v_path
       and o.owner_id = v_user_id::text
@@ -351,7 +361,7 @@ begin
   set status = 'RECEIVED'
   where id = p_id;
 end;
-$;
+$func$;
 
 revoke all on function public.norautomatch_finalize_customer_secure_document(uuid)
   from public, anon;
@@ -363,7 +373,7 @@ returns void
 language plpgsql
 security definer
 set search_path = pg_catalog, public
-as $
+as $func$
 declare
   v_user_id uuid := auth.uid();
 begin
@@ -383,7 +393,7 @@ begin
     raise exception 'PENDING_DOCUMENT_NOT_FOUND';
   end if;
 end;
-$;
+$func$;
 
 revoke all on function public.norautomatch_abandon_pending_customer_secure_document(uuid)
   from public, anon;
@@ -394,34 +404,39 @@ create or replace function public.norautomatch_touch_customer_secure_document_up
 returns trigger
 language plpgsql
 set search_path = pg_catalog, public
-as $$
+as $func$
 begin
   new.updated_at = now();
   return new;
 end;
-$$;
+$func$;
 
-drop trigger if exists customer_secure_documents_touch_updated_at on public.customer_secure_documents;
+drop trigger if exists customer_secure_documents_touch_updated_at
+  on public.customer_secure_documents;
 create trigger customer_secure_documents_touch_updated_at
 before update on public.customer_secure_documents
-for each row execute function public.norautomatch_touch_customer_secure_document_updated_at();
+for each row
+execute function public.norautomatch_touch_customer_secure_document_updated_at();
 
 create or replace function public.norautomatch_reject_document_access_event_mutation()
 returns trigger
 language plpgsql
 set search_path = pg_catalog, public
-as $$
+as $func$
 begin
   raise exception 'NorAutoMatch customer document access events are append-only';
 end;
-$$;
+$func$;
 
-drop trigger if exists customer_secure_document_access_events_immutable on public.customer_secure_document_access_events;
+drop trigger if exists customer_secure_document_access_events_immutable
+  on public.customer_secure_document_access_events;
 create trigger customer_secure_document_access_events_immutable
 before update or delete on public.customer_secure_document_access_events
-for each row execute function public.norautomatch_reject_document_access_event_mutation();
+for each row
+execute function public.norautomatch_reject_document_access_event_mutation();
 
 comment on table public.customer_secure_documents is
   'Private customer document metadata. Raw files live only in the private customer-secure-documents storage bucket.';
+
 comment on table public.customer_secure_document_access_events is
   'Append-only audit evidence for signed document view-link creation and manager metadata review.';
