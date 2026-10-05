@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLink, FileCheck2, Loader2, ShieldCheck } from "lucide-react";
-import { createManagerDocumentViewLink, reviewSecureDocument } from "@/app/manager/documents/actions";
+import { ExternalLink, FileCheck2, Loader2, ShieldCheck, Trash2 } from "lucide-react";
+import { createManagerDocumentViewLink, deleteDueSecureDocument, reviewSecureDocument } from "@/app/manager/documents/actions";
 
 type SecureDocumentRow = {
   id: string;
@@ -14,6 +14,8 @@ type SecureDocumentRow = {
   byte_size: number;
   status: string;
   retention_state: string;
+  delete_after: string | null;
+  raw_deleted_at: string | null;
   received_at: string;
   reviewed_at: string | null;
 };
@@ -89,9 +91,24 @@ export function SecureDocumentDesk({ documents }: { documents: SecureDocumentRow
             </button>
           </form>
 
-          <div className="mt-4 flex items-center gap-2 text-[11px] leading-5 text-slate-600">
-            <ShieldCheck size={14} className="text-emerald-400" />
-            Retention state: {doc.retention_state.replaceAll("_", " ").toLowerCase()}. Raw document access remains outside Torque.
+          <div className="mt-4 flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2 text-[11px] leading-5 text-slate-600">
+              <ShieldCheck size={14} className="text-emerald-400" />
+              <span>
+                Retention: {doc.retention_state.replaceAll("_", " ").toLowerCase()}
+                {doc.delete_after ? ` · due ${new Date(doc.delete_after).toLocaleDateString()}` : ""}
+                {doc.raw_deleted_at ? ` · raw file deleted ${new Date(doc.raw_deleted_at).toLocaleDateString()}` : ""}.
+                Raw document access remains outside Torque.
+              </span>
+            </div>
+            {doc.delete_after && !doc.raw_deleted_at && doc.retention_state !== "PRESERVED" && Date.parse(doc.delete_after) <= Date.now() ? (
+              <form action={deleteDueSecureDocument}>
+                <input type="hidden" name="documentId" value={doc.id} />
+                <button className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full border border-rose-400/20 bg-rose-400/[.06] px-4 text-xs font-black text-rose-200 hover:border-rose-300/40">
+                  <Trash2 size={14} /> Delete due raw file
+                </button>
+              </form>
+            ) : null}
           </div>
         </article>
       ))}
