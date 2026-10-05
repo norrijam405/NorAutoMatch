@@ -38,6 +38,12 @@ type ConversationQueueItem = {
     sourceRef: string | null;
     sourceHash: string | null;
   };
+  ownership: {
+    state: "UNASSIGNED" | "ASSIGNED";
+    assigneeSubjectId: string | null;
+    assignedAt: string | null;
+    authorityEffect: "NONE";
+  };
   authorityEffect: "NONE";
 };
 
@@ -55,6 +61,8 @@ export function ConversationResponseDesk() {
   const [state, setState] = useState<DeskState>("LOCKED");
   const [items, setItems] = useState<ConversationQueueItem[]>([]);
   const [message, setMessage] = useState("Manager credentials remain only in this browser tab's memory.");
+  const [viewerSubjectId, setViewerSubjectId] = useState("");
+  const [ownershipBusyId, setOwnershipBusyId] = useState<string>();
   const [siteReplyDrafts, setSiteReplyDrafts] = useState<Record<string, string>>({});
   const [publishingReplyId, setPublishingReplyId] = useState<string>();
 
@@ -73,6 +81,7 @@ export function ConversationResponseDesk() {
         body?.protocol !== "NORAUTO_CONVERSATION_RESPONSE_QUEUE_V1" ||
         body?.truthState !== "READ_MODEL_ONLY" ||
         body?.authorityEffect !== "NONE" ||
+        typeof body?.viewerSubjectId !== "string" ||
         !Array.isArray(body?.items)
       ) {
         setItems([]);
@@ -81,6 +90,7 @@ export function ConversationResponseDesk() {
         return false;
       }
       setItems(body.items as ConversationQueueItem[]);
+      setViewerSubjectId(body.viewerSubjectId);
       setState("READY");
       setMessage(body.items.length ? `${body.items.length} conversation response item${body.items.length === 1 ? "" : "s"} require attention.` : "No authorized conversation-response items are currently queued.");
       return true;
@@ -89,6 +99,42 @@ export function ConversationResponseDesk() {
       setState("ERROR");
       setMessage("Conversation response queue is unavailable. No customer state was changed.");
       return false;
+    }
+  }
+
+  async function updateOwnership(item: ConversationQueueItem, action: "CLAIM" | "RELEASE") {
+    if (!sessionToken || ownershipBusyId) return;
+    const key = `${item.provider}:${item.conversationId}`;
+    setOwnershipBusyId(key);
+    setMessage(action === "CLAIM" ? "Claiming conversation…" : "Releasing conversation…");
+    try {
+      const response = await fetch("/api/manager/conversations/ownership", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          provider: item.provider,
+          conversationId: item.conversationId,
+          action,
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (
+        !response.ok ||
+        body?.protocol !== "NORAUTO_CONVERSATION_OWNERSHIP_V1" ||
+        body?.authorityEffect !== "NONE"
+      ) {
+        setMessage(typeof body?.message === "string" ? body.message : "Conversation ownership update failed.");
+        return;
+      }
+      await loadQueue(sessionToken);
+      setMessage(action === "CLAIM" ? "Conversation claimed. Only the current owner can publish a website reply." : "Conversation released back to the shared queue.");
+    } catch {
+      setMessage("Conversation ownership is temporarily unavailable.");
+    } finally {
+      setOwnershipBusyId(undefined);
     }
   }
 
@@ -152,6 +198,7 @@ export function ConversationResponseDesk() {
     setSessionToken("");
     setDraftToken("");
     setItems([]);
+    setViewerSubjectId("");
     setSiteReplyDrafts({});
     setState("LOCKED");
     setMessage("Manager session cleared from this tab. Conversation data is no longer displayed.");
@@ -222,6 +269,30 @@ export function ConversationResponseDesk() {
               <div className="text-left lg:text-right">
                 <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 lg:justify-end"><Clock3 size={14} /> Target {new Date(item.targetAt).toLocaleTimeString()}</div>
                 <code className="mt-2 block text-[11px] text-slate-600">{item.conversationId}</code>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className={item.ownership.state === "ASSIGNED" ? "rounded-full border border-sky-400/20 bg-sky-400/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[.12em] text-sky-300" : "rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[.12em] text-slate-500"}>
+                    {item.ownership.state === "ASSIGNED" ? (item.ownership.assigneeSubjectId === viewerSubjectId ? "Owned by you" : "Assigned") : "Unassigned"}
+                  </span>
+                  {item.ownership.state === "UNASSIGNED" ? (
+                    <button
+                      type="button"
+                      onClick={() => void updateOwnership(item, "CLAIM")}
+                      disabled={ownershipBusyId === `${item.provider}:${item.conversationId}`}
+                      className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.12em] text-white hover:border-amber-300/40 disabled:opacity-50"
+                    >
+                      Claim conversation
+                    </button>
+                  ) : item.ownership.assigneeSubjectId === viewerSubjectId ? (
+                    <button
+                      type="button"
+                      onClick={() => void updateOwnership(item, "RELEASE")}
+                      disabled={ownershipBusyId === `${item.provider}:${item.conversationId}`}
+                      className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.12em] text-white hover:border-amber-300/40 disabled:opacity-50"
+                    >
+                      Release
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </div>
 
@@ -259,12 +330,18 @@ export function ConversationResponseDesk() {
                 <button
                   type="button"
                   onClick={() => void publishSiteReply(item)}
-                  disabled={publishingReplyId === `${item.provider}:${item.eventId}`}
+                  disabled={
+                    publishingReplyId === `${item.provider}:${item.eventId}` ||
+                    item.ownership.assigneeSubjectId !== viewerSubjectId
+                  }
                   className="btn-primary mt-3 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {publishingReplyId === `${item.provider}:${item.eventId}` ? <RefreshCw size={16} className="animate-spin" /> : <MessageSquareText size={16} />}
                   Publish to website thread
                 </button>
+                {item.ownership.assigneeSubjectId !== viewerSubjectId ? (
+                  <p className="mt-2 text-[11px] leading-5 text-slate-600">Claim this conversation before publishing a website reply.</p>
+                ) : null}
               </div>
             ) : null}
           </article>
