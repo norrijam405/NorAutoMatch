@@ -7,7 +7,23 @@ import { validateSecureDocumentFile } from "@/lib/secure-document-file-validatio
 export const runtime = "nodejs";
 
 const BUCKET = "customer-secure-documents";
+
+function secureDocumentRuntimeConfig() {
+  if (process.env.NORAUTO_SECURE_DOCUMENTS_ACTIVATION !== "ACTIVE") return null;
+  const retentionDays = Number.parseInt(process.env.NORAUTO_SECURE_DOCUMENT_RETENTION_DAYS ?? "", 10);
+  if (!Number.isInteger(retentionDays) || retentionDays < 1 || retentionDays > 3650) return null;
+  return { retentionDays };
+}
+
 export async function POST(request: Request) {
+  const runtimeConfig = secureDocumentRuntimeConfig();
+  if (!runtimeConfig) {
+    return NextResponse.json(
+      { message: "Secure deal-document upload is not activated yet." },
+      { status: 503 },
+    );
+  }
+
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
   const user = userData.user;
@@ -25,6 +41,7 @@ export async function POST(request: Request) {
   if (!(file instanceof File) || file.size <= 0) {
     return NextResponse.json({ message: "Choose a document to upload." }, { status: 400 });
   }
+
   const bytes = new Uint8Array(await file.arrayBuffer());
   const fileValidation = validateSecureDocumentFile({
     declaredMime: file.type,
@@ -33,22 +50,29 @@ export async function POST(request: Request) {
   });
   if (!fileValidation.ok) {
     const status = fileValidation.reason === "FILE_TOO_LARGE" ? 413 : 415;
-    return NextResponse.json({ message: "Use a genuine PDF, JPG, PNG, or WebP file no larger than 12 MB." }, { status });
+    return NextResponse.json(
+      { message: "Use a genuine PDF, JPG, PNG, or WebP file no larger than 12 MB." },
+      { status },
+    );
   }
 
   const documentId = randomUUID();
   const storagePath = `${user.id}/${documentId}.${fileValidation.extension}`;
   const sha256 = createHash("sha256").update(bytes).digest("hex");
 
-  const { error: registrationError } = await supabase.rpc("norautomatch_register_customer_secure_document", {
-    p_id: documentId,
-    p_kind: kindParsed.data,
-    p_storage_path: storagePath,
-    p_original_filename: file.name.slice(0, 255) || `document.${fileValidation.extension}`,
-    p_mime_type: file.type,
-    p_byte_size: file.size,
-    p_sha256: sha256,
-  });
+  const { error: registrationError } = await supabase.rpc(
+    "norautomatch_register_customer_secure_document_v2",
+    {
+      p_id: documentId,
+      p_kind: kindParsed.data,
+      p_storage_path: storagePath,
+      p_original_filename: file.name.slice(0, 255) || `document.${fileValidation.extension}`,
+      p_mime_type: file.type,
+      p_byte_size: file.size,
+      p_sha256: sha256,
+      p_retention_days: runtimeConfig.retentionDays,
+    },
+  );
   if (registrationError) {
     return NextResponse.json({ message: "The document could not be registered safely." }, { status: 503 });
   }
