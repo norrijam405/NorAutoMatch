@@ -140,12 +140,16 @@ export async function recordCommunicationAction(input: {
 
     if (existing.rows[0]) {
       const row = existing.rows[0];
+      const expectedEvidenceRef = input.action === "HANDOFF_OPENED" ? null : normalizeEvidenceRef(input.evidenceRef);
+      const expectedDeliveryOutcome = input.action === "DELIVERY_EVIDENCE_RECORDED" ? input.deliveryOutcome ?? null : null;
       if (
         row.provider !== input.provider ||
         row.source_event_id !== input.eventId ||
         row.channel !== input.channel ||
         row.event_type !== eventType(input.action) ||
-        row.actor_subject_id !== input.actorSubjectId
+        row.actor_subject_id !== input.actorSubjectId ||
+        row.evidence_ref !== expectedEvidenceRef ||
+        row.delivery_outcome !== expectedDeliveryOutcome
       ) throw new Error("COMMUNICATION_CLIENT_ACTION_IDENTITY_COLLISION");
       await client.query("commit");
       return {
