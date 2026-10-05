@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "outDir": ".tmp-customer-workspace-foundation"
+  },
+  "include": [
+    "scripts/customer-secure-document.behavior.ts",
+    "scripts/orr-conversation-bridge.behavior.ts",
+    "scripts/video-hub.behavior.ts",
+    "src/lib/customer-secure-document.ts",
+    "src/lib/orr-conversation-bridge.ts",
+    "src/lib/video-hub.ts",
+    "src/lib/conversation-gateway.ts"
+  ]
+}
