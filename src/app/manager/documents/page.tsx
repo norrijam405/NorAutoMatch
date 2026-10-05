@@ -13,7 +13,7 @@ export default async function ManagerDocumentsPage() {
   const { supabase } = await requireNorAutoMembership(["operator", "admin", "founder"], "/manager/documents");
   const { data: documents } = await supabase
     .from("customer_secure_documents")
-    .select("id,user_id,opportunity_id,kind,original_filename,mime_type,byte_size,status,retention_state,received_at,reviewed_at")
+    .select("id,user_id,opportunity_id,kind,original_filename,mime_type,byte_size,status,retention_state,delete_after,raw_deleted_at,received_at,reviewed_at")
     .order("received_at", { ascending: false })
     .limit(100);
 
