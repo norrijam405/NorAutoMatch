@@ -1,0 +1,86 @@
+name: NorAutoMatch R2 Customer Workspace + Communication Bundle CI
+
+on:
+  push:
+    branches:
+      - "integration/2026-10-05-r2-customer-workspace-communication-bundle"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  r2-customer-workspace-communication-bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Production dependency security gate
+        run: npm audit --omit=dev --audit-level=high
+      - name: Apply bounded conversation schemas
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f infrastructure/norautomatch-crm-v4-conversation-events.sql
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f infrastructure/norautomatch-site-chat-thread-r0.sql
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f infrastructure/norautomatch-conversation-ownership-r0.sql
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f infrastructure/norautomatch-conversation-communication-ledger-r0.sql
+      - name: Compile integrated verification surface
+        run: |
+          rm -rf .tmp-r2-customer-workspace-communication-bundle
+          npx tsc -p tsconfig.r2-customer-workspace-communication-bundle.json
+      - name: Challenge Ask Torque normalization
+        run: node .tmp-r2-customer-workspace-communication-bundle/scripts/ask-torque-intake.behavior.js
+      - name: Challenge same-site reply transport
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-r2-customer-workspace-communication-bundle/scripts/site-chat-thread.integration.js
+      - name: Challenge conversation ownership
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-r2-customer-workspace-communication-bundle/scripts/conversation-ownership.integration.js
+      - name: Challenge response queue integration
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-r2-customer-workspace-communication-bundle/scripts/conversation-response-queue.integration.js
+      - name: Challenge communication execution truth
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-r2-customer-workspace-communication-bundle/scripts/conversation-communication-ledger.integration.js
+      - name: Challenge Deal Prep Center truth
+        run: node .tmp-r2-customer-workspace-communication-bundle/scripts/customer-deal-prep.behavior.js
+      - name: Challenge Video Hub metadata
+        run: node .tmp-r2-customer-workspace-communication-bundle/scripts/video-hub-library.behavior.js
+      - name: Challenge Torque video VIN boundary
+        run: node .tmp-r2-customer-workspace-communication-bundle/scripts/torque-video-recommendations.behavior.js
+      - name: Clean generated verification output
+        run: rm -rf .tmp-r2-customer-workspace-communication-bundle
+      - name: Typecheck application
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
