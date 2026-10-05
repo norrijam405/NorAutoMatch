@@ -49,6 +49,28 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["vehicle_scout_dossiers"]["Row"]>;
         Relationships: [];
       };
+      customer_secure_documents: {
+        Row: {
+          id: string; user_id: string; opportunity_id: string | null; kind: string; storage_path: string;
+          original_filename: string; mime_type: string; byte_size: number; sha256: string; status: string;
+          retention_state: string; delete_after: string | null; reviewed_at: string | null; reviewed_by: string | null;
+          received_at: string; updated_at: string;
+        };
+        Insert: {
+          id?: string; user_id: string; opportunity_id?: string | null; kind: string; storage_path: string;
+          original_filename: string; mime_type: string; byte_size: number; sha256: string; status?: string;
+          retention_state?: string; delete_after?: string | null; reviewed_at?: string | null; reviewed_by?: string | null;
+          received_at?: string; updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["customer_secure_documents"]["Row"]>;
+        Relationships: [];
+      };
+      customer_secure_document_access_events: {
+        Row: { id: string; document_id: string; actor_user_id: string; action: string; created_at: string };
+        Insert: { id?: string; document_id: string; actor_user_id: string; action: string; created_at?: string };
+        Update: never;
+        Relationships: [];
+      };
       inventory_vehicles: {
         Row: {
           vin: string; workspace_id: string; dealer_id: number; provider: string; source_url: string;
