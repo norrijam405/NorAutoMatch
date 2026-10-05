@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     p_id: documentId,
     p_kind: kindParsed.data,
     p_storage_path: storagePath,
-    p_original_filename: file.name.slice(0, 255) || `document.${extension}`,
+    p_original_filename: file.name.slice(0, 255) || `document.${fileValidation.extension}`,
     p_mime_type: file.type,
     p_byte_size: file.size,
     p_sha256: sha256,
