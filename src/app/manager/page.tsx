@@ -21,6 +21,7 @@ export default function ManagerPage() {
           <div className="mt-5 flex flex-wrap gap-4 text-sm font-bold">
             <Link href="/manager/conversations" className="text-amber-300 hover:text-amber-200">Open conversation response desk →</Link>
             <Link href="/manager/documents" className="text-amber-300 hover:text-amber-200">Open secure document desk →</Link>
+            <Link href="/manager/videos" className="text-amber-300 hover:text-amber-200">Open Video Hub →</Link>
             <Link href="/manager/follow-up" className="text-amber-300 hover:text-amber-200">Open evidence-gated follow-up desk →</Link>
           </div>
         </div>
