@@ -1,0 +1,45 @@
+name: NorAutoMatch Customer Workspace Foundation CI
+
+on:
+  push:
+    branches:
+      - "feature/2026-10-04-customer-workspace-foundation-r0"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  customer-workspace-foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Production dependency security gate
+        run: npm audit --omit=dev --audit-level=high
+      - name: Compile foundation verification surface
+        run: |
+          rm -rf .tmp-customer-workspace-foundation
+          npx tsc -p tsconfig.customer-workspace-foundation.json
+      - name: Challenge secure-document metadata boundary
+        run: node .tmp-customer-workspace-foundation/scripts/customer-secure-document.behavior.js
+      - name: Challenge Orr conversation bridge boundary
+        run: node .tmp-customer-workspace-foundation/scripts/orr-conversation-bridge.behavior.js
+      - name: Challenge video publication truth boundary
+        run: node .tmp-customer-workspace-foundation/scripts/video-hub.behavior.js
+      - name: Clean generated verification output
+        run: rm -rf .tmp-customer-workspace-foundation
+      - name: Typecheck application
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
