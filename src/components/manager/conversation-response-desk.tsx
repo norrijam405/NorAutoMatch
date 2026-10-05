@@ -55,6 +55,8 @@ export function ConversationResponseDesk() {
   const [state, setState] = useState<DeskState>("LOCKED");
   const [items, setItems] = useState<ConversationQueueItem[]>([]);
   const [message, setMessage] = useState("Manager credentials remain only in this browser tab's memory.");
+  const [siteReplyDrafts, setSiteReplyDrafts] = useState<Record<string, string>>({});
+  const [publishingReplyId, setPublishingReplyId] = useState<string>();
 
   async function loadQueue(token: string) {
     setState("LOADING");
@@ -90,6 +92,49 @@ export function ConversationResponseDesk() {
     }
   }
 
+  async function publishSiteReply(item: ConversationQueueItem) {
+    if (!sessionToken || item.provider !== "NORAUTO_SITE_CHAT") return;
+    const key = `${item.provider}:${item.eventId}`;
+    const body = (siteReplyDrafts[key] ?? "").trim();
+    if (!body) {
+      setMessage("Write a same-site reply before publishing.");
+      return;
+    }
+    setPublishingReplyId(key);
+    setMessage("Publishing a human-reviewed reply to the NorAutoMatch website thread…");
+    try {
+      const response = await fetch("/api/manager/conversations/site-reply", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          provider: item.provider,
+          eventId: item.eventId,
+          body,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (
+        !response.ok ||
+        result?.protocol !== "NORAUTO_SITE_CHAT_PUBLISH_RECEIPT_V1" ||
+        result?.deliveryChannel !== "NORAUTO_SITE_THREAD" ||
+        result?.externalDelivery !== "NOT_PERFORMED" ||
+        result?.authorityEffect !== "NONE"
+      ) {
+        setMessage(typeof result?.message === "string" ? result.message : "Same-site reply failed its truth-boundary check.");
+        return;
+      }
+      setSiteReplyDrafts((current) => ({ ...current, [key]: "" }));
+      setMessage("Website reply published. No email, text, phone, Motive, or lender delivery was performed.");
+    } catch {
+      setMessage("Same-site reply publishing is temporarily unavailable.");
+    } finally {
+      setPublishingReplyId(undefined);
+    }
+  }
+
   async function unlock() {
     const token = draftToken.trim();
     if (!token) {
@@ -107,6 +152,7 @@ export function ConversationResponseDesk() {
     setSessionToken("");
     setDraftToken("");
     setItems([]);
+    setSiteReplyDrafts({});
     setState("LOCKED");
     setMessage("Manager session cleared from this tab. Conversation data is no longer displayed.");
   }
@@ -193,6 +239,34 @@ export function ConversationResponseDesk() {
                 <p className="mt-3 text-[11px] leading-5 text-slate-600">Availability, price, incentive, financing, reservation, appointment, SOLD, and LOST claims still require their own current evidence. This queue grants no authority to invent them.</p>
               </div>
             </div>
+
+            {item.provider === "NORAUTO_SITE_CHAT" ? (
+              <div className="mt-5 border-t border-white/10 pt-5">
+                <div className="text-[10px] font-black uppercase tracking-[.14em] text-emerald-300">NorAutoMatch website reply</div>
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  This publishes only inside the customer's Ask Torque website thread. It does not send email, SMS, make a phone call, reserve a vehicle, create an appointment, or submit financing.
+                </p>
+                <textarea
+                  value={siteReplyDrafts[`${item.provider}:${item.eventId}`] ?? ""}
+                  onChange={(event) => setSiteReplyDrafts((current) => ({
+                    ...current,
+                    [`${item.provider}:${item.eventId}`]: event.target.value,
+                  }))}
+                  maxLength={3000}
+                  className="field mt-3 min-h-28"
+                  placeholder="Write the human-reviewed reply the customer should see on NorAutoMatch…"
+                />
+                <button
+                  type="button"
+                  onClick={() => void publishSiteReply(item)}
+                  disabled={publishingReplyId === `${item.provider}:${item.eventId}`}
+                  className="btn-primary mt-3 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {publishingReplyId === `${item.provider}:${item.eventId}` ? <RefreshCw size={16} className="animate-spin" /> : <MessageSquareText size={16} />}
+                  Publish to website thread
+                </button>
+              </div>
+            ) : null}
           </article>
         ))}
       </div>

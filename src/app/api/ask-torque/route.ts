@@ -12,6 +12,7 @@ import {
 } from "@/lib/public-abuse-control";
 import { PostgresPublicAbuseCounterStore } from "@/lib/public-abuse-postgres";
 import { readJsonBodyWithByteLimit } from "@/lib/request-body-limit";
+import { registerSiteChatAccess } from "@/lib/site-chat-thread";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -136,6 +137,12 @@ export async function POST(request: Request) {
   try {
     const event = buildAskTorqueConversationEvent(parsed.data, new Date().toISOString());
     const result = await persistConversationEvent({ pool, event });
+    const threadAccess = await registerSiteChatAccess({
+      pool,
+      workspaceId: event.workspaceId,
+      conversationId: event.conversationId,
+      accessToken: parsed.data.accessToken,
+    });
     return noStore({
       accepted: true,
       protocol: "NORAUTO_ASK_TORQUE_RECEIPT_V1",
@@ -143,6 +150,8 @@ export async function POST(request: Request) {
       eventId: result.eventId,
       persistence: result.status,
       routingDecision: result.routingDecision,
+      siteThreadAccess: threadAccess.status,
+      siteThreadExpiresAt: threadAccess.expiresAt,
       responseExecution: "NOT_PERFORMED",
       customerReachedState: "NOT_CLAIMED",
       authorityEffect: "NONE",
