@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Clock3, Film, Loader2, LockKeyhole, Mail, MessageSquareText, PhoneCall, RefreshCw, ShieldCheck } from "lucide-react";
+import { ConversationContactControls } from "./conversation-contact-controls";
 
 type ConversationQueueItem = {
   workspaceId: string;
@@ -296,7 +297,7 @@ export function ConversationResponseDesk() {
       <div className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-slate-900/55 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm font-bold text-emerald-300"><ShieldCheck size={17} /> Manager boundary verified</div>
-          <p className="mt-1 text-xs text-slate-500">This is a read-only continuity desk. Phone/email links do not claim a message was sent, delivered, or answered.</p>
+          <p className="mt-1 text-xs text-slate-500">This desk preserves explicit human communication evidence. Opening phone/email/text apps does not claim a send, delivery, answer, or customer contact.</p>
         </div>
         <div className="flex gap-2">
           <button type="button" onClick={() => void loadQueue(sessionToken)} disabled={state === "LOADING"} className="btn-secondary px-4"><RefreshCw size={16} /> Refresh</button>
@@ -404,6 +405,18 @@ export function ConversationResponseDesk() {
                 </div>
               ) : null}
             </div>
+
+            <ConversationContactControls
+              sessionToken={sessionToken}
+              viewerSubjectId={viewerSubjectId}
+              item={{
+                provider: item.provider,
+                eventId: item.eventId,
+                conversationId: item.conversationId,
+                customer: item.customer,
+                ownership: { assigneeSubjectId: item.ownership.assigneeSubjectId },
+              }}
+            />
 
             {item.provider === "NORAUTO_SITE_CHAT" ? (
               <div className="mt-5 border-t border-white/10 pt-5">
