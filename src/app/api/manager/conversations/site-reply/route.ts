@@ -4,7 +4,6 @@ import { createPostgresCrmPool } from "@/lib/crm-postgres-adapter";
 import { authorizeManagerRequest } from "@/lib/manager-route-auth";
 import { readJsonBodyWithByteLimit } from "@/lib/request-body-limit";
 import { publishSiteChatReply } from "@/lib/site-chat-thread";
-import { requireConversationOwner } from "@/lib/conversation-ownership";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,24 +52,6 @@ export async function POST(request: Request) {
   if (!crm) return noStore({ message: "Site-thread persistence is not configured." }, 503);
 
   try {
-    const event = await crm.query<{ conversation_id: string }>(
-      `select conversation_id
-         from crm_conversation_events
-        where workspace_id=$1 and provider=$2 and event_id=$3
-        limit 1`,
-      [auth.claims.workspaceId, parsed.data.provider, parsed.data.eventId],
-    );
-    const row = event.rows[0];
-    if (!row) return noStore({ message: "Conversation evidence was not found." }, 404);
-
-    await requireConversationOwner({
-      pool: crm,
-      workspaceId: auth.claims.workspaceId,
-      provider: parsed.data.provider,
-      conversationId: row.conversation_id,
-      actorSubjectId: auth.claims.subjectId,
-    });
-
     const receipt = await publishSiteChatReply({
       pool: crm,
       workspaceId: auth.claims.workspaceId,
@@ -82,7 +63,7 @@ export async function POST(request: Request) {
     return noStore(receipt, 201);
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    if (message.includes("OWNERSHIP_REQUIRED")) {
+    if (message.includes("CURRENT_OWNER_REQUIRED")) {
       return noStore({ message: "Claim this conversation before publishing a website reply." }, 409);
     }
     if (message.includes("NOT_ELIGIBLE") || message.includes("NOT_ACTIVE")) {
