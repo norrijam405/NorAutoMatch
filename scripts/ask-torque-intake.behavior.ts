@@ -4,6 +4,7 @@ import { buildAskTorqueConversationEvent } from "../src/lib/ask-torque-intake";
 const base = {
   conversationId: "f322d60e-a2d8-4ae0-a551-96dddf10d481",
   messageId: "fd2ce0b7-c374-4697-8e92-00ef7ba84d56",
+  accessToken: "abcdefghijklmnopqrstuvwxABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-abcd",
   message: "Do you have a Rogue SV in stock?",
   vehicleVin: null,
   customer: {
