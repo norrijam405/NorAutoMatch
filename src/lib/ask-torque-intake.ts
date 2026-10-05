@@ -7,6 +7,7 @@ const nullableContact = z.string().trim().max(254).optional().nullable();
 export const askTorqueInputSchema = z.object({
   conversationId: z.string().uuid(),
   messageId: z.string().uuid(),
+  accessToken: z.string().min(64).max(160).regex(/^[A-Za-z0-9_-]+$/),
   message: z.string().trim().min(1).max(1000),
   vehicleVin: z.string().trim().toUpperCase().regex(/^[A-HJ-NPR-Z0-9]{17}$/).optional().nullable(),
   customer: z.object({
