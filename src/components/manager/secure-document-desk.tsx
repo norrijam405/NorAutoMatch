@@ -4,6 +4,14 @@ import { useState } from "react";
 import { ExternalLink, FileCheck2, Loader2, ShieldCheck, Trash2 } from "lucide-react";
 import { createManagerDocumentViewLink, deleteDueSecureDocument, reviewSecureDocument } from "@/app/manager/documents/actions";
 
+type SecureDocumentAccessEvent = {
+  id: string;
+  document_id: string;
+  actor_user_id: string;
+  action: string;
+  created_at: string;
+};
+
 type SecureDocumentRow = {
   id: string;
   user_id: string;
@@ -20,7 +28,13 @@ type SecureDocumentRow = {
   reviewed_at: string | null;
 };
 
-export function SecureDocumentDesk({ documents }: { documents: SecureDocumentRow[] }) {
+export function SecureDocumentDesk({
+  documents,
+  accessEvents,
+}: {
+  documents: SecureDocumentRow[];
+  accessEvents: SecureDocumentAccessEvent[];
+}) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
@@ -47,7 +61,9 @@ export function SecureDocumentDesk({ documents }: { documents: SecureDocumentRow
   return (
     <div className="mt-8 grid gap-4">
       {message ? <p className="text-xs text-slate-400">{message}</p> : null}
-      {documents.map((doc) => (
+      {documents.map((doc) => {
+        const recentEvents = accessEvents.filter((event) => event.document_id === doc.id).slice(0, 3);
+        return (
         <article key={doc.id} className="rounded-3xl border border-white/10 bg-slate-900/55 p-5 sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -110,8 +126,21 @@ export function SecureDocumentDesk({ documents }: { documents: SecureDocumentRow
               </form>
             ) : null}
           </div>
+          {recentEvents.length ? (
+            <div className="mt-4 border-t border-white/10 pt-4">
+              <p className="text-[10px] font-black uppercase tracking-[.14em] text-slate-500">Recent access evidence</p>
+              <div className="mt-2 grid gap-1.5 text-[11px] text-slate-600">
+                {recentEvents.map((event) => (
+                  <p key={event.id}>
+                    {event.action.replaceAll("_", " ").toLowerCase()} · {new Date(event.created_at).toLocaleString()}
+                  </p>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </article>
-      ))}
+        );
+      })}
     </div>
   );
 }
