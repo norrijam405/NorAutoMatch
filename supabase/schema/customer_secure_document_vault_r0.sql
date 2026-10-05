@@ -41,6 +41,9 @@ create index if not exists customer_secure_documents_opportunity_idx
 create index if not exists customer_secure_documents_retention_idx
   on public.customer_secure_documents (retention_state, delete_after)
   where delete_after is not null;
+create index if not exists customer_secure_documents_reviewed_by_idx
+  on public.customer_secure_documents (reviewed_by)
+  where reviewed_by is not null;
 
 create table if not exists public.customer_secure_document_access_events (
   id uuid primary key default gen_random_uuid(),
@@ -54,6 +57,8 @@ create table if not exists public.customer_secure_document_access_events (
 
 create index if not exists customer_secure_document_access_doc_idx
   on public.customer_secure_document_access_events (document_id, created_at desc);
+create index if not exists customer_secure_document_access_actor_idx
+  on public.customer_secure_document_access_events (actor_user_id, created_at desc);
 
 alter table public.customer_secure_documents enable row level security;
 alter table public.customer_secure_document_access_events enable row level security;
