@@ -1,0 +1,59 @@
+name: NorAutoMatch R2 Dev Audit Partial Remediation CI
+
+on:
+  push:
+    branches:
+      - "security/2026-10-05-r2-dev-audit-partial-remediation"
+  pull_request:
+    branches:
+      - "integration/2026-10-05-r2-customer-workspace-communication-bundle"
+
+permissions:
+  contents: read
+
+jobs:
+  dev-audit-partial-remediation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Assert patchable brace-expansion advisories are gone
+        shell: bash
+        run: |
+          set +e
+          npm audit --audit-level=high --json > audit.json
+          audit_status=$?
+          set -e
+          node - <<'NODE'
+          const fs = require('fs');
+          const audit = JSON.parse(fs.readFileSync('audit.json','utf8'));
+          const names = Object.keys(audit.vulnerabilities || {});
+          if (names.includes('brace-expansion')) {
+            throw new Error('brace-expansion remains vulnerable after targeted patch');
+          }
+          if (!names.includes('braces')) {
+            throw new Error('expected currently-unpatched braces advisory was not observed');
+          }
+          const unexpected = names.filter((name) => name !== 'braces' && name !== 'chokidar' && name !== 'micromatch' && name !== 'fast-glob' && name !== 'tailwindcss' && name !== '@next/eslint-plugin-next' && name !== 'eslint-config-next');
+          if (unexpected.length) {
+            throw new Error('unexpected high-severity audit packages: ' + unexpected.join(', '));
+          }
+          const high = audit.metadata?.vulnerabilities?.high ?? 0;
+          if (high < 1) throw new Error('expected remaining high advisory was not counted');
+          console.log('PASS targeted brace-expansion remediation; remaining high advisory chain is braces-derived');
+          NODE
+          if [ "$audit_status" -eq 0 ]; then
+            echo "Full audit unexpectedly green; acceptable but investigate whether upstream braces was patched."
+          fi
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
