@@ -11,10 +11,12 @@
   },
   "include": [
     "scripts/customer-secure-document.behavior.ts",
+    "scripts/secure-document-file-validation.behavior.ts",
     "scripts/orr-conversation-bridge.behavior.ts",
     "scripts/video-hub.behavior.ts",
     "scripts/deal-readiness.behavior.ts",
     "src/lib/customer-secure-document.ts",
+    "src/lib/secure-document-file-validation.ts",
     "src/lib/orr-conversation-bridge.ts",
     "src/lib/video-hub.ts",
     "src/lib/deal-readiness.ts",
