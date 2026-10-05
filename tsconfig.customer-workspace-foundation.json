@@ -13,9 +13,14 @@
     "scripts/customer-secure-document.behavior.ts",
     "scripts/orr-conversation-bridge.behavior.ts",
     "scripts/video-hub.behavior.ts",
+    "scripts/deal-readiness.behavior.ts",
     "src/lib/customer-secure-document.ts",
     "src/lib/orr-conversation-bridge.ts",
     "src/lib/video-hub.ts",
+    "src/lib/deal-readiness.ts",
+    "src/lib/desk-prep.ts",
+    "src/lib/lead-schema.ts",
+    "src/lib/lead-inventory-evidence.ts",
     "src/lib/conversation-gateway.ts"
   ]
 }
