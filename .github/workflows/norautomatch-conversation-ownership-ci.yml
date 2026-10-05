@@ -1,0 +1,68 @@
+name: NorAutoMatch Conversation Ownership CI
+
+on:
+  push:
+    branches:
+      - "feature/2026-10-05-conversation-ownership-r0"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  conversation-ownership:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Production dependency security gate
+        run: npm audit --omit=dev --audit-level=high
+      - name: Apply bounded schemas
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f infrastructure/norautomatch-crm-v4-conversation-events.sql
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f infrastructure/norautomatch-site-chat-thread-r0.sql
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f infrastructure/norautomatch-conversation-ownership-r0.sql
+      - name: Compile ownership verification surface
+        run: |
+          rm -rf .tmp-conversation-ownership
+          npx tsc -p tsconfig.conversation-ownership.json
+      - name: Challenge self-claim ownership boundary
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-conversation-ownership/scripts/conversation-ownership.integration.js
+      - name: Challenge existing response queue with ownership join
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-conversation-ownership/scripts/conversation-response-queue.integration.js
+      - name: Clean generated verification output
+        run: rm -rf .tmp-conversation-ownership
+      - name: Typecheck application
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
