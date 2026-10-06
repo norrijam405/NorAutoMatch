@@ -3,10 +3,10 @@ name: NorAutoMatch R2 Communication Ledger CI
 on:
   push:
     branches:
-      - "remediation/2026-10-06-r2-brc-frc05-communication-insert-truth"
+      - "remediation/2026-10-06-r2-brc-frc06-provider-receipt-truth"
   pull_request:
     branches:
-      - "remediation/2026-10-06-r2-brc-frc04-communication-truncate"
+      - "remediation/2026-10-06-r2-brc-frc05-communication-insert-truth"
 
 permissions:
   contents: read
