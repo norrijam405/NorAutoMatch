@@ -166,15 +166,15 @@ export async function publishSiteChatReply(input: {
       throw new Error("SITE_CHAT_REPLY_CURRENT_OWNER_REQUIRED");
     }
 
-    const access = await client.query<{ expires_at: Date | string }>(
-      `select expires_at
+    const access = await client.query<{ active: boolean }>(
+      `select expires_at > clock_timestamp() as active
          from crm_site_chat_access
         where workspace_id=$1 and conversation_id=$2
         for update`,
       [input.workspaceId, row.conversation_id],
     );
     const accessRow = access.rows[0];
-    if (!accessRow || new Date(accessRow.expires_at).getTime() <= Date.now()) {
+    if (!accessRow?.active) {
       throw new Error("SITE_CHAT_REPLY_THREAD_NOT_ACTIVE");
     }
 
@@ -187,10 +187,6 @@ export async function publishSiteChatReply(input: {
     );
     const reply = inserted.rows[0];
     if (!reply) throw new Error("SITE_CHAT_REPLY_INSERT_FAILED");
-
-    if (new Date(accessRow.expires_at).getTime() <= Date.now()) {
-      throw new Error("SITE_CHAT_REPLY_THREAD_NOT_ACTIVE");
-    }
 
     await client.query("commit");
 
