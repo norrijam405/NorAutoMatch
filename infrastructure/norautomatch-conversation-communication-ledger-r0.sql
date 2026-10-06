@@ -67,3 +67,20 @@ create trigger crm_conversation_contact_events_immutable
 before update or delete on crm_conversation_contact_events
 for each row
 execute function norautomatch_reject_communication_evidence_mutation();
+
+
+create or replace function norautomatch_reject_communication_evidence_truncate()
+returns trigger
+language plpgsql
+as $$
+begin
+  raise exception 'NorAutoMatch communication evidence ledger cannot be truncated';
+end;
+$$;
+
+drop trigger if exists crm_conversation_contact_events_no_truncate
+  on crm_conversation_contact_events;
+create trigger crm_conversation_contact_events_no_truncate
+before truncate on crm_conversation_contact_events
+for each statement
+execute function norautomatch_reject_communication_evidence_truncate();
