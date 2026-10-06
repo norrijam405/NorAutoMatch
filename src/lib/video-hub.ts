@@ -16,7 +16,7 @@ export const videoHubEntrySchema = z.object({
   channels: z.array(z.object({
     channel: videoChannelSchema,
     url: z.string().url(),
-    publicationState: z.enum(["NOT_PUBLISHED", "PUBLISHED", "REMOVED"]),
+    publicationState: z.enum(["NOT_PUBLISHED", "UNVERIFIED", "PUBLISHED", "REMOVED"]),
     observedAt: z.string().datetime({ offset: true }),
   })).max(20),
   outboundPublishingAuthority: z.literal("NOT_GRANTED"),
