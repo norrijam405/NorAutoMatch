@@ -37,15 +37,6 @@ export async function reviewSecureDocument(formData: FormData) {
     "/manager/documents",
   );
 
-  if (opportunityId) {
-    const pool = getCrmPool();
-    const result = await pool.query(
-      "select 1 from crm_opportunities where workspace_id = $1 and opportunity_id = $2 limit 1",
-      ["norautomatch", opportunityId],
-    );
-    if (result.rowCount !== 1) throw new Error("That NorAutoMatch opportunity could not be verified.");
-  }
-
   const { data: existing, error: readError } = await supabase
     .from("customer_secure_documents")
     .select("id,user_id,storage_path,raw_deleted_at")
@@ -53,6 +44,22 @@ export async function reviewSecureDocument(formData: FormData) {
     .maybeSingle();
   if (readError || !existing) throw new Error("Secure document not found.");
   if (existing.raw_deleted_at) throw new Error("Deleted raw documents cannot be reviewed.");
+
+  if (opportunityId) {
+    const pool = getCrmPool();
+    const result = await pool.query(
+      `select 1
+         from crm_opportunity_customer_bindings b
+        where b.workspace_id = $1
+          and b.opportunity_id = $2
+          and b.customer_user_id = $3::uuid
+        limit 1`,
+      ["norautomatch", opportunityId, existing.user_id],
+    );
+    if (result.rowCount !== 1) {
+      throw new Error("That opportunity is not verified for this customer's secure document.");
+    }
+  }
 
   const { error: updateError } = await supabase
     .from("customer_secure_documents")
