@@ -93,7 +93,7 @@ as $$
 declare
   source_payload jsonb;
   source_processing_state text;
-  assignment_state text;
+  current_assignment_state text;
   current_assignee text;
 begin
   select normalized_payload, processing_state
@@ -109,15 +109,15 @@ begin
     raise exception 'COMMUNICATION_SOURCE_EVENT_NOT_ELIGIBLE';
   end if;
 
-  select assignment_state, assignee_subject_id
-    into assignment_state, current_assignee
-    from crm_conversation_assignments
+  select a.assignment_state, a.assignee_subject_id
+    into current_assignment_state, current_assignee
+    from crm_conversation_assignments a
    where workspace_id = new.workspace_id
      and provider = new.provider
      and conversation_id = new.conversation_id
    limit 1;
 
-  if assignment_state is distinct from 'ASSIGNED'
+  if current_assignment_state is distinct from 'ASSIGNED'
      or current_assignee is distinct from new.actor_subject_id then
     raise exception 'COMMUNICATION_CONVERSATION_OWNERSHIP_REQUIRED';
   end if;
