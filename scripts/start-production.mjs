@@ -22,6 +22,8 @@ const migrations = [
   "infrastructure/norautomatch-crm-v11-manager-session-revocation.sql",
   "infrastructure/norautomatch-crm-v12-inventory-provider-cache.sql",
   "infrastructure/norautomatch-crm-v13-customer-opportunity-bindings.sql",
+  "infrastructure/norautomatch-conversation-ownership-r0.sql",
+  "infrastructure/norautomatch-conversation-communication-ledger-r0.sql",
 ];
 
 function sha256(text) {

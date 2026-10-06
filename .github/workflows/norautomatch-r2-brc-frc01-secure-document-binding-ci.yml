@@ -1,12 +1,12 @@
-name: NorAutoMatch R2 BRC-FRC-01 Secure Document Binding CI
+name: NorAutoMatch R2 BRC-FRC-07 Production Ledger Bootstrap CI
 
 on:
   push:
     branches:
-      - "remediation/2026-10-06-r2-brc-frc02-startup-v13"
+      - "remediation/2026-10-06-r2-brc-frc07-production-ledger-bootstrap"
   pull_request:
     branches:
-      - "remediation/2026-10-06-r2-brc-frc01-document-binding"
+      - "remediation/2026-10-06-r2-brc-frc06-provider-receipt-truth"
 
 permissions:
   contents: read
@@ -63,6 +63,11 @@ jobs:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
         run: node scripts/verify-production-v13.mjs
 
+      - name: Verify production launcher installed communication ledger guards
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node scripts/verify-production-communication-ledger.mjs
+
       - name: Re-run production migration launcher for idempotency
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
@@ -82,6 +87,19 @@ jobs:
 
       - name: Clean verification output
         run: rm -rf .tmp-secure-document-binding
+
+      - name: Compile communication ledger verification surface
+        run: |
+          rm -rf .tmp-communication-ledger
+          npx tsc -p tsconfig.communication-ledger.json
+
+      - name: Challenge communication truth on production-bootstrapped schema
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js
+
+      - name: Clean communication verification output
+        run: rm -rf .tmp-communication-ledger
 
       - name: Typecheck application
         run: npm run typecheck
