@@ -123,6 +123,10 @@ export async function recordCommunicationAction(input: {
   evidenceRef?: string;
   deliveryOutcome?: DeliveryOutcome;
 }) {
+  if (input.action === "DELIVERY_EVIDENCE_RECORDED") {
+    throw new Error("COMMUNICATION_VERIFIED_PROVIDER_RECEIPT_REQUIRED");
+  }
+
   const client = await input.pool.connect();
   try {
     await client.query("begin");
@@ -248,14 +252,9 @@ export async function readCommunicationHistory(input: {
   );
 
   let executionState: "NOT_CLAIMED" | "HUMAN_RECORDED" = "NOT_CLAIMED";
-  let deliveryState: "NOT_CLAIMED" | "DELIVERY_EVIDENCE_RECORDED_DELIVERED" | "DELIVERY_EVIDENCE_RECORDED_FAILED" = "NOT_CLAIMED";
+  const deliveryState = "NOT_CLAIMED" as const;
   for (const row of result.rows) {
     if (row.event_type === "OUTBOUND_EXECUTION_RECORDED") executionState = "HUMAN_RECORDED";
-    if (row.event_type === "DELIVERY_EVIDENCE_RECORDED") {
-      deliveryState = row.delivery_outcome === "DELIVERED"
-        ? "DELIVERY_EVIDENCE_RECORDED_DELIVERED"
-        : "DELIVERY_EVIDENCE_RECORDED_FAILED";
-    }
   }
 
   return {
@@ -276,6 +275,9 @@ export async function readCommunicationHistory(input: {
       evidenceAuthority: row.evidence_authority,
       evidenceRef: row.evidence_ref,
       deliveryOutcome: row.delivery_outcome,
+      providerReceiptVerificationState: row.event_type === "DELIVERY_EVIDENCE_RECORDED"
+        ? "UNVERIFIED_REP_REPORTED_REFERENCE" as const
+        : null,
       createdAt: new Date(row.created_at).toISOString(),
       customerReachedState: "NOT_CLAIMED" as const,
       authorityEffect: "COMMUNICATION_EVIDENCE_ONLY" as const,
