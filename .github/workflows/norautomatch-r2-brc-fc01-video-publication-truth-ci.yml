@@ -128,14 +128,16 @@ jobs:
             '00000000-0000-4000-8000-000000000001'
           );
 
-          select case
-            when (select count(*) from public.video_hub_entries where id='00000000-0000-4000-8000-000000000101') = 1
-             and (select count(*) from public.video_hub_entries where id='00000000-0000-4000-8000-000000000102') = 0
-             and (select count(*) from public.video_hub_entries where id='00000000-0000-4000-8000-000000000103') = 1
-            then 1
-            else cast('VIDEO_PUBLICATION_TRUTH_ASSERTION_FAILED' as integer)
-          end as truth_assertion;
           SQL
+
+          unverified_count=$(psql -h 127.0.0.1 -U norauto -d norauto_ci -tAc "select count(*) from public.video_hub_entries where id='00000000-0000-4000-8000-000000000101'")
+          false_published_count=$(psql -h 127.0.0.1 -U norauto -d norauto_ci -tAc "select count(*) from public.video_hub_entries where id='00000000-0000-4000-8000-000000000102'")
+          evidenced_count=$(psql -h 127.0.0.1 -U norauto -d norauto_ci -tAc "select count(*) from public.video_hub_entries where id='00000000-0000-4000-8000-000000000103'")
+
+          test "$unverified_count" = "1"
+          test "$false_published_count" = "0"
+          test "$evidenced_count" = "1"
+          echo "PASS: database preserves UNVERIFIED truth and requires evidence for PUBLISHED"
 
       - name: Clean generated verification output
         run: rm -rf .tmp-video-hub-library
