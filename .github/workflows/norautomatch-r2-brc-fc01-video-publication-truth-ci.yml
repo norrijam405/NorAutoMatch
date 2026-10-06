@@ -57,21 +57,7 @@ jobs:
       - name: Prepare bounded PostgreSQL schema prerequisites
         env:
           PGPASSWORD: norauto-ci-password
-        run: |
-          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 <<'SQL'
-          create role anon nologin;
-          create role authenticated nologin;
-          create schema auth;
-          create table auth.users (
-            id uuid primary key
-          );
-          create table public.app_memberships (
-            user_id uuid not null,
-            app_id text not null,
-            active boolean not null default true,
-            role text not null
-          );
-          SQL
+        run: psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/video-hub-ci-prereqs.sql
 
       - name: Apply Video Hub schema truth constraints
         env:
