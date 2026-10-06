@@ -169,7 +169,7 @@ export async function publishSiteChatReply(input: {
     const access = await client.query(
       `select 1
          from crm_site_chat_access
-        where workspace_id=$1 and conversation_id=$2 and expires_at > current_timestamp
+        where workspace_id=$1 and conversation_id=$2 and expires_at > clock_timestamp()
         limit 1`,
       [input.workspaceId, row.conversation_id],
     );

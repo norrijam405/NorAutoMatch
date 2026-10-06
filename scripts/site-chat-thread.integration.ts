@@ -122,6 +122,65 @@ async function main() {
     assert.equal(replies.length, 2);
     assert.equal(replies[1]?.body, "The current owner can publish.");
 
+    await pool.query(
+      `update crm_site_chat_access
+          set expires_at = clock_timestamp() + interval '1 second'
+        where workspace_id=$1 and conversation_id=$2`,
+      [workspaceId, conversationId],
+    );
+
+    const expiryLock = await pool.connect();
+    try {
+      await expiryLock.query("begin");
+      await expiryLock.query(
+        `select 1
+           from crm_conversation_assignments
+          where workspace_id=$1 and provider=$2 and conversation_id=$3
+          for update`,
+        [workspaceId, provider, conversationId],
+      );
+
+      const expiredWhileWaiting = publishSiteChatReply({
+        pool,
+        workspaceId,
+        provider,
+        eventId,
+        body: "This reply must fail after access expires during the lock wait.",
+        publishedBy: repB,
+      });
+
+      await delay(1500);
+
+      const expiryProof = await pool.query<{ expired: boolean }>(
+        `select expires_at <= clock_timestamp() as expired
+           from crm_site_chat_access
+          where workspace_id=$1 and conversation_id=$2`,
+        [workspaceId, conversationId],
+      );
+      assert.equal(expiryProof.rows[0]?.expired, true, "site-thread access must be expired before releasing ownership lock");
+
+      await expiryLock.query("commit");
+
+      await assert.rejects(
+        expiredWhileWaiting,
+        /SITE_CHAT_REPLY_THREAD_NOT_ACTIVE/,
+        "publication must re-evaluate expiry at mutation time after waiting for ownership lock",
+      );
+    } catch (error) {
+      try { await expiryLock.query("rollback"); } catch {}
+      throw error;
+    } finally {
+      expiryLock.release();
+    }
+
+    const replyCountAfterExpiry = await pool.query<{ count: string }>(
+      `select count(*)::text as count
+         from crm_site_chat_replies
+        where workspace_id=$1 and conversation_id=$2 and delivery_state='PUBLISHED'`,
+      [workspaceId, conversationId],
+    );
+    assert.equal(replyCountAfterExpiry.rows[0]?.count, "2", "expired access must not insert a reply after lock wait");
+
     await assert.rejects(
       publishSiteChatReply({
         pool,
@@ -134,7 +193,7 @@ async function main() {
       /SITE_CHAT_REPLY_PROVIDER_NOT_ELIGIBLE/,
     );
 
-    console.log("PASS same-site Ask Torque reply transport + atomic current-owner race gate");
+    console.log("PASS same-site Ask Torque reply transport + ownership race gate + mutation-time expiry gate");
   } finally {
     await pool.end();
   }
