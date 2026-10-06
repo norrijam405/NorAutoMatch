@@ -17,7 +17,7 @@ export async function createVideoHubEntry(formData: FormData) {
   const channels = channelNames.flatMap((channel) => {
     const raw = String(formData.get(channel.toLowerCase()) ?? "").trim();
     return raw
-      ? [{ channel, url: raw, publicationState: "UNVERIFIED" as const }]
+      ? [{ channel, url: raw, publicationState: "UNVERIFIED" as const, publicationEvidenceRef: null }]
       : [];
   });
 
