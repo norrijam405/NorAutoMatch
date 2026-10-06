@@ -3,10 +3,10 @@ name: NorAutoMatch R2 Communication Ledger CI
 on:
   push:
     branches:
-      - "feature/2026-10-05-rep-customer-communication-ledger-r0"
+      - "remediation/2026-10-06-r2-brc-frc03-communication-immutable"
   pull_request:
     branches:
-      - "feature/2026-10-05-conversation-ownership-r0"
+      - "remediation/2026-10-06-r2-brc-frc02-startup-v13"
 
 permissions:
   contents: read
