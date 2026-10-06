@@ -145,7 +145,7 @@ export async function recordCommunicationAction(input: {
     if (existing.rows[0]) {
       const row = existing.rows[0];
       const expectedEvidenceRef = input.action === "HANDOFF_OPENED" ? null : normalizeEvidenceRef(input.evidenceRef);
-      const expectedDeliveryOutcome = input.action === "DELIVERY_EVIDENCE_RECORDED" ? input.deliveryOutcome ?? null : null;
+      const expectedDeliveryOutcome = null;
       if (
         row.provider !== input.provider ||
         row.source_event_id !== input.eventId ||
@@ -164,9 +164,7 @@ export async function recordCommunicationAction(input: {
         channel: row.channel,
         eventType: row.event_type,
         executionState: row.event_type === "OUTBOUND_EXECUTION_RECORDED" ? "HUMAN_RECORDED" as const : "NOT_CLAIMED" as const,
-        deliveryState: row.event_type === "DELIVERY_EVIDENCE_RECORDED"
-          ? (row.delivery_outcome === "DELIVERED" ? "DELIVERY_EVIDENCE_RECORDED_DELIVERED" as const : "DELIVERY_EVIDENCE_RECORDED_FAILED" as const)
-          : "NOT_CLAIMED" as const,
+        deliveryState: "NOT_CLAIMED" as const,
         customerReachedState: "NOT_CLAIMED" as const,
         authorityEffect: "COMMUNICATION_EVIDENCE_ONLY" as const,
       };
@@ -174,12 +172,7 @@ export async function recordCommunicationAction(input: {
 
     const eligible = await loadEligibleConversation(client, input);
     const ref = input.action === "HANDOFF_OPENED" ? null : normalizeEvidenceRef(input.evidenceRef);
-    if (input.action === "DELIVERY_EVIDENCE_RECORDED") {
-      if (input.channel === "PHONE") throw new Error("PHONE_DELIVERY_RECEIPT_NOT_SUPPORTED");
-      if (input.deliveryOutcome !== "DELIVERED" && input.deliveryOutcome !== "FAILED") {
-        throw new Error("DELIVERY_OUTCOME_REQUIRED");
-      }
-    } else if (input.deliveryOutcome !== undefined) {
+    if (input.deliveryOutcome !== undefined) {
       throw new Error("DELIVERY_OUTCOME_NOT_ALLOWED");
     }
 
@@ -206,7 +199,7 @@ export async function recordCommunicationAction(input: {
         eligible.targetHint,
         authority(input.action),
         ref,
-        input.action === "DELIVERY_EVIDENCE_RECORDED" ? input.deliveryOutcome : null,
+        null,
       ],
     );
     const row = inserted.rows[0];
@@ -221,9 +214,7 @@ export async function recordCommunicationAction(input: {
       channel: row.channel,
       eventType: row.event_type,
       executionState: row.event_type === "OUTBOUND_EXECUTION_RECORDED" ? "HUMAN_RECORDED" as const : "NOT_CLAIMED" as const,
-      deliveryState: row.event_type === "DELIVERY_EVIDENCE_RECORDED"
-        ? (row.delivery_outcome === "DELIVERED" ? "DELIVERY_EVIDENCE_RECORDED_DELIVERED" as const : "DELIVERY_EVIDENCE_RECORDED_FAILED" as const)
-        : "NOT_CLAIMED" as const,
+      deliveryState: "NOT_CLAIMED" as const,
       customerReachedState: "NOT_CLAIMED" as const,
       authorityEffect: "COMMUNICATION_EVIDENCE_ONLY" as const,
     };
