@@ -185,6 +185,17 @@ export async function publishSiteChatReply(input: {
     const reply = inserted.rows[0];
     if (!reply) throw new Error("SITE_CHAT_REPLY_INSERT_FAILED");
 
+    const commitEligibility = await client.query(
+      `select 1
+         from crm_site_chat_access
+        where workspace_id=$1 and conversation_id=$2 and expires_at > clock_timestamp()
+        limit 1`,
+      [input.workspaceId, row.conversation_id],
+    );
+    if (commitEligibility.rowCount !== 1) {
+      throw new Error("SITE_CHAT_REPLY_THREAD_NOT_ACTIVE");
+    }
+
     await client.query("commit");
 
     return {
