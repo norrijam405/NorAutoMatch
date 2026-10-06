@@ -12,6 +12,15 @@ export const videoHubManagerFormSchema = z.object({
     channel: z.enum(["NORAUTO", "YOUTUBE", "TIKTOK", "INSTAGRAM", "FACEBOOK"]),
     url: z.string().url(),
     publicationState: z.enum(["NOT_PUBLISHED", "UNVERIFIED", "PUBLISHED", "REMOVED"]),
+    publicationEvidenceRef: z.string().trim().min(1).max(512).nullable().default(null),
+  }).superRefine((value, ctx) => {
+    if (value.publicationState === "PUBLISHED" && !value.publicationEvidenceRef) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["publicationEvidenceRef"],
+        message: "Published social links require publication evidence.",
+      });
+    }
   })).max(20),
 });
 
