@@ -12,6 +12,7 @@
   "include": [
     "scripts/site-chat-thread.integration.ts",
     "scripts/site-chat-thread.frc02-expiry-after-eligibility-check.reproducer.ts",
+    "scripts/site-chat-thread.frc03-access-lock-remediation.integration.ts",
     "scripts/ask-torque-intake.behavior.ts",
     "src/lib/site-chat-thread.ts",
     "src/lib/ask-torque-intake.ts",
