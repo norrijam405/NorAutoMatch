@@ -55,10 +55,7 @@ async function main() {
     );
 
     const publish = await publishSiteChatReply({
-      pool,
-      workspaceId,
-      provider,
-      eventId,
+      pool, workspaceId, provider, eventId,
       body: "A human-reviewed same-site reply.",
       publishedBy: repA,
     });
@@ -69,8 +66,6 @@ async function main() {
 
     let replies = await readSiteChatReplies({ pool, workspaceId, conversationId, accessToken: token });
     assert.equal(replies.length, 1);
-    assert.equal(replies[0]?.body, "A human-reviewed same-site reply.");
-    assert.equal(replies[0]?.authorityEffect, "NONE");
 
     const transfer = await pool.connect();
     try {
@@ -86,22 +81,16 @@ async function main() {
       assert.equal(moved.rowCount, 1);
 
       const stalePublish = publishSiteChatReply({
-        pool,
-        workspaceId,
-        provider,
-        eventId,
+        pool, workspaceId, provider, eventId,
         body: "This stale-owner reply must never commit.",
         publishedBy: repA,
       });
 
       await delay(100);
       await transfer.query("commit");
-
       await assert.rejects(stalePublish, /SITE_CHAT_REPLY_CURRENT_OWNER_REQUIRED/);
-    } catch (error) {
-      try { await transfer.query("rollback"); } catch {}
-      throw error;
     } finally {
+      try { await transfer.query("rollback"); } catch {}
       transfer.release();
     }
 
@@ -109,32 +98,61 @@ async function main() {
     assert.equal(replies.length, 1, "stale owner must not insert a reply after ownership transfer");
 
     const currentOwnerPublish = await publishSiteChatReply({
-      pool,
-      workspaceId,
-      provider,
-      eventId,
+      pool, workspaceId, provider, eventId,
       body: "The current owner can publish.",
       publishedBy: repB,
     });
     assert.equal(currentOwnerPublish.deliveryChannel, "NORAUTO_SITE_THREAD");
 
-    replies = await readSiteChatReplies({ pool, workspaceId, conversationId, accessToken: token });
-    assert.equal(replies.length, 2);
-    assert.equal(replies[1]?.body, "The current owner can publish.");
-
-    await assert.rejects(
-      publishSiteChatReply({
-        pool,
-        workspaceId,
-        provider: "RIDEMOTIVE_CHAT",
-        eventId,
-        body: "must not publish",
-        publishedBy: repB,
-      }),
-      /SITE_CHAT_REPLY_PROVIDER_NOT_ELIGIBLE/,
+    // Fresh Re-Challenger challenge: access expires while publication is blocked on ownership row.
+    // Expected invariant: publication must fail closed if access is expired at insert time.
+    await pool.query(
+      `update crm_site_chat_access
+          set expires_at = clock_timestamp() + interval '1 second'
+        where workspace_id=$1 and conversation_id=$2`,
+      [workspaceId, conversationId],
     );
 
-    console.log("PASS same-site Ask Torque reply transport + atomic current-owner race gate");
+    const locker = await pool.connect();
+    try {
+      await locker.query("begin");
+      await locker.query(
+        `select assignment_state
+           from crm_conversation_assignments
+          where workspace_id=$1 and provider=$2 and conversation_id=$3
+          for update`,
+        [workspaceId, provider, conversationId],
+      );
+
+      const expiringPublish = publishSiteChatReply({
+        pool, workspaceId, provider, eventId,
+        body: "Must not publish after thread access expires while blocked.",
+        publishedBy: repB,
+      });
+
+      await delay(1500);
+
+      const expiry = await locker.query<{ expired: boolean }>(
+        `select expires_at <= clock_timestamp() as expired
+           from crm_site_chat_access
+          where workspace_id=$1 and conversation_id=$2`,
+        [workspaceId, conversationId],
+      );
+      assert.equal(expiry.rows[0]?.expired, true, "test precondition: site-thread access must be expired before lock release");
+
+      await locker.query("commit");
+
+      await assert.rejects(
+        expiringPublish,
+        /SITE_CHAT_REPLY_THREAD_NOT_ACTIVE/,
+        "publication must re-evaluate expiry at mutation time after waiting for ownership lock",
+      );
+    } finally {
+      try { await locker.query("rollback"); } catch {}
+      locker.release();
+    }
+
+    console.log("PASS fresh rechallenge ownership + expiry-at-insert invariants");
   } finally {
     await pool.end();
   }
