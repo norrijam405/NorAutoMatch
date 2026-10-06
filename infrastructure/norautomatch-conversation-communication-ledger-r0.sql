@@ -50,3 +50,20 @@ create index if not exists crm_conversation_contact_events_thread_idx
 
 comment on table crm_conversation_contact_events is
   'Append-only rep/customer communication evidence. Opening an external app is not a send. Rep-recorded execution is not delivery. Delivery evidence requires a separate provider-receipt reference and never implies the customer was reached.';
+
+
+create or replace function norautomatch_reject_communication_evidence_mutation()
+returns trigger
+language plpgsql
+as $$
+begin
+  raise exception 'NorAutoMatch communication evidence rows are append-only';
+end;
+$$;
+
+drop trigger if exists crm_conversation_contact_events_immutable
+  on crm_conversation_contact_events;
+create trigger crm_conversation_contact_events_immutable
+before update or delete on crm_conversation_contact_events
+for each row
+execute function norautomatch_reject_communication_evidence_mutation();
