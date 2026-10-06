@@ -11,7 +11,7 @@ export const videoHubManagerFormSchema = z.object({
   channels: z.array(z.object({
     channel: z.enum(["NORAUTO", "YOUTUBE", "TIKTOK", "INSTAGRAM", "FACEBOOK"]),
     url: z.string().url(),
-    publicationState: z.enum(["NOT_PUBLISHED", "PUBLISHED", "REMOVED"]),
+    publicationState: z.enum(["NOT_PUBLISHED", "UNVERIFIED", "PUBLISHED", "REMOVED"]),
   })).max(20),
 });
 
