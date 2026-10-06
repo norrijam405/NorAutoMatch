@@ -110,7 +110,36 @@ async function main() {
     assert.equal(history.status.deliveryState, "DELIVERY_EVIDENCE_RECORDED_DELIVERED");
     assert.equal(history.status.customerReachedState, "NOT_CLAIMED");
 
-    console.log("PASS rep/customer communication evidence ledger");
+    const deliveredId = delivered.communicationEventId;
+
+    await assert.rejects(
+      pool.query(
+        `update crm_conversation_contact_events
+            set evidence_ref = 'rewritten-provider-receipt'
+          where communication_event_id = $1::uuid`,
+        [deliveredId],
+      ),
+      /append-only/,
+      "direct SQL UPDATE must not rewrite committed communication evidence",
+    );
+
+    await assert.rejects(
+      pool.query(
+        `delete from crm_conversation_contact_events
+          where communication_event_id = $1::uuid`,
+        [deliveredId],
+      ),
+      /append-only/,
+      "direct SQL DELETE must not erase committed communication evidence",
+    );
+
+    history = await readCommunicationHistory({ pool, workspaceId, provider, conversationId });
+    assert.equal(history.events.length, 3);
+    const surviving = history.events.find((event) => event.communicationEventId === deliveredId);
+    assert.equal(surviving?.evidenceRef, "synthetic-provider-delivery-receipt-001");
+    assert.equal(surviving?.deliveryOutcome, "DELIVERED");
+
+    console.log("PASS rep/customer communication evidence ledger + database immutability");
   } finally {
     await pool.end();
   }
