@@ -49,7 +49,7 @@ create index if not exists crm_conversation_contact_events_thread_idx
   on crm_conversation_contact_events (workspace_id, provider, conversation_id, created_at, communication_event_id);
 
 comment on table crm_conversation_contact_events is
-  'Append-only rep/customer communication evidence. Opening an external app is not a send. Rep-recorded execution is not delivery. Delivery evidence requires a separate provider-receipt reference and never implies the customer was reached.';
+  'Append-only rep/customer communication evidence. Opening an external app is not a send. Rep-recorded execution is not delivery. Rep-reported provider receipt references are not verified delivery evidence. New delivery claims fail closed until a separately governed provider-verification path exists.';
 
 
 create or replace function norautomatch_reject_communication_evidence_mutation()
@@ -131,21 +131,7 @@ begin
   end if;
 
   if new.event_type = 'DELIVERY_EVIDENCE_RECORDED' then
-    if not exists (
-      select 1
-        from crm_conversation_contact_events prior
-       where prior.workspace_id = new.workspace_id
-         and prior.provider = new.provider
-         and prior.conversation_id = new.conversation_id
-         and prior.source_event_id = new.source_event_id
-         and prior.channel = new.channel
-         and prior.event_type = 'OUTBOUND_EXECUTION_RECORDED'
-         and prior.actor_subject_id = new.actor_subject_id
-         and prior.target_hash = new.target_hash
-         and prior.created_at <= new.created_at
-    ) then
-      raise exception 'COMMUNICATION_DELIVERY_REQUIRES_PRIOR_EXECUTION';
-    end if;
+    raise exception 'COMMUNICATION_VERIFIED_PROVIDER_RECEIPT_REQUIRED';
   end if;
 
   return new;
