@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "outDir": ".tmp-secure-document-binding"
+  },
+  "include": [
+    "scripts/secure-document-opportunity-binding.integration.ts",
+    "src/lib/customer-opportunity-binding.ts",
+    "src/lib/crm-document-readiness.ts",
+    "src/lib/customer-secure-document.ts",
+    "src/lib/crm-postgres-adapter.ts",
+    "src/lib/crm-persistence.ts",
+    "src/lib/crm-core.ts",
+    "src/lib/crm-outbox.ts",
+    "src/lib/crm-follow-up.ts",
+    "src/lib/manager-handoff.ts",
+    "src/lib/manager-review-receipt.ts",
+    "src/lib/desk-prep.ts",
+    "src/lib/lead-schema.ts",
+    "src/lib/lead-inventory-evidence.ts"
+  ]
+}
