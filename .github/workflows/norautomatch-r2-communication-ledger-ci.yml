@@ -3,10 +3,10 @@ name: NorAutoMatch R2 Communication Ledger CI
 on:
   push:
     branches:
-      - "remediation/2026-10-06-r2-brc-frc03-communication-immutable"
+      - "remediation/2026-10-06-r2-brc-frc04-communication-truncate"
   pull_request:
     branches:
-      - "remediation/2026-10-06-r2-brc-frc02-startup-v13"
+      - "remediation/2026-10-06-r2-brc-frc03-communication-immutable"
 
 permissions:
   contents: read

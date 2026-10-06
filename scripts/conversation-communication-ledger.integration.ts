@@ -133,6 +133,12 @@ async function main() {
       "direct SQL DELETE must not erase committed communication evidence",
     );
 
+    await assert.rejects(
+      pool.query("truncate table crm_conversation_contact_events"),
+      /cannot be truncated/,
+      "direct SQL TRUNCATE must not erase the communication evidence ledger",
+    );
+
     history = await readCommunicationHistory({ pool, workspaceId, provider, conversationId });
     assert.equal(history.events.length, 3);
     const surviving = history.events.find((event) => event.communicationEventId === deliveredId);
