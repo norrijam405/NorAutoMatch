@@ -30,9 +30,17 @@ jobs:
     steps:
       - name: Checkout challenge branch
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Verify candidate implementation remains exact
         run: |
-          git diff --exit-code 936b9bbd81ac83afc9383cf3b74b806c2ecdcbf3 --             src/lib/site-chat-thread.ts             src/app/api/manager/conversations/site-reply/route.ts             src/lib/conversation-ownership.ts             infrastructure/norautomatch-conversation-ownership-r0.sql             infrastructure/norautomatch-site-chat-thread-r0.sql
+          test "$(git merge-base HEAD 936b9bbd81ac83afc9383cf3b74b806c2ecdcbf3)" = "936b9bbd81ac83afc9383cf3b74b806c2ecdcbf3"
+          git diff --exit-code 936b9bbd81ac83afc9383cf3b74b806c2ecdcbf3 -- \
+            src/lib/site-chat-thread.ts \
+            src/app/api/manager/conversations/site-reply/route.ts \
+            src/lib/conversation-ownership.ts \
+            infrastructure/norautomatch-conversation-ownership-r0.sql \
+            infrastructure/norautomatch-site-chat-thread-r0.sql
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
