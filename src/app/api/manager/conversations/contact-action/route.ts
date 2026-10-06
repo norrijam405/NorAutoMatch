@@ -70,6 +70,7 @@ export async function POST(request: Request) {
     if (message.includes("PREFERRED_CONTACT_MISMATCH")) return noStore({ message: "Use the customer's stated preferred contact channel." }, 409);
     if (message.includes("TARGET_MISSING")) return noStore({ message: "The preferred contact route is missing." }, 409);
     if (message.includes("PHONE_DELIVERY_RECEIPT_NOT_SUPPORTED")) return noStore({ message: "Phone-call delivery is not modeled as a provider delivery receipt." }, 409);
+    if (message.includes("VERIFIED_PROVIDER_RECEIPT_REQUIRED")) return noStore({ message: "Verified provider delivery evidence is not configured. Rep-entered receipt references cannot claim delivery." }, 409);
     if (message.includes("EVIDENCE_REF_REQUIRED") || message.includes("DELIVERY_OUTCOME_REQUIRED") || message.includes("DELIVERY_OUTCOME_NOT_ALLOWED")) {
       return noStore({ message: "The requested evidence fields do not match this communication action." }, 400);
     }
