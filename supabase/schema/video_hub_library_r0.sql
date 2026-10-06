@@ -18,6 +18,29 @@ create table if not exists public.video_hub_entries (
   constraint video_hub_entry_channels_array check (jsonb_typeof(channels) = 'array')
 );
 
+create or replace function public.norautomatch_video_channels_truth_valid(p_channels jsonb)
+returns boolean
+language sql
+immutable
+set search_path = pg_catalog, public
+as $func$
+  select
+    jsonb_typeof(p_channels) = 'array'
+    and not exists (
+      select 1
+      from jsonb_array_elements(p_channels) as item
+      where item->>'publicationState' = 'PUBLISHED'
+        and nullif(btrim(item->>'publicationEvidenceRef'), '') is null
+    );
+$func$;
+
+alter table public.video_hub_entries
+  drop constraint if exists video_hub_entry_channels_truth;
+
+alter table public.video_hub_entries
+  add constraint video_hub_entry_channels_truth
+  check (public.norautomatch_video_channels_truth_valid(channels));
+
 create index if not exists video_hub_entries_visibility_created_idx
   on public.video_hub_entries (visibility, created_at desc);
 
@@ -130,4 +153,4 @@ for each row
 execute function public.norautomatch_touch_video_hub_entry_updated_at();
 
 comment on table public.video_hub_entries is
-  'Canonical NorAutoMatch video metadata and evidence-backed external publication links. No social publishing authority is implied.';
+  'Canonical NorAutoMatch video metadata. Manually entered social links remain UNVERIFIED; PUBLISHED requires evidence. No social publishing authority is implied.';
