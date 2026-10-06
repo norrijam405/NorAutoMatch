@@ -3,10 +3,10 @@ name: NorAutoMatch R2 BRC-FRC-01 Secure Document Binding CI
 on:
   push:
     branches:
-      - "remediation/2026-10-06-r2-brc-frc01-document-binding"
+      - "remediation/2026-10-06-r2-brc-frc02-startup-v13"
   pull_request:
     branches:
-      - "remediation/2026-10-06-r2-brc-fc01-video-truth"
+      - "remediation/2026-10-06-r2-brc-frc01-document-binding"
 
 permissions:
   contents: read
@@ -46,20 +46,29 @@ jobs:
       - name: Production dependency security gate
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Apply CRM base schema
-        env:
-          PGPASSWORD: norauto-ci-password
-        run: psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f infrastructure/norautomatch-crm-v1.sql
-
-      - name: Apply secure-document binding test fixture
+      - name: Prepare secure-document production prerequisite
         env:
           PGPASSWORD: norauto-ci-password
         run: psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
 
-      - name: Apply customer opportunity binding guard
+      - name: Run real production migration launcher
         env:
-          PGPASSWORD: norauto-ci-password
-        run: psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f infrastructure/norautomatch-crm-v13-customer-opportunity-bindings.sql
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: startup-v13-ci
+        run: npm start
+
+      - name: Verify production launcher installed v13
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node scripts/verify-production-v13.mjs
+
+      - name: Re-run production migration launcher for idempotency
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: startup-v13-ci
+        run: npm start
 
       - name: Compile secure-document binding verification
         run: |
