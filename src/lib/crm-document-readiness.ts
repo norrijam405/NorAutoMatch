@@ -98,6 +98,10 @@ export async function readDeskDocumentReadiness(input: {
        JOIN crm_opportunities o
          ON o.opportunity_id = d.opportunity_id
         AND o.workspace_id = $1
+       JOIN crm_opportunity_customer_bindings b
+         ON b.workspace_id = o.workspace_id
+        AND b.opportunity_id = o.opportunity_id
+        AND b.customer_user_id = d.user_id
       WHERE d.opportunity_id = ANY($2::text[])
         AND d.raw_deleted_at IS NULL
         AND d.status <> 'UPLOAD_PENDING'

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Pool } from "pg";
 import { requireNorAutoMembership } from "@/lib/supabase/authz";
+import { requireVerifiedCustomerOpportunityBinding } from "@/lib/customer-opportunity-binding";
 
 const documentIdSchema = z.string().uuid();
 const opportunityIdSchema = z.string().regex(/^namo_[0-9a-f]{24}$/);
@@ -37,15 +38,6 @@ export async function reviewSecureDocument(formData: FormData) {
     "/manager/documents",
   );
 
-  if (opportunityId) {
-    const pool = getCrmPool();
-    const result = await pool.query(
-      "select 1 from crm_opportunities where workspace_id = $1 and opportunity_id = $2 limit 1",
-      ["norautomatch", opportunityId],
-    );
-    if (result.rowCount !== 1) throw new Error("That NorAutoMatch opportunity could not be verified.");
-  }
-
   const { data: existing, error: readError } = await supabase
     .from("customer_secure_documents")
     .select("id,user_id,storage_path,raw_deleted_at")
@@ -53,6 +45,16 @@ export async function reviewSecureDocument(formData: FormData) {
     .maybeSingle();
   if (readError || !existing) throw new Error("Secure document not found.");
   if (existing.raw_deleted_at) throw new Error("Deleted raw documents cannot be reviewed.");
+
+  if (opportunityId) {
+    const pool = getCrmPool();
+    await requireVerifiedCustomerOpportunityBinding({
+      pool,
+      workspaceId: "norautomatch",
+      opportunityId,
+      customerUserId: existing.user_id,
+    });
+  }
 
   const { error: updateError } = await supabase
     .from("customer_secure_documents")
