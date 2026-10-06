@@ -59,6 +59,17 @@ jobs:
           PGPASSWORD: norauto-ci-password
         run: |
           psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 <<'SQL'
+          do $
+          begin
+            if not exists (select 1 from pg_roles where rolname = 'anon') then
+              create role anon nologin;
+            end if;
+            if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+              create role authenticated nologin;
+            end if;
+          end
+          $;
+
           create schema if not exists auth;
           create table if not exists auth.users (
             id uuid primary key
