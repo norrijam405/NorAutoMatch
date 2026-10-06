@@ -26,7 +26,7 @@ export default async function ManagerVideosPage() {
         <p className="eyebrow">Restricted operator surface</p>
         <h1 className="mt-4 text-4xl font-black tracking-[-.04em] text-white sm:text-5xl">Video Hub</h1>
         <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-400">
-          Keep one canonical NorAutoMatch record for each customer-facing video, then record where it is published. This does not auto-post to any social network.
+          Keep one canonical NorAutoMatch record for each customer-facing video. Manually entered social links are stored as unverified references until publication evidence exists. This does not auto-post to any social network.
         </p>
 
         <form action={createVideoHubEntry} className="mt-8 grid gap-4 rounded-3xl border border-white/10 bg-slate-900/55 p-5 sm:p-7">
@@ -53,7 +53,7 @@ export default async function ManagerVideosPage() {
             <Field label="Facebook URL"><input name="facebook" type="url" className="field" /></Field>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs leading-5 text-slate-500">Outbound publishing authority: NOT GRANTED. Add a social URL only after that platform actually has the video.</p>
+            <p className="text-xs leading-5 text-slate-500">Outbound publishing authority: NOT GRANTED. Manual social URLs are stored as UNVERIFIED and do not count as publication evidence.</p>
             <button className="rounded-full bg-amber-300 px-5 py-3 text-sm font-black text-black">Save video record</button>
           </div>
         </form>
@@ -85,7 +85,7 @@ export default async function ManagerVideosPage() {
               <div className="mt-4 flex flex-wrap gap-2">
                 {(video.topics ?? []).map((topic) => <span key={topic} className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[.12em] text-slate-500">{topic}</span>)}
               </div>
-              <p className="mt-4 text-[11px] leading-5 text-slate-600">Social links are evidence records only. NorAutoMatch did not publish them.</p>
+              <p className="mt-4 text-[11px] leading-5 text-slate-600">Manual social links are unverified references unless an evidence-backed publication state is present. NorAutoMatch did not publish them.</p>
             </article>
           ))}
           {!videos?.length ? <p className="rounded-2xl border border-white/10 bg-white/[.03] p-5 text-sm text-slate-500">No video records yet.</p> : null}
