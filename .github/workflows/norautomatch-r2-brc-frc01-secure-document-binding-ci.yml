@@ -1,12 +1,12 @@
-name: NorAutoMatch R2 BRC-FRC-07 Production Ledger Bootstrap CI
+name: NorAutoMatch R2 BRC-FRC-08 Site Chat Production Bootstrap CI
 
 on:
   push:
     branches:
-      - "remediation/2026-10-06-r2-brc-frc07-production-ledger-bootstrap"
+      - "remediation/r2-frc08-site-chat-bootstrap"
   pull_request:
     branches:
-      - "remediation/2026-10-06-r2-brc-frc06-provider-receipt-truth"
+      - "remediation/2026-10-06-r2-brc-frc07-production-ledger-bootstrap"
 
 permissions:
   contents: read
@@ -100,6 +100,19 @@ jobs:
 
       - name: Clean communication verification output
         run: rm -rf .tmp-communication-ledger
+
+      - name: Compile site-chat verification surface
+        run: |
+          rm -rf .tmp-site-chat-thread
+          npx tsc -p tsconfig.site-chat-thread.json
+
+      - name: Challenge same-site thread on production-bootstrapped schema
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-site-chat-thread/scripts/site-chat-thread.integration.js
+
+      - name: Clean site-chat verification output
+        run: rm -rf .tmp-site-chat-thread
 
       - name: Typecheck application
         run: npm run typecheck

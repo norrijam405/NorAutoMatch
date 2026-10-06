@@ -26,6 +26,8 @@ try {
   for (const relation of [
     "public.crm_conversation_assignments",
     "public.crm_conversation_contact_events",
+    "public.crm_site_chat_access",
+    "public.crm_site_chat_replies",
   ]) {
     const result = await client.query("select to_regclass($1) as relation", [relation]);
     if (!result.rows[0]?.relation) throw new Error(`PRODUCTION_RELATION_MISSING:${relation}`);
@@ -35,6 +37,7 @@ try {
     "crm_conversation_contact_events_insert_truth",
     "crm_conversation_contact_events_immutable",
     "crm_conversation_contact_events_no_truncate",
+    "crm_site_chat_reply_access_commit_guard",
   ]) {
     const trigger = await client.query(
       "select 1 from pg_trigger where tgname = $1 and not tgisinternal",
@@ -43,7 +46,13 @@ try {
     if (trigger.rowCount !== 1) throw new Error(`PRODUCTION_TRIGGER_MISSING:${triggerName}`);
   }
 
-  console.log("PASS production startup installed ownership + communication ledger truth guards");
+  const functionCheck = await client.query(
+    "select 1 from pg_proc where proname = $1",
+    ["norauto_enforce_site_chat_reply_access_at_commit"],
+  );
+  if (functionCheck.rowCount !== 1) throw new Error("PRODUCTION_SITE_CHAT_COMMIT_GUARD_FUNCTION_MISSING");
+
+  console.log("PASS production startup installed ownership + communication ledger + site-chat commit guards");
 } finally {
   await client.end();
 }
