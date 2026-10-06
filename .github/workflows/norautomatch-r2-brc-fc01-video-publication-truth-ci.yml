@@ -1,0 +1,149 @@
+name: NorAutoMatch R2 BRC-FC-01 Video Publication Truth CI
+
+on:
+  push:
+    branches:
+      - "remediation/2026-10-06-r2-brc-fc01-video-truth"
+  pull_request:
+    branches:
+      - "remediation/2026-10-05-r2-frc03-access-lock"
+
+permissions:
+  contents: read
+
+jobs:
+  video-publication-truth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Production dependency security gate
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Compile Video Hub truth surface
+        run: |
+          rm -rf .tmp-video-hub-library
+          npx tsc -p tsconfig.video-hub-library.json
+
+      - name: Challenge manager-entered social URL truth
+        run: node .tmp-video-hub-library/scripts/video-hub-library.behavior.js
+
+      - name: Prepare bounded PostgreSQL schema prerequisites
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/video-hub-ci-prereqs.sql
+
+      - name: Apply Video Hub schema truth constraints
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f supabase/schema/video_hub_library_r0.sql
+
+      - name: Challenge direct database publication truth
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 <<'SQL'
+          insert into auth.users (id)
+          values ('00000000-0000-4000-8000-000000000001');
+
+          insert into public.app_memberships (user_id, app_id, active, role)
+          values ('00000000-0000-4000-8000-000000000001', 'norautomatch', true, 'founder');
+
+          insert into public.video_hub_entries (
+            id,title,summary,canonical_url,visibility,vehicle_vins,topics,channels,created_by
+          ) values (
+            '00000000-0000-4000-8000-000000000101',
+            'Unverified social reference',
+            '',
+            'https://example.com/video/unverified',
+            'PUBLIC',
+            '{}',
+            '{}',
+            '[{"channel":"YOUTUBE","url":"https://youtube.com/watch?v=unverified","publicationState":"UNVERIFIED","publicationEvidenceRef":null}]'::jsonb,
+            '00000000-0000-4000-8000-000000000001'
+          );
+          SQL
+
+          if psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 <<'SQL'
+          insert into public.video_hub_entries (
+            id,title,summary,canonical_url,visibility,vehicle_vins,topics,channels,created_by
+          ) values (
+            '00000000-0000-4000-8000-000000000102',
+            'False published claim',
+            '',
+            'https://example.com/video/false-published',
+            'PUBLIC',
+            '{}',
+            '{}',
+            '[{"channel":"YOUTUBE","url":"https://youtube.com/watch?v=false","publicationState":"PUBLISHED","publicationEvidenceRef":null}]'::jsonb,
+            '00000000-0000-4000-8000-000000000001'
+          );
+          SQL
+          then
+            echo "ERROR: database accepted PUBLISHED social metadata without evidence"
+            exit 1
+          else
+            echo "PASS: database rejected PUBLISHED social metadata without evidence"
+          fi
+
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 <<'SQL'
+          insert into public.video_hub_entries (
+            id,title,summary,canonical_url,visibility,vehicle_vins,topics,channels,created_by
+          ) values (
+            '00000000-0000-4000-8000-000000000103',
+            'Evidence-backed publication',
+            '',
+            'https://example.com/video/evidenced',
+            'PUBLIC',
+            '{}',
+            '{}',
+            '[{"channel":"YOUTUBE","url":"https://youtube.com/watch?v=evidenced","publicationState":"PUBLISHED","publicationEvidenceRef":"provider-receipt:synthetic-proof-001"}]'::jsonb,
+            '00000000-0000-4000-8000-000000000001'
+          );
+
+          SQL
+
+          unverified_count=$(psql -h 127.0.0.1 -U norauto -d norauto_ci -tAc "select count(*) from public.video_hub_entries where id='00000000-0000-4000-8000-000000000101'")
+          false_published_count=$(psql -h 127.0.0.1 -U norauto -d norauto_ci -tAc "select count(*) from public.video_hub_entries where id='00000000-0000-4000-8000-000000000102'")
+          evidenced_count=$(psql -h 127.0.0.1 -U norauto -d norauto_ci -tAc "select count(*) from public.video_hub_entries where id='00000000-0000-4000-8000-000000000103'")
+
+          test "$unverified_count" = "1"
+          test "$false_published_count" = "0"
+          test "$evidenced_count" = "1"
+          echo "PASS: database preserves UNVERIFIED truth and requires evidence for PUBLISHED"
+
+      - name: Clean generated verification output
+        run: rm -rf .tmp-video-hub-library
+
+      - name: Typecheck application
+        run: npm run typecheck
+
+      - name: Production build
+        run: npm run build
