@@ -57,8 +57,6 @@ function channelLabel(channel: Channel) {
 export function ConversationContactControls({ sessionToken, viewerSubjectId, item }: Props) {
   const [draft, setDraft] = useState("");
   const [executionEvidence, setExecutionEvidence] = useState("");
-  const [deliveryEvidence, setDeliveryEvidence] = useState("");
-  const [deliveryOutcome, setDeliveryOutcome] = useState<"DELIVERED" | "FAILED">("DELIVERED");
   const [history, setHistory] = useState<History | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("No external send or delivery is claimed until a human records evidence.");
@@ -163,25 +161,6 @@ export function ConversationContactControls({ sessionToken, viewerSubjectId, ite
     }
   }
 
-  async function recordDelivery() {
-    if (!eligible || !channel || channel === "PHONE" || busy) return;
-    const evidenceRef = deliveryEvidence.trim();
-    if (!evidenceRef) {
-      setMessage("Add the provider/dealership delivery receipt reference first.");
-      return;
-    }
-    setBusy(true);
-    try {
-      await record("DELIVERY_EVIDENCE_RECORDED", { evidenceRef, deliveryOutcome });
-      setDeliveryEvidence("");
-      setMessage(`Delivery evidence recorded as ${deliveryOutcome.toLowerCase()}. Customer-reached state remains unclaimed.`);
-      await loadHistory();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Delivery evidence could not be recorded.");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <div className="mt-5 border-t border-white/10 pt-5">
@@ -192,7 +171,7 @@ export function ConversationContactControls({ sessionToken, viewerSubjectId, ite
           </div>
           <p className="mt-2 text-xs leading-5 text-slate-500">
             Preferred channel: <span className="font-bold text-slate-300">{channel ?? "not stated"}</span>.
-            Opening a phone/email/text app is only a handoff. A separate human evidence action records execution; a separate receipt records delivery evidence.
+            Opening a phone/email/text app is only a handoff. A separate human evidence action can record execution. Delivery remains unclaimed until a trusted provider-verification path exists.
           </p>
         </div>
         <button type="button" onClick={() => void loadHistory()} disabled={busy} className="btn-secondary px-3 py-2">
@@ -244,25 +223,10 @@ export function ConversationContactControls({ sessionToken, viewerSubjectId, ite
 
         {channel === "EMAIL" || channel === "TEXT" ? (
           <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-            <div className="text-[10px] font-black uppercase tracking-[.13em] text-slate-400">Record provider delivery evidence</div>
-            <div className="mt-3 flex gap-2">
-              <select value={deliveryOutcome} onChange={(event) => setDeliveryOutcome(event.target.value as "DELIVERED" | "FAILED")} disabled={!eligible} className="field">
-                <option value="DELIVERED">Delivered receipt</option>
-                <option value="FAILED">Failed receipt</option>
-              </select>
-            </div>
-            <input
-              value={deliveryEvidence}
-              onChange={(event) => setDeliveryEvidence(event.target.value)}
-              disabled={!eligible}
-              maxLength={512}
-              className="field mt-3 disabled:opacity-50"
-              placeholder="Provider/dealership receipt reference"
-            />
-            <button type="button" onClick={() => void recordDelivery()} disabled={!eligible || busy} className="btn-secondary mt-3 disabled:opacity-50">
-              <ShieldCheck size={14} /> Record delivery evidence
-            </button>
-            <p className="mt-2 text-[11px] leading-5 text-slate-600">The receipt is preserved as reported evidence; NorAutoMatch does not infer a reply, appointment, reservation, financing result, SOLD, or LOST.</p>
+            <div className="text-[10px] font-black uppercase tracking-[.13em] text-slate-400">Provider delivery verification</div>
+            <p className="mt-3 text-[11px] leading-5 text-slate-500">
+              Verified provider delivery evidence is not configured. Rep-entered receipt references cannot claim delivered or failed status.
+            </p>
           </div>
         ) : null}
       </div>
