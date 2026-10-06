@@ -42,3 +42,37 @@ comment on table crm_site_chat_access is
   'Hashed opaque browser capability for reading a NorAutoMatch same-site Ask Torque thread. Raw token is never stored.';
 comment on table crm_site_chat_replies is
   'Human-published same-site replies only. This table does not represent SMS, email, Motive, lender, reservation, or appointment delivery.';
+
+
+create or replace function norauto_enforce_site_chat_reply_access_at_commit()
+returns trigger
+language plpgsql
+as $$
+declare
+  active_expires_at timestamptz;
+begin
+  select expires_at
+    into active_expires_at
+    from crm_site_chat_access
+   where workspace_id = new.workspace_id
+     and conversation_id = new.conversation_id
+   for update;
+
+  if active_expires_at is null or active_expires_at <= clock_timestamp() then
+    raise exception 'SITE_CHAT_REPLY_THREAD_NOT_ACTIVE';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists crm_site_chat_reply_access_commit_guard on crm_site_chat_replies;
+
+create constraint trigger crm_site_chat_reply_access_commit_guard
+after insert on crm_site_chat_replies
+deferrable initially deferred
+for each row
+execute function norauto_enforce_site_chat_reply_access_at_commit();
+
+comment on function norauto_enforce_site_chat_reply_access_at_commit() is
+  'Deferred commit-time guard: same-site reply commit requires an access row that remains present and unexpired at commit. The access row is locked through commit.';

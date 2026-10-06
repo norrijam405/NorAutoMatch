@@ -166,14 +166,17 @@ export async function publishSiteChatReply(input: {
       throw new Error("SITE_CHAT_REPLY_CURRENT_OWNER_REQUIRED");
     }
 
-    const access = await client.query(
-      `select 1
+    const access = await client.query<{ active: boolean }>(
+      `select expires_at > clock_timestamp() as active
          from crm_site_chat_access
-        where workspace_id=$1 and conversation_id=$2 and expires_at > clock_timestamp()
-        limit 1`,
+        where workspace_id=$1 and conversation_id=$2
+        for update`,
       [input.workspaceId, row.conversation_id],
     );
-    if (access.rowCount !== 1) throw new Error("SITE_CHAT_REPLY_THREAD_NOT_ACTIVE");
+    const accessRow = access.rows[0];
+    if (!accessRow?.active) {
+      throw new Error("SITE_CHAT_REPLY_THREAD_NOT_ACTIVE");
+    }
 
     const inserted = await client.query<{ reply_id: string; published_at: Date | string }>(
       `insert into crm_site_chat_replies (
@@ -184,17 +187,6 @@ export async function publishSiteChatReply(input: {
     );
     const reply = inserted.rows[0];
     if (!reply) throw new Error("SITE_CHAT_REPLY_INSERT_FAILED");
-
-    const commitEligibility = await client.query(
-      `select 1
-         from crm_site_chat_access
-        where workspace_id=$1 and conversation_id=$2 and expires_at > clock_timestamp()
-        limit 1`,
-      [input.workspaceId, row.conversation_id],
-    );
-    if (commitEligibility.rowCount !== 1) {
-      throw new Error("SITE_CHAT_REPLY_THREAD_NOT_ACTIVE");
-    }
 
     await client.query("commit");
 
