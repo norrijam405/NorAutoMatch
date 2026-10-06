@@ -1,0 +1,81 @@
+name: NorAutoMatch R2 BRC-FRC-01 Secure Document Binding CI
+
+on:
+  push:
+    branches:
+      - "remediation/2026-10-06-r2-brc-frc01-document-binding"
+  pull_request:
+    branches:
+      - "remediation/2026-10-06-r2-brc-fc01-video-truth"
+
+permissions:
+  contents: read
+
+jobs:
+  secure-document-binding:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Production dependency security gate
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Apply CRM base schema
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f infrastructure/norautomatch-crm-v1.sql
+
+      - name: Apply secure-document binding test fixture
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+
+      - name: Apply customer opportunity binding guard
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f infrastructure/norautomatch-crm-v13-customer-opportunity-bindings.sql
+
+      - name: Compile secure-document binding verification
+        run: |
+          rm -rf .tmp-secure-document-binding
+          npx tsc -p tsconfig.secure-document-binding.json
+
+      - name: Challenge cross-customer secure-document linkage
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-secure-document-binding/scripts/secure-document-opportunity-binding.integration.js
+
+      - name: Clean verification output
+        run: rm -rf .tmp-secure-document-binding
+
+      - name: Typecheck application
+        run: npm run typecheck
+
+      - name: Production build
+        run: npm run build
