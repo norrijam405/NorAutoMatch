@@ -81,6 +81,40 @@ async function main() {
     });
     assert.equal(replay.status, "DEDUPLICATED");
 
+    await assert.rejects(
+      pool.query(
+        `insert into crm_conversation_contact_events (
+          client_action_id, workspace_id, provider, conversation_id, source_event_id,
+          channel, event_type, actor_subject_id, target_hash, target_hint,
+          evidence_authority, evidence_ref, delivery_outcome
+        ) values (
+          '00000000-0000-4000-8000-000000000101'::uuid,$1,$2,$3,'forged-source-event',
+          'EMAIL','DELIVERY_EVIDENCE_RECORDED',$4,$5,'***@example.com',
+          'PROVIDER_RECEIPT_REPORTED_BY_REP','fabricated-receipt','DELIVERED'
+        )`,
+        [workspaceId, provider, conversationId, actorSubjectId, "f".repeat(64)],
+      ),
+      /COMMUNICATION_SOURCE_EVENT_NOT_ELIGIBLE/,
+      "direct SQL must not mint delivery evidence for an arbitrary source event",
+    );
+
+    await assert.rejects(
+      pool.query(
+        `insert into crm_conversation_contact_events (
+          client_action_id, workspace_id, provider, conversation_id, source_event_id,
+          channel, event_type, actor_subject_id, target_hash, target_hint,
+          evidence_authority, evidence_ref, delivery_outcome
+        ) values (
+          '00000000-0000-4000-8000-000000000102'::uuid,$1,$2,$3,$4,
+          'EMAIL','DELIVERY_EVIDENCE_RECORDED',$5,$6,'***@example.com',
+          'PROVIDER_RECEIPT_REPORTED_BY_REP','fabricated-receipt','DELIVERED'
+        )`,
+        [workspaceId, provider, conversationId, eventId, actorSubjectId, "e".repeat(64)],
+      ),
+      /COMMUNICATION_DELIVERY_REQUIRES_PRIOR_EXECUTION/,
+      "direct SQL delivery evidence must require prior execution evidence for the same target",
+    );
+
     const executed = await recordCommunicationAction({
       pool, workspaceId, provider, eventId, actorSubjectId,
       channel: "EMAIL", action: "EXECUTION_RECORDED",
