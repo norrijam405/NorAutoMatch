@@ -40,6 +40,8 @@ try {
     "crm_conversation_contact_events_no_truncate",
     "crm_site_chat_reply_access_commit_guard",
     "crm_site_chat_reply_insert_truth_guard",
+    "crm_site_chat_replies_immutable",
+    "crm_site_chat_replies_no_truncate",
   ]) {
     const trigger = await client.query(
       "select 1 from pg_trigger where tgname = $1 and not tgisinternal",
@@ -51,6 +53,8 @@ try {
   for (const functionName of [
     "norauto_enforce_site_chat_reply_access_at_commit",
     "norauto_enforce_site_chat_reply_insert_truth",
+    "norauto_reject_site_chat_reply_mutation",
+    "norauto_reject_site_chat_reply_truncate",
   ]) {
     const functionCheck = await client.query(
       "select 1 from pg_proc where proname = $1",
