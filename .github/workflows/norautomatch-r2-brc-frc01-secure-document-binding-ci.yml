@@ -1,12 +1,12 @@
-name: NorAutoMatch R2 BRC-FRC-08 Site Chat Production Bootstrap CI
+name: NorAutoMatch R2 BRC-FRC-09 Site Chat Insert Truth CI
 
 on:
   push:
     branches:
-      - "remediation/r2-frc08-site-chat-bootstrap"
+      - "remediation/r2-frc09-site-chat-insert-truth"
   pull_request:
     branches:
-      - "remediation/2026-10-06-r2-brc-frc07-production-ledger-bootstrap"
+      - "remediation/r2-frc08-site-chat-bootstrap"
 
 permissions:
   contents: read

@@ -41,6 +41,56 @@ async function main() {
     const registered = await registerSiteChatAccess({ pool, workspaceId, conversationId, accessToken: token });
     assert.equal(registered.status, "COMMITTED");
 
+    await assert.rejects(
+      pool.query(
+        `insert into crm_site_chat_replies (
+          workspace_id, conversation_id, source_event_id, body, published_by
+        ) values ($1,$2,$3,$4,$5)`,
+        [workspaceId, conversationId, "arbitrary-missing-event", "forged missing-event reply", repA],
+      ),
+      /SITE_CHAT_REPLY_EVENT_NOT_ELIGIBLE/,
+      "direct SQL must not publish against an arbitrary source event",
+    );
+
+    const deadLetterEventId = "site-00000000-0000-4000-8000-000000000099";
+    await pool.query(
+      `insert into crm_conversation_events (
+        workspace_id,provider,event_id,conversation_id,event_type,observed_at,
+        normalized_payload,routing_decision,routing_reasons,processing_state
+      ) values ($1,$2,$3,$4,'CONVERSATION_ENDED_OR_HANDOFF_READY',current_timestamp,$5::jsonb,'CONTACTABLE','[]'::jsonb,'DEAD_LETTER')`,
+      [workspaceId, provider, deadLetterEventId, conversationId, JSON.stringify({ synthetic: true })],
+    );
+
+    await assert.rejects(
+      pool.query(
+        `insert into crm_site_chat_replies (
+          workspace_id, conversation_id, source_event_id, body, published_by
+        ) values ($1,$2,$3,$4,$5)`,
+        [workspaceId, conversationId, deadLetterEventId, "forged dead-letter reply", repA],
+      ),
+      /SITE_CHAT_REPLY_EVENT_NOT_ELIGIBLE/,
+      "direct SQL must not publish from a DEAD_LETTER source event",
+    );
+
+    await assert.rejects(
+      pool.query(
+        `insert into crm_site_chat_replies (
+          workspace_id, conversation_id, source_event_id, body, published_by
+        ) values ($1,$2,$3,$4,$5)`,
+        [workspaceId, conversationId, eventId, "forged non-owner reply", repB],
+      ),
+      /SITE_CHAT_REPLY_CURRENT_OWNER_REQUIRED/,
+      "direct SQL must not publish as a non-owner",
+    );
+
+    const forgedCount = await pool.query<{ count: string }>(
+      `select count(*)::text as count
+         from crm_site_chat_replies
+        where workspace_id=$1 and conversation_id=$2`,
+      [workspaceId, conversationId],
+    );
+    assert.equal(forgedCount.rows[0]?.count, "0", "forged direct-SQL replies must not persist");
+
     const replay = await registerSiteChatAccess({ pool, workspaceId, conversationId, accessToken: token });
     assert.equal(replay.status, "DEDUPLICATED");
 
