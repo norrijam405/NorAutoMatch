@@ -1,0 +1,152 @@
+name: NorAutoMatch R2 BRC-FRC-09 Fresh Re-Challenge
+
+on:
+  push:
+    branches:
+      - "evidence/r2-site-chat-insert-truth-2026-10-07"
+
+permissions:
+  contents: read
+
+jobs:
+  frc09-fresh-rechallenge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout exact frozen successor
+        uses: actions/checkout@v4
+        with:
+          ref: 477595088bbb931a1822dc7b9db0f1743b2a851e
+
+      - name: Assert exact candidate and tree
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "477595088bbb931a1822dc7b9db0f1743b2a851e"
+          test "$(git rev-parse HEAD^{tree})" = "cf7d02bca46905a84af155d3b5a5967dfee084df"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Real production bootstrap
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: 477595088bbb931a1822dc7b9db0f1743b2a851e
+        run: npm start
+
+      - name: Verify production bootstrap truth guards
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node scripts/verify-production-communication-ledger.mjs
+
+      - name: Compile site-chat verification surface
+        run: |
+          rm -rf .tmp-site-chat-thread
+          npx tsc -p tsconfig.site-chat-thread.json
+
+      - name: Re-test FRC-09 including REDACTED direct-SQL witness
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        shell: bash
+        run: |
+          node .tmp-site-chat-thread/scripts/site-chat-thread.integration.js
+          node .tmp-site-chat-thread/scripts/site-chat-thread.frc03-access-lock-remediation.integration.js
+          node --input-type=module <<'NODE'
+          import pg from "pg";
+          import assert from "node:assert/strict";
+          const { Client } = pg;
+          const c = new Client({ connectionString: process.env.NORAUTO_CRM_DATABASE_URL });
+          await c.connect();
+          const w = "norautomatch-frc09-fresh";
+          const p = "NORAUTO_SITE_CHAT";
+          const conv = "site-frc09-fresh-0000-4000-8000-000000000001";
+          const good = "site-frc09-fresh-0000-4000-8000-000000000002";
+          const red = "site-frc09-fresh-0000-4000-8000-000000000003";
+          const dead = "site-frc09-fresh-0000-4000-8000-000000000004";
+          const owner = "fresh-owner";
+          const other = "fresh-non-owner";
+          try {
+            await c.query("begin");
+            await c.query("delete from crm_site_chat_replies where workspace_id=$1", [w]);
+            await c.query("delete from crm_site_chat_access where workspace_id=$1", [w]);
+            await c.query("delete from crm_conversation_assignments where workspace_id=$1", [w]);
+            await c.query("delete from crm_conversation_events where workspace_id=$1 and provider=$2", [w,p]);
+            for (const [id,state] of [[good,"RECEIVED"],[red,"REDACTED"],[dead,"DEAD_LETTER"]]) {
+              await c.query(`
+                insert into crm_conversation_events (
+                  workspace_id,provider,event_id,conversation_id,event_type,observed_at,
+                  normalized_payload,routing_decision,routing_reasons,processing_state
+                ) values ($1,$2,$3,$4,'CONVERSATION_ENDED_OR_HANDOFF_READY',clock_timestamp(),
+                          '{}'::jsonb,'CONTACTABLE','[]'::jsonb,$5)`,
+                [w,p,id,conv,state]);
+            }
+            await c.query(`
+              insert into crm_conversation_assignments (
+                workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at
+              ) values ($1,$2,$3,$4,'ASSIGNED',clock_timestamp(),clock_timestamp())`,
+              [w,p,conv,owner]);
+            await c.query(`
+              insert into crm_site_chat_access (
+                workspace_id,conversation_id,access_token_hash,created_at,expires_at
+              ) values ($1,$2,repeat('b',64),clock_timestamp(),clock_timestamp()+interval '10 minutes')`,
+              [w,conv]);
+            const rejectInsert = async (source,publishedBy,pattern) => {
+              let rejected = false;
+              try {
+                await c.query(`
+                  insert into crm_site_chat_replies
+                    (workspace_id,conversation_id,source_event_id,body,published_by)
+                  values ($1,$2,$3,'fresh witness',$4)`,
+                  [w,conv,source,publishedBy]);
+              } catch (e) {
+                rejected = pattern.test(String(e?.message || e));
+              }
+              assert.equal(rejected, true, `expected rejection for ${source}/${publishedBy}`);
+            };
+            await rejectInsert("missing-event", owner, /SITE_CHAT_REPLY_EVENT_NOT_ELIGIBLE/);
+            await rejectInsert(red, owner, /SITE_CHAT_REPLY_EVENT_NOT_ELIGIBLE/);
+            await rejectInsert(dead, owner, /SITE_CHAT_REPLY_EVENT_NOT_ELIGIBLE/);
+            await rejectInsert(good, other, /SITE_CHAT_REPLY_CURRENT_OWNER_REQUIRED/);
+            await c.query(`
+              insert into crm_site_chat_replies
+                (workspace_id,conversation_id,source_event_id,body,published_by)
+              values ($1,$2,$3,'valid current-owner reply',$4)`,
+              [w,conv,good,owner]);
+            const n = await c.query("select count(*)::int as n from crm_site_chat_replies where workspace_id=$1 and conversation_id=$2", [w,conv]);
+            assert.equal(n.rows[0].n, 1);
+            await c.query("rollback");
+            console.log("PASS FRC-09 fresh direct-SQL insert-truth witnesses including REDACTED");
+          } finally {
+            await c.end();
+          }
+          NODE
+
+      - name: Production dependency security gate
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Full typecheck
+        run: npm run typecheck
+
+      - name: Production build
+        run: npm run build
