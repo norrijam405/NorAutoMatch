@@ -11,6 +11,7 @@ try {
   const requiredMigrations = [
     "infrastructure/norautomatch-conversation-ownership-r0.sql",
     "infrastructure/norautomatch-conversation-communication-ledger-r0.sql",
+    "infrastructure/norautomatch-site-chat-thread-r0.sql",
   ];
 
   for (const migrationName of requiredMigrations) {
@@ -38,6 +39,7 @@ try {
     "crm_conversation_contact_events_immutable",
     "crm_conversation_contact_events_no_truncate",
     "crm_site_chat_reply_access_commit_guard",
+    "crm_site_chat_reply_insert_truth_guard",
   ]) {
     const trigger = await client.query(
       "select 1 from pg_trigger where tgname = $1 and not tgisinternal",
@@ -46,13 +48,18 @@ try {
     if (trigger.rowCount !== 1) throw new Error(`PRODUCTION_TRIGGER_MISSING:${triggerName}`);
   }
 
-  const functionCheck = await client.query(
-    "select 1 from pg_proc where proname = $1",
-    ["norauto_enforce_site_chat_reply_access_at_commit"],
-  );
-  if (functionCheck.rowCount !== 1) throw new Error("PRODUCTION_SITE_CHAT_COMMIT_GUARD_FUNCTION_MISSING");
+  for (const functionName of [
+    "norauto_enforce_site_chat_reply_access_at_commit",
+    "norauto_enforce_site_chat_reply_insert_truth",
+  ]) {
+    const functionCheck = await client.query(
+      "select 1 from pg_proc where proname = $1",
+      [functionName],
+    );
+    if (functionCheck.rowCount !== 1) throw new Error(`PRODUCTION_FUNCTION_MISSING:${functionName}`);
+  }
 
-  console.log("PASS production startup installed ownership + communication ledger + site-chat commit guards");
+  console.log("PASS production startup installed ownership + communication ledger + site-chat truth guards");
 } finally {
   await client.end();
 }
