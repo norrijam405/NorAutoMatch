@@ -92,7 +92,6 @@ jobs:
           const owner = "fresh-owner";
           const other = "fresh-non-owner";
           try {
-            await c.query("begin");
             await c.query("delete from crm_site_chat_replies where workspace_id=$1", [w]);
             await c.query("delete from crm_site_chat_access where workspace_id=$1", [w]);
             await c.query("delete from crm_conversation_assignments where workspace_id=$1", [w]);
@@ -140,7 +139,10 @@ jobs:
               [w,conv,good,owner]);
             const n = await c.query("select count(*)::int as n from crm_site_chat_replies where workspace_id=$1 and conversation_id=$2", [w,conv]);
             assert.equal(n.rows[0].n, 1);
-            await c.query("rollback");
+            await c.query("delete from crm_site_chat_replies where workspace_id=$1", [w]);
+            await c.query("delete from crm_site_chat_access where workspace_id=$1", [w]);
+            await c.query("delete from crm_conversation_assignments where workspace_id=$1", [w]);
+            await c.query("delete from crm_conversation_events where workspace_id=$1 and provider=$2", [w,p]);
             console.log("PASS FRC-09 fresh direct-SQL insert-truth witnesses including REDACTED");
           } finally {
             await c.end();
