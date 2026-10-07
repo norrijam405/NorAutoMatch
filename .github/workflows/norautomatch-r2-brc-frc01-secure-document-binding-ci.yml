@@ -1,12 +1,12 @@
-name: NorAutoMatch R2 BRC-FRC-09 Site Chat Insert Truth CI
+name: NorAutoMatch R2 BRC-FRC-10 Site Chat Immutability CI
 
 on:
   push:
     branches:
-      - "remediation/r2-frc09-site-chat-insert-truth"
+      - "remediation/r2-frc10-site-chat-immutable"
   pull_request:
     branches:
-      - "remediation/r2-frc08-site-chat-bootstrap"
+      - "remediation/r2-frc09-site-chat-insert-truth"
 
 permissions:
   contents: read

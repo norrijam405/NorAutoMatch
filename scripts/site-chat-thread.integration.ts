@@ -172,6 +172,81 @@ async function main() {
     assert.equal(replies.length, 2);
     assert.equal(replies[1]?.body, "The current owner can publish.");
 
+    const currentOwnerReply = await pool.query<{ reply_id: string }>(
+      `select reply_id
+         from crm_site_chat_replies
+        where workspace_id=$1
+          and conversation_id=$2
+          and body=$3
+        limit 1`,
+      [workspaceId, conversationId, "The current owner can publish."],
+    );
+    const currentOwnerReplyId = currentOwnerReply.rows[0]?.reply_id;
+    assert.ok(currentOwnerReplyId);
+
+    await assert.rejects(
+      pool.query(
+        `update crm_site_chat_replies
+            set source_event_id='arbitrary-rewritten-source'
+          where workspace_id=$1 and conversation_id=$2 and reply_id=$3::uuid`,
+        [workspaceId, conversationId, currentOwnerReplyId],
+      ),
+      /SITE_CHAT_REPLY_PUBLISHED_EVIDENCE_IMMUTABLE/,
+      "published reply source_event_id must be immutable",
+    );
+
+    await assert.rejects(
+      pool.query(
+        `update crm_site_chat_replies
+            set published_by='forged-non-owner'
+          where workspace_id=$1 and conversation_id=$2 and reply_id=$3::uuid`,
+        [workspaceId, conversationId, currentOwnerReplyId],
+      ),
+      /SITE_CHAT_REPLY_PUBLISHED_EVIDENCE_IMMUTABLE/,
+      "published reply publisher identity must be immutable",
+    );
+
+    await assert.rejects(
+      pool.query(
+        `update crm_site_chat_replies
+            set body='forged rewritten content'
+          where workspace_id=$1 and conversation_id=$2 and reply_id=$3::uuid`,
+        [workspaceId, conversationId, currentOwnerReplyId],
+      ),
+      /SITE_CHAT_REPLY_PUBLISHED_EVIDENCE_IMMUTABLE/,
+      "published reply body must be immutable",
+    );
+
+    await assert.rejects(
+      pool.query(
+        `delete from crm_site_chat_replies
+          where workspace_id=$1 and conversation_id=$2 and reply_id=$3::uuid`,
+        [workspaceId, conversationId, currentOwnerReplyId],
+      ),
+      /SITE_CHAT_REPLY_PUBLISHED_EVIDENCE_IMMUTABLE/,
+      "published reply evidence must not be silently deleted",
+    );
+
+    await assert.rejects(
+      pool.query("truncate table crm_site_chat_replies"),
+      /SITE_CHAT_REPLY_LEDGER_CANNOT_BE_TRUNCATED/,
+      "published reply evidence ledger must not be truncatable",
+    );
+
+    const preservedReply = await pool.query<{
+      source_event_id: string;
+      published_by: string;
+      body: string;
+    }>(
+      `select source_event_id, published_by, body
+         from crm_site_chat_replies
+        where workspace_id=$1 and conversation_id=$2 and reply_id=$3::uuid`,
+      [workspaceId, conversationId, currentOwnerReplyId],
+    );
+    assert.equal(preservedReply.rows[0]?.source_event_id, eventId);
+    assert.equal(preservedReply.rows[0]?.published_by, repB);
+    assert.equal(preservedReply.rows[0]?.body, "The current owner can publish.");
+
     await pool.query(
       `update crm_site_chat_access
           set expires_at = clock_timestamp() + interval '1 second'

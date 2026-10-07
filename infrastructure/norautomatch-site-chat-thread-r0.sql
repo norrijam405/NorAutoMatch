@@ -124,3 +124,36 @@ create trigger crm_site_chat_reply_insert_truth_guard
 before insert on crm_site_chat_replies
 for each row
 execute function norauto_enforce_site_chat_reply_insert_truth();
+
+
+create or replace function norauto_reject_site_chat_reply_mutation()
+returns trigger
+language plpgsql
+as $$
+begin
+  raise exception 'SITE_CHAT_REPLY_PUBLISHED_EVIDENCE_IMMUTABLE';
+end;
+$$;
+
+drop trigger if exists crm_site_chat_replies_immutable
+  on crm_site_chat_replies;
+create trigger crm_site_chat_replies_immutable
+before update or delete on crm_site_chat_replies
+for each row
+execute function norauto_reject_site_chat_reply_mutation();
+
+create or replace function norauto_reject_site_chat_reply_truncate()
+returns trigger
+language plpgsql
+as $$
+begin
+  raise exception 'SITE_CHAT_REPLY_LEDGER_CANNOT_BE_TRUNCATED';
+end;
+$$;
+
+drop trigger if exists crm_site_chat_replies_no_truncate
+  on crm_site_chat_replies;
+create trigger crm_site_chat_replies_no_truncate
+before truncate on crm_site_chat_replies
+for each statement
+execute function norauto_reject_site_chat_reply_truncate();
