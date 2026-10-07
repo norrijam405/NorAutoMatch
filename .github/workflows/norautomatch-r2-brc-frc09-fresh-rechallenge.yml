@@ -149,6 +149,101 @@ jobs:
           }
           NODE
 
+      - name: Re-test FRC-02 production v13 bootstrap
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node scripts/verify-production-v13.mjs
+
+      - name: Compile FRC-01 secure-document binding surface
+        run: |
+          rm -rf .tmp-secure-document-binding
+          npx tsc -p tsconfig.secure-document-binding.json
+
+      - name: Re-test FRC-01 secure-document customer binding
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-secure-document-binding/scripts/secure-document-opportunity-binding.integration.js
+
+      - name: Compile FRC-06 through FRC-03 communication ledger surface
+        run: |
+          rm -rf .tmp-communication-ledger
+          npx tsc -p tsconfig.communication-ledger.json
+
+      - name: Re-test FRC-06 through FRC-03 communication ledger truth
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js
+
+      - name: Continue broad matrix - challenge published site-chat reply immutability
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import pg from "pg";
+          const { Client } = pg;
+          const c = new Client({ connectionString: process.env.NORAUTO_CRM_DATABASE_URL });
+          await c.connect();
+          const w = "norautomatch-brc-frc10";
+          const p = "NORAUTO_SITE_CHAT";
+          const conv = "site-brc-frc10-0000-4000-8000-000000000001";
+          const event = "site-brc-frc10-0000-4000-8000-000000000002";
+          const owner = "brc-frc10-owner";
+          try {
+            await c.query("delete from crm_site_chat_replies where workspace_id=$1", [w]);
+            await c.query("delete from crm_site_chat_access where workspace_id=$1", [w]);
+            await c.query("delete from crm_conversation_assignments where workspace_id=$1", [w]);
+            await c.query("delete from crm_conversation_events where workspace_id=$1 and provider=$2", [w,p]);
+
+            await c.query(`
+              insert into crm_conversation_events (
+                workspace_id,provider,event_id,conversation_id,event_type,observed_at,
+                normalized_payload,routing_decision,routing_reasons,processing_state
+              ) values ($1,$2,$3,$4,'CONVERSATION_ENDED_OR_HANDOFF_READY',clock_timestamp(),
+                        '{}'::jsonb,'CONTACTABLE','[]'::jsonb,'RECEIVED')`,
+              [w,p,event,conv]);
+
+            await c.query(`
+              insert into crm_conversation_assignments (
+                workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at
+              ) values ($1,$2,$3,$4,'ASSIGNED',clock_timestamp(),clock_timestamp())`,
+              [w,p,conv,owner]);
+
+            await c.query(`
+              insert into crm_site_chat_access (
+                workspace_id,conversation_id,access_token_hash,created_at,expires_at
+              ) values ($1,$2,repeat('c',64),clock_timestamp(),clock_timestamp()+interval '10 minutes')`,
+              [w,conv]);
+
+            const inserted = await c.query(`
+              insert into crm_site_chat_replies
+                (workspace_id,conversation_id,source_event_id,body,published_by)
+              values ($1,$2,$3,'legitimate published reply',$4)
+              returning reply_id`,
+              [w,conv,event,owner]);
+            const replyId = inserted.rows[0].reply_id;
+
+            const mutated = await c.query(`
+              update crm_site_chat_replies
+                 set source_event_id='arbitrary-rewritten-source',
+                     published_by='forged-non-owner',
+                     body='forged post-publication rewrite'
+               where workspace_id=$1 and conversation_id=$2 and reply_id=$3
+               returning source_event_id,published_by,body`,
+              [w,conv,replyId]);
+
+            if (mutated.rowCount === 1 &&
+                mutated.rows[0].source_event_id === "arbitrary-rewritten-source" &&
+                mutated.rows[0].published_by === "forged-non-owner") {
+              throw new Error("NORAUTOMATCH-R2-BRC-FRC-10:SITE_CHAT_REPLY_TRUTH_MUTABLE_BY_DIRECT_SQL_UPDATE");
+            }
+
+            console.log("PASS broad site-chat published-reply immutability challenge");
+          } finally {
+            await c.end();
+          }
+          NODE
+
       - name: Production dependency security gate
         run: npm audit --omit=dev --audit-level=high
 
