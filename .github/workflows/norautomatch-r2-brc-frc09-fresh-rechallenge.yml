@@ -48,6 +48,11 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Prepare secure-document production prerequisite
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+
       - name: Real production bootstrap
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
