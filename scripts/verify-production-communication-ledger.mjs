@@ -80,7 +80,7 @@ try {
   );
   if (proofColumn.rowCount !== 1) throw new Error("PRODUCTION_SITE_CHAT_ISSUANCE_PROOF_COLUMN_MISSING");
 
-  const primaryKey = await client.query<{ columns: string[] }>(
+  const primaryKey = await client.query(
     `select array_agg(a.attname order by u.ordinality)::text[] as columns
        from pg_constraint c
        join lateral unnest(c.conkey) with ordinality as u(attnum, ordinality) on true
