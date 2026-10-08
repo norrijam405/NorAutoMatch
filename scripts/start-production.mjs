@@ -28,6 +28,7 @@ const migrations = [
   "infrastructure/norautomatch-site-chat-access-integrity-r1.sql",
   "infrastructure/norautomatch-site-chat-access-authenticity-r2.sql",
   "infrastructure/norautomatch-site-chat-publication-authenticity-r3.sql",
+  "infrastructure/norautomatch-site-chat-publication-secret-anchor-r4.sql",
 ];
 
 function sha256(text) {
@@ -67,6 +68,30 @@ async function applyMigrations(connectionString) {
 
       await client.query("BEGIN");
       try {
+        if (migrationName === "infrastructure/norautomatch-site-chat-publication-secret-anchor-r4.sql") {
+          const currentSecret = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_SECRET?.trim() ?? "";
+          const previousSecret = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET?.trim() ?? "";
+
+          if (currentSecret.length < 32) {
+            throw new Error("SITE_CHAT_PUBLICATION_TRUST_ANCHOR_SECRET_NOT_CONFIGURED");
+          }
+          if (previousSecret && previousSecret.length < 32) {
+            throw new Error("SITE_CHAT_PUBLICATION_TRUST_ANCHOR_PREVIOUS_SECRET_INVALID");
+          }
+          if (previousSecret && previousSecret === currentSecret) {
+            throw new Error("SITE_CHAT_PUBLICATION_TRUST_ANCHOR_ROTATION_INVALID");
+          }
+
+          await client.query(
+            "select set_config('norautomatch.bootstrap_site_chat_publication_hmac_secret', $1, true)",
+            [currentSecret],
+          );
+          await client.query(
+            "select set_config('norautomatch.bootstrap_site_chat_publication_previous_hmac_secret', $1, true)",
+            [previousSecret],
+          );
+        }
+
         await client.query(sql);
         await client.query(
           `INSERT INTO norautomatch_schema_migrations
