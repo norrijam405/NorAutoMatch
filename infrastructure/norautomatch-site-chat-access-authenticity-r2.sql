@@ -49,3 +49,32 @@ comment on column crm_site_chat_access.access_token_hash is
 
 comment on column crm_site_chat_access.issuance_proof is
   'Server-HMAC proof authenticating application issuance metadata. Rows without a valid proof carry no read authority.';
+
+
+create or replace function norauto_enforce_site_chat_reply_access_at_commit()
+returns trigger
+language plpgsql
+as $$
+declare
+  active_expires_at timestamptz;
+begin
+  select expires_at
+    into active_expires_at
+    from crm_site_chat_access
+   where workspace_id = new.workspace_id
+     and conversation_id = new.conversation_id
+     and expires_at > clock_timestamp()
+   order by expires_at desc
+   limit 1
+   for update;
+
+  if active_expires_at is null then
+    raise exception 'SITE_CHAT_REPLY_THREAD_NOT_ACTIVE';
+  end if;
+
+  return new;
+end;
+$$;
+
+comment on function norauto_enforce_site_chat_reply_access_at_commit() is
+  'Deferred commit-time guard compatible with multiple candidate access rows: at least one row must remain unexpired through commit.';
