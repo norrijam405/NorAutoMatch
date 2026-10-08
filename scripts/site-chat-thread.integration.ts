@@ -115,6 +115,55 @@ async function main() {
 
     console.log("PASS FRC-12 pre-issuance attacker row is unauthenticated and does not block legitimate capability");
 
+    const frc13ConversationId = "site-00000000-0000-4000-8000-000000000401";
+    const frc13EventId = "site-00000000-0000-4000-8000-000000000402";
+    const frc13Rep = "synthetic-rep-frc13";
+    const frc13AttackerHash = "b".repeat(64);
+
+    await pool.query(
+      `insert into crm_conversation_events (
+        workspace_id,provider,event_id,conversation_id,event_type,observed_at,
+        normalized_payload,routing_decision,routing_reasons,processing_state
+      ) values ($1,$2,$3,$4,'CONVERSATION_ENDED_OR_HANDOFF_READY',current_timestamp,$5::jsonb,'CONTACTABLE','[]'::jsonb,'RECEIVED')`,
+      [workspaceId, provider, frc13EventId, frc13ConversationId, JSON.stringify({ synthetic: true, frc13: true })],
+    );
+
+    await pool.query(
+      `insert into crm_conversation_assignments (
+        workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at
+      ) values ($1,$2,$3,$4,'ASSIGNED',current_timestamp,current_timestamp)`,
+      [workspaceId, provider, frc13ConversationId, frc13Rep],
+    );
+
+    await pool.query(
+      `insert into crm_site_chat_access (
+        workspace_id, conversation_id, access_token_hash, issuance_proof, created_at, expires_at
+      ) values ($1,$2,$3,null,current_timestamp,clock_timestamp() + interval '7 days')`,
+      [workspaceId, frc13ConversationId, frc13AttackerHash],
+    );
+
+    const frc13Publish = await publishSiteChatReply({
+      pool,
+      workspaceId,
+      provider,
+      eventId: frc13EventId,
+      body: "FRC-13 publication without authenticated thread activation",
+      publishedBy: frc13Rep,
+    });
+    assert.equal(frc13Publish.deliveryChannel, "NORAUTO_SITE_THREAD");
+
+    const frc13Published = await pool.query<{ count: string }>(
+      `select count(*)::text as count
+         from crm_site_chat_replies
+        where workspace_id=$1
+          and conversation_id=$2
+          and body='FRC-13 publication without authenticated thread activation'`,
+      [workspaceId, frc13ConversationId],
+    );
+    assert.equal(frc13Published.rows[0]?.count, "1", "unauthenticated access row activated reply publication");
+
+    console.log("FRC13_WITNESS unauthenticated preissuance access row activated reply publication");
+
     const registered = await registerSiteChatAccess({ pool, workspaceId, conversationId, accessToken: token });
     assert.equal(registered.status, "COMMITTED");
 
