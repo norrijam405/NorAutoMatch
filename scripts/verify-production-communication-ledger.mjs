@@ -14,6 +14,7 @@ try {
     "infrastructure/norautomatch-site-chat-thread-r0.sql",
     "infrastructure/norautomatch-site-chat-access-integrity-r1.sql",
     "infrastructure/norautomatch-site-chat-access-authenticity-r2.sql",
+    "infrastructure/norautomatch-site-chat-publication-authenticity-r3.sql",
   ];
 
   for (const migrationName of requiredMigrations) {
@@ -63,6 +64,7 @@ try {
     "norauto_enforce_site_chat_access_update_integrity",
     "norauto_reject_site_chat_access_delete",
     "norauto_reject_site_chat_access_truncate",
+    "norauto_site_chat_publication_proof_valid",
   ]) {
     const functionCheck = await client.query(
       "select 1 from pg_proc where proname = $1",
@@ -80,6 +82,20 @@ try {
   );
   if (proofColumn.rowCount !== 1) throw new Error("PRODUCTION_SITE_CHAT_ISSUANCE_PROOF_COLUMN_MISSING");
 
+  const publicationProofColumn = await client.query(
+    `select 1
+       from information_schema.columns
+      where table_schema='public'
+        and table_name='crm_site_chat_access'
+        and column_name='publication_proof'`,
+  );
+  if (publicationProofColumn.rowCount !== 1) throw new Error("PRODUCTION_SITE_CHAT_PUBLICATION_PROOF_COLUMN_MISSING");
+
+  const pgcrypto = await client.query(
+    "select 1 from pg_extension where extname='pgcrypto'",
+  );
+  if (pgcrypto.rowCount !== 1) throw new Error("PRODUCTION_PGCRYPTO_EXTENSION_MISSING");
+
   const primaryKey = await client.query(
     `select array_agg(a.attname order by u.ordinality)::text[] as columns
        from pg_constraint c
@@ -94,7 +110,7 @@ try {
     throw new Error(`PRODUCTION_SITE_CHAT_ACCESS_PRIMARY_KEY_DRIFT:${pkColumns.join(",")}`);
   }
 
-  console.log("PASS production startup installed ownership + communication ledger + site-chat truth/authenticity guards");
+  console.log("PASS production startup installed ownership + communication ledger + site-chat read/publication authenticity guards");
 } finally {
   await client.end();
 }

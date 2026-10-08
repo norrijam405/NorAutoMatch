@@ -27,6 +27,7 @@ const migrations = [
   "infrastructure/norautomatch-site-chat-thread-r0.sql",
   "infrastructure/norautomatch-site-chat-access-integrity-r1.sql",
   "infrastructure/norautomatch-site-chat-access-authenticity-r2.sql",
+  "infrastructure/norautomatch-site-chat-publication-authenticity-r3.sql",
 ];
 
 function sha256(text) {

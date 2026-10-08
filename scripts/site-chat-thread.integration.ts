@@ -115,6 +115,111 @@ async function main() {
 
     console.log("PASS FRC-12 pre-issuance attacker row is unauthenticated and does not block legitimate capability");
 
+    const frc13ConversationId = "site-00000000-0000-4000-8000-000000000401";
+    const frc13EventId = "site-00000000-0000-4000-8000-000000000402";
+    const frc13Rep = "synthetic-rep-frc13";
+    const frc13LegitimateToken = "frc13LegitimateToken_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcdef";
+
+    await pool.query(
+      `insert into crm_conversation_events (
+        workspace_id,provider,event_id,conversation_id,event_type,observed_at,
+        normalized_payload,routing_decision,routing_reasons,processing_state
+      ) values ($1,$2,$3,$4,'CONVERSATION_ENDED_OR_HANDOFF_READY',current_timestamp,$5::jsonb,'CONTACTABLE','[]'::jsonb,'RECEIVED')`,
+      [workspaceId, provider, frc13EventId, frc13ConversationId, JSON.stringify({ synthetic: true, frc13: true })],
+    );
+
+    await pool.query(
+      `insert into crm_conversation_assignments (
+        workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at
+      ) values ($1,$2,$3,$4,'ASSIGNED',current_timestamp,current_timestamp)`,
+      [workspaceId, provider, frc13ConversationId, frc13Rep],
+    );
+
+    await pool.query(
+      `insert into crm_site_chat_access (
+        workspace_id, conversation_id, access_token_hash, issuance_proof, publication_proof, created_at, expires_at
+      ) values ($1,$2,$3,null,null,current_timestamp,clock_timestamp() + interval '7 days')`,
+      [workspaceId, frc13ConversationId, "c".repeat(64)],
+    );
+
+    await assert.rejects(
+      publishSiteChatReply({
+        pool,
+        workspaceId,
+        provider,
+        eventId: frc13EventId,
+        body: "FRC-13 unauthenticated app publication must fail",
+        publishedBy: frc13Rep,
+      }),
+      /SITE_CHAT_REPLY_AUTHENTIC_ACCESS_REQUIRED/,
+      "application publication must reject an unauthenticated active access row",
+    );
+
+    await assert.rejects(
+      pool.query(
+        `insert into crm_site_chat_replies (
+          workspace_id, conversation_id, source_event_id, body, published_by
+        ) values ($1,$2,$3,$4,$5)`,
+        [
+          workspaceId,
+          frc13ConversationId,
+          frc13EventId,
+          "FRC-13 direct SQL publication must fail",
+          frc13Rep,
+        ],
+      ),
+      /SITE_CHAT_REPLY_AUTHENTIC_ACCESS_REQUIRED/,
+      "deferred database guard must reject direct SQL publication without authenticated access",
+    );
+
+    await pool.query(
+      `insert into crm_site_chat_access (
+        workspace_id, conversation_id, access_token_hash, issuance_proof, publication_proof, created_at, expires_at
+      ) values ($1,$2,$3,$4,$5,current_timestamp,clock_timestamp() + interval '7 days')`,
+      [workspaceId, frc13ConversationId, "d".repeat(64), "e".repeat(64), "f".repeat(64)],
+    );
+
+    await assert.rejects(
+      publishSiteChatReply({
+        pool,
+        workspaceId,
+        provider,
+        eventId: frc13EventId,
+        body: "FRC-13 forged proof publication must fail",
+        publishedBy: frc13Rep,
+      }),
+      /SITE_CHAT_REPLY_AUTHENTIC_ACCESS_REQUIRED/,
+      "application publication must reject forged proof-looking access rows",
+    );
+
+    const frc13Registered = await registerSiteChatAccess({
+      pool,
+      workspaceId,
+      conversationId: frc13ConversationId,
+      accessToken: frc13LegitimateToken,
+    });
+    assert.equal(frc13Registered.status, "COMMITTED");
+
+    const frc13LegitimatePublish = await publishSiteChatReply({
+      pool,
+      workspaceId,
+      provider,
+      eventId: frc13EventId,
+      body: "FRC-13 legitimate authenticated publication",
+      publishedBy: frc13Rep,
+    });
+    assert.equal(frc13LegitimatePublish.deliveryChannel, "NORAUTO_SITE_THREAD");
+
+    const frc13Count = await pool.query<{ count: string }>(
+      `select count(*)::text as count
+         from crm_site_chat_replies
+        where workspace_id=$1 and conversation_id=$2`,
+      [workspaceId, frc13ConversationId],
+    );
+    assert.equal(frc13Count.rows[0]?.count, "1", "only authenticated publication may persist");
+
+    console.log("PASS FRC-13 publication requires cryptographically authentic site-chat access");
+
     const registered = await registerSiteChatAccess({ pool, workspaceId, conversationId, accessToken: token });
     assert.equal(registered.status, "COMMITTED");
 
@@ -420,7 +525,6 @@ async function main() {
     const expiryConversationId = "site-00000000-0000-4000-8000-000000000201";
     const expiryEventId = "site-00000000-0000-4000-8000-000000000202";
     const expiryToken = "expiryToken_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcdefghijklmnop";
-    const expiryHash = createHash("sha256").update(expiryToken, "utf8").digest("hex");
 
     await pool.query(
       `insert into crm_conversation_events (
@@ -437,12 +541,15 @@ async function main() {
       [workspaceId, provider, expiryConversationId, repB],
     );
 
-    await pool.query(
-      `insert into crm_site_chat_access (
-        workspace_id, conversation_id, access_token_hash, created_at, expires_at
-      ) values ($1,$2,$3,current_timestamp,clock_timestamp() + interval '1 second')`,
-      [workspaceId, expiryConversationId, expiryHash],
-    );
+    const expiryIssuedAt = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000) + 1000);
+    const expiryRegistration = await registerSiteChatAccess({
+      pool,
+      workspaceId,
+      conversationId: expiryConversationId,
+      accessToken: expiryToken,
+      now: expiryIssuedAt,
+    });
+    assert.equal(expiryRegistration.status, "COMMITTED");
 
     const expiryLock = await pool.connect();
     try {
@@ -478,8 +585,8 @@ async function main() {
 
       await assert.rejects(
         expiredWhileWaiting,
-        /SITE_CHAT_REPLY_THREAD_NOT_ACTIVE/,
-        "publication must re-evaluate expiry at mutation time after waiting for ownership lock",
+        /SITE_CHAT_REPLY_AUTHENTIC_ACCESS_REQUIRED/,
+        "publication must re-evaluate authenticated access expiry after waiting for ownership lock",
       );
     } catch (error) {
       try { await expiryLock.query("rollback"); } catch {}

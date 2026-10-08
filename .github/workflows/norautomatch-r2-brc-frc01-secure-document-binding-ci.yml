@@ -1,12 +1,12 @@
-name: NorAutoMatch R2 BRC-FRC-12 Preissuance Capability Authenticity CI
+name: NorAutoMatch R2 BRC-FRC-13 Authenticated Publication CI
 
 on:
   push:
     branches:
-      - "remediation/r2-frc12-preissuance-authenticity"
+      - "remediation/r2-frc13-authenticated-publication"
   pull_request:
     branches:
-      - "remediation/r2-frc11-access-capability-integrity"
+      - "remediation/r2-frc12-preissuance-authenticity"
 
 permissions:
   contents: read

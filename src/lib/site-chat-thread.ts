@@ -15,6 +15,7 @@ export type SiteChatReply = {
 type SiteChatAccessRow = {
   access_token_hash: string;
   issuance_proof: string | null;
+  publication_proof?: string | null;
   created_at: Date | string;
   expires_at: Date | string;
   last_seen_at?: Date | string | null;
@@ -72,6 +73,31 @@ function issuanceProof(input: {
     input.createdAt,
     input.expiresAt,
   ]);
+}
+
+function publicationProof(workspaceId: string, conversationId: string, accessTokenHash: string, secret: string) {
+  return createHmac("sha256", secret)
+    .update([
+      "norautomatch:site-chat-publication:v1",
+      workspaceId,
+      conversationId,
+      accessTokenHash,
+    ].join("\u001f"), "utf8")
+    .digest("hex");
+}
+
+function validPublicationProof(
+  row: SiteChatAccessRow,
+  workspaceId: string,
+  conversationId: string,
+  secrets: { current: string; previous?: string },
+) {
+  if (!row.publication_proof || !/^[0-9a-f]{64}$/.test(row.publication_proof)) return false;
+  const candidates = [secrets.current, secrets.previous].filter((value): value is string => Boolean(value));
+  return candidates.some((secret) => equalHex(
+    row.publication_proof!,
+    publicationProof(workspaceId, conversationId, row.access_token_hash, secret),
+  ));
 }
 
 function equalHex(leftValue: string, rightValue: string) {
@@ -132,7 +158,7 @@ export async function registerSiteChatAccess(input: {
     );
 
     const existing = await client.query<SiteChatAccessRow>(
-      `select access_token_hash, issuance_proof, created_at, expires_at, last_seen_at
+      `select access_token_hash, issuance_proof, publication_proof, created_at, expires_at, last_seen_at
          from crm_site_chat_access
         where workspace_id=$1 and conversation_id=$2
         for update`,
@@ -166,12 +192,18 @@ export async function registerSiteChatAccess(input: {
       createdAt,
       expiresAt,
     }, secrets.current);
+    const publishProof = publicationProof(
+      input.workspaceId,
+      input.conversationId,
+      currentHash,
+      secrets.current,
+    );
 
     await client.query(
       `insert into crm_site_chat_access (
-         workspace_id, conversation_id, access_token_hash, issuance_proof, created_at, expires_at
-       ) values ($1,$2,$3,$4,$5,$6)`,
-      [input.workspaceId, input.conversationId, currentHash, proof, createdAt, expiresAt],
+         workspace_id, conversation_id, access_token_hash, issuance_proof, publication_proof, created_at, expires_at
+       ) values ($1,$2,$3,$4,$5,$6,$7)`,
+      [input.workspaceId, input.conversationId, currentHash, proof, publishProof, createdAt, expiresAt],
     );
 
     await client.query("commit");
@@ -204,7 +236,7 @@ export async function readSiteChatReplies(input: {
   ].filter((value): value is string => Boolean(value));
 
   const access = await input.pool.query<SiteChatAccessRow>(
-    `select access_token_hash, issuance_proof, created_at, expires_at, last_seen_at
+    `select access_token_hash, issuance_proof, publication_proof, created_at, expires_at, last_seen_at
        from crm_site_chat_access
       where workspace_id=$1
         and conversation_id=$2
@@ -300,21 +332,33 @@ export async function publishSiteChatReply(input: {
       throw new Error("SITE_CHAT_REPLY_CURRENT_OWNER_REQUIRED");
     }
 
-    const access = await client.query<{ active: boolean }>(
-      `select true as active
+    const secrets = siteChatSecrets();
+    const access = await client.query<SiteChatAccessRow>(
+      `select access_token_hash, issuance_proof, publication_proof, created_at, expires_at, last_seen_at
          from crm_site_chat_access
         where workspace_id=$1
           and conversation_id=$2
           and expires_at > clock_timestamp()
         order by expires_at desc
-        limit 1
         for update`,
       [input.workspaceId, row.conversation_id],
     );
-    const accessRow = access.rows[0];
-    if (!accessRow?.active) {
-      throw new Error("SITE_CHAT_REPLY_THREAD_NOT_ACTIVE");
+    const authenticAccess = access.rows.find((candidate) =>
+      validIssuanceProof(candidate, input.workspaceId, row.conversation_id, secrets)
+      && validPublicationProof(candidate, input.workspaceId, row.conversation_id, secrets),
+    );
+    if (!authenticAccess) {
+      throw new Error("SITE_CHAT_REPLY_AUTHENTIC_ACCESS_REQUIRED");
     }
+
+    await client.query(
+      "select set_config('norautomatch.site_chat_publication_hmac_secret', $1, true)",
+      [secrets.current],
+    );
+    await client.query(
+      "select set_config('norautomatch.site_chat_publication_previous_hmac_secret', $1, true)",
+      [secrets.previous ?? ""],
+    );
 
     const inserted = await client.query<{ reply_id: string; published_at: Date | string }>(
       `insert into crm_site_chat_replies (
