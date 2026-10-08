@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import pg from "pg";
 
 const { Client } = pg;
@@ -15,6 +16,7 @@ try {
     "infrastructure/norautomatch-site-chat-access-integrity-r1.sql",
     "infrastructure/norautomatch-site-chat-access-authenticity-r2.sql",
     "infrastructure/norautomatch-site-chat-publication-authenticity-r3.sql",
+    "infrastructure/norautomatch-site-chat-publication-secret-anchor-r4.sql",
   ];
 
   for (const migrationName of requiredMigrations) {
@@ -32,6 +34,7 @@ try {
     "public.crm_conversation_contact_events",
     "public.crm_site_chat_access",
     "public.crm_site_chat_replies",
+    "public.crm_site_chat_publication_secret_anchor",
   ]) {
     const result = await client.query("select to_regclass($1) as relation", [relation]);
     if (!result.rows[0]?.relation) throw new Error(`PRODUCTION_RELATION_MISSING:${relation}`);
@@ -48,6 +51,8 @@ try {
     "crm_site_chat_access_update_integrity",
     "crm_site_chat_access_no_delete",
     "crm_site_chat_access_no_truncate",
+    "crm_site_chat_publication_anchor_immutable",
+    "crm_site_chat_publication_anchor_no_truncate",
   ]) {
     const trigger = await client.query(
       "select 1 from pg_trigger where tgname = $1 and not tgisinternal",
@@ -65,6 +70,9 @@ try {
     "norauto_reject_site_chat_access_delete",
     "norauto_reject_site_chat_access_truncate",
     "norauto_site_chat_publication_proof_valid",
+    "norauto_site_chat_publication_secret_trusted",
+    "norauto_reject_site_chat_publication_anchor_mutation",
+    "norauto_reject_site_chat_publication_anchor_truncate",
   ]) {
     const functionCheck = await client.query(
       "select 1 from pg_proc where proname = $1",
@@ -96,6 +104,32 @@ try {
   );
   if (pgcrypto.rowCount !== 1) throw new Error("PRODUCTION_PGCRYPTO_EXTENSION_MISSING");
 
+  const configuredSecret = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_SECRET?.trim() ?? "";
+  if (configuredSecret.length < 32) {
+    throw new Error("PRODUCTION_SITE_CHAT_PUBLICATION_SECRET_NOT_CONFIGURED");
+  }
+  const configuredPrevious = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET?.trim() ?? "";
+
+  const anchorRow = await client.query(
+    `select current_secret_sha256, previous_secret_sha256
+       from crm_site_chat_publication_secret_anchor
+      where anchor_id='ACTIVE'`,
+  );
+  if (anchorRow.rowCount !== 1) throw new Error("PRODUCTION_SITE_CHAT_PUBLICATION_TRUST_ANCHOR_MISSING");
+
+  const expectedCurrent = createHash("sha256").update(configuredSecret, "utf8").digest("hex");
+  const expectedPrevious = configuredPrevious
+    ? createHash("sha256").update(configuredPrevious, "utf8").digest("hex")
+    : null;
+
+  if (anchorRow.rows[0]?.current_secret_sha256?.trim() !== expectedCurrent) {
+    throw new Error("PRODUCTION_SITE_CHAT_PUBLICATION_TRUST_ANCHOR_CURRENT_MISMATCH");
+  }
+  const recordedPrevious = anchorRow.rows[0]?.previous_secret_sha256?.trim() ?? null;
+  if (recordedPrevious !== expectedPrevious) {
+    throw new Error("PRODUCTION_SITE_CHAT_PUBLICATION_TRUST_ANCHOR_PREVIOUS_MISMATCH");
+  }
+
   const primaryKey = await client.query(
     `select array_agg(a.attname order by u.ordinality)::text[] as columns
        from pg_constraint c
@@ -110,7 +144,7 @@ try {
     throw new Error(`PRODUCTION_SITE_CHAT_ACCESS_PRIMARY_KEY_DRIFT:${pkColumns.join(",")}`);
   }
 
-  console.log("PASS production startup installed ownership + communication ledger + site-chat read/publication authenticity guards");
+  console.log("PASS production startup installed ownership + communication ledger + site-chat read/publication authenticity + immutable secret anchor");
 } finally {
   await client.end();
 }
