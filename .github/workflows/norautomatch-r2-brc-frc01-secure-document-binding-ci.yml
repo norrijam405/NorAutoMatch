@@ -1,9 +1,9 @@
-name: NorAutoMatch R2 BRC-FRC-13 Authenticated Publication CI
+name: NorAutoMatch R2 FRC-14 Fresh Rechallenge Evidence
 
 on:
   push:
     branches:
-      - "remediation/r2-frc13-authenticated-publication"
+      - "evidence/r2-frc13-fresh-rechallenge-frc14-20261008"
   pull_request:
     branches:
       - "remediation/r2-frc12-preissuance-authenticity"
