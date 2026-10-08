@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { createPostgresCrmPool } from "../src/lib/crm-postgres-adapter";
 import { registerSiteChatAccess, readSiteChatReplies, publishSiteChatReply } from "../src/lib/site-chat-thread";
@@ -121,6 +122,99 @@ async function main() {
     assert.equal(replies.length, 1);
     assert.equal(replies[0]?.body, "A human-reviewed same-site reply.");
     assert.equal(replies[0]?.authorityEffect, "NONE");
+
+    const accessAfterRead = await pool.query<{ last_seen_at: Date | string | null; access_token_hash: string; expires_at: Date | string }>(
+      `select last_seen_at, access_token_hash, expires_at
+         from crm_site_chat_access
+        where workspace_id=$1 and conversation_id=$2`,
+      [workspaceId, conversationId],
+    );
+    const accessSnapshot = accessAfterRead.rows[0];
+    assert.ok(accessSnapshot?.last_seen_at, "legitimate thread read must still update last_seen_at");
+    const originalAccessHash = accessSnapshot.access_token_hash;
+    const originalExpiresAt = new Date(accessSnapshot.expires_at).toISOString();
+
+    const attackerToken = "attackerCapabilityToken_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcd";
+    const attackerHash = createHash("sha256").update(attackerToken, "utf8").digest("hex");
+
+    await assert.rejects(
+      pool.query(
+        `update crm_site_chat_access
+            set access_token_hash=$3
+          where workspace_id=$1 and conversation_id=$2`,
+        [workspaceId, conversationId, attackerHash],
+      ),
+      /SITE_CHAT_ACCESS_CAPABILITY_IMMUTABLE/,
+      "direct SQL must not rewrite the browser capability hash",
+    );
+
+    await assert.rejects(
+      pool.query(
+        `update crm_site_chat_access
+            set expires_at=expires_at + interval '30 days'
+          where workspace_id=$1 and conversation_id=$2`,
+        [workspaceId, conversationId],
+      ),
+      /SITE_CHAT_ACCESS_CAPABILITY_IMMUTABLE/,
+      "direct SQL must not extend site-thread capability expiry",
+    );
+
+    await assert.rejects(
+      pool.query(
+        `update crm_site_chat_access
+            set workspace_id='forged-workspace'
+          where workspace_id=$1 and conversation_id=$2`,
+        [workspaceId, conversationId],
+      ),
+      /SITE_CHAT_ACCESS_CAPABILITY_IMMUTABLE/,
+      "direct SQL must not reassign site-thread workspace identity",
+    );
+
+    await assert.rejects(
+      pool.query(
+        `update crm_site_chat_access
+            set conversation_id='site-00000000-0000-4000-8000-999999999999'
+          where workspace_id=$1 and conversation_id=$2`,
+        [workspaceId, conversationId],
+      ),
+      /SITE_CHAT_ACCESS_CAPABILITY_IMMUTABLE/,
+      "direct SQL must not reassign site-thread conversation identity",
+    );
+
+    await assert.rejects(
+      pool.query(
+        `delete from crm_site_chat_access
+          where workspace_id=$1 and conversation_id=$2`,
+        [workspaceId, conversationId],
+      ),
+      /SITE_CHAT_ACCESS_CAPABILITY_DELETE_FORBIDDEN/,
+      "direct SQL must not delete and replace an issued capability",
+    );
+
+    await assert.rejects(
+      pool.query("truncate table crm_site_chat_access"),
+      /SITE_CHAT_ACCESS_LEDGER_CANNOT_BE_TRUNCATED/,
+      "site-thread access capability ledger must not be truncatable",
+    );
+
+    const accessAfterAttacks = await pool.query<{ access_token_hash: string; expires_at: Date | string }>(
+      `select access_token_hash, expires_at
+         from crm_site_chat_access
+        where workspace_id=$1 and conversation_id=$2`,
+      [workspaceId, conversationId],
+    );
+    assert.equal(accessAfterAttacks.rows[0]?.access_token_hash, originalAccessHash);
+    assert.equal(new Date(accessAfterAttacks.rows[0]!.expires_at).toISOString(), originalExpiresAt);
+    assert.equal(
+      (await readSiteChatReplies({ pool, workspaceId, conversationId, accessToken: attackerToken })).length,
+      0,
+      "attacker-chosen token must remain unauthorized",
+    );
+    assert.equal(
+      (await readSiteChatReplies({ pool, workspaceId, conversationId, accessToken: token })).length,
+      1,
+      "legitimate browser capability must remain authorized",
+    );
 
     const transfer = await pool.connect();
     try {
@@ -247,11 +341,31 @@ async function main() {
     assert.equal(preservedReply.rows[0]?.published_by, repB);
     assert.equal(preservedReply.rows[0]?.body, "The current owner can publish.");
 
+    const expiryConversationId = "site-00000000-0000-4000-8000-000000000201";
+    const expiryEventId = "site-00000000-0000-4000-8000-000000000202";
+    const expiryToken = "expiryToken_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcdefghijklmnop";
+    const expiryHash = createHash("sha256").update(expiryToken, "utf8").digest("hex");
+
     await pool.query(
-      `update crm_site_chat_access
-          set expires_at = clock_timestamp() + interval '1 second'
-        where workspace_id=$1 and conversation_id=$2`,
-      [workspaceId, conversationId],
+      `insert into crm_conversation_events (
+        workspace_id,provider,event_id,conversation_id,event_type,observed_at,
+        normalized_payload,routing_decision,routing_reasons,processing_state
+      ) values ($1,$2,$3,$4,'CONVERSATION_ENDED_OR_HANDOFF_READY',current_timestamp,$5::jsonb,'CONTACTABLE','[]'::jsonb,'RECEIVED')`,
+      [workspaceId, provider, expiryEventId, expiryConversationId, JSON.stringify({ synthetic: true, expiryFixture: true })],
+    );
+
+    await pool.query(
+      `insert into crm_conversation_assignments (
+        workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at
+      ) values ($1,$2,$3,$4,'ASSIGNED',current_timestamp,current_timestamp)`,
+      [workspaceId, provider, expiryConversationId, repB],
+    );
+
+    await pool.query(
+      `insert into crm_site_chat_access (
+        workspace_id, conversation_id, access_token_hash, created_at, expires_at
+      ) values ($1,$2,$3,current_timestamp,clock_timestamp() + interval '1 second')`,
+      [workspaceId, expiryConversationId, expiryHash],
     );
 
     const expiryLock = await pool.connect();
@@ -262,14 +376,14 @@ async function main() {
            from crm_conversation_assignments
           where workspace_id=$1 and provider=$2 and conversation_id=$3
           for update`,
-        [workspaceId, provider, conversationId],
+        [workspaceId, provider, expiryConversationId],
       );
 
       const expiredWhileWaiting = publishSiteChatReply({
         pool,
         workspaceId,
         provider,
-        eventId,
+        eventId: expiryEventId,
         body: "This reply must fail after access expires during the lock wait.",
         publishedBy: repB,
       });
@@ -280,7 +394,7 @@ async function main() {
         `select expires_at <= clock_timestamp() as expired
            from crm_site_chat_access
           where workspace_id=$1 and conversation_id=$2`,
-        [workspaceId, conversationId],
+        [workspaceId, expiryConversationId],
       );
       assert.equal(expiryProof.rows[0]?.expired, true, "site-thread access must be expired before releasing ownership lock");
 
@@ -302,9 +416,9 @@ async function main() {
       `select count(*)::text as count
          from crm_site_chat_replies
         where workspace_id=$1 and conversation_id=$2 and delivery_state='PUBLISHED'`,
-      [workspaceId, conversationId],
+      [workspaceId, expiryConversationId],
     );
-    assert.equal(replyCountAfterExpiry.rows[0]?.count, "2", "expired access must not insert a reply after lock wait");
+    assert.equal(replyCountAfterExpiry.rows[0]?.count, "0", "expired access must not insert a reply after lock wait");
 
     await assert.rejects(
       publishSiteChatReply({
