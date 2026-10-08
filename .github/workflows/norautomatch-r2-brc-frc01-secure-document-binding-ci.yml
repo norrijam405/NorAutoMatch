@@ -1,12 +1,12 @@
-name: NorAutoMatch R2 BRC-FRC-13 Authenticated Publication CI
+name: NorAutoMatch R2 BRC-FRC-14 Publication Secret Anchor CI
 
 on:
   push:
     branches:
-      - "remediation/r2-frc13-authenticated-publication"
+      - "remediation/r2-frc14-publication-secret-anchor"
   pull_request:
     branches:
-      - "remediation/r2-frc12-preissuance-authenticity"
+      - "remediation/r2-frc13-authenticated-publication"
 
 permissions:
   contents: read
@@ -56,6 +56,7 @@ jobs:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
           NORAUTO_MIGRATION_ONLY: "1"
           NORAUTO_RELEASE_SHA: startup-v13-ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
         run: npm start
 
       - name: Verify production launcher installed v13
@@ -66,6 +67,7 @@ jobs:
       - name: Verify production launcher installed communication ledger guards
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
         run: node scripts/verify-production-communication-ledger.mjs
 
       - name: Re-run production migration launcher for idempotency
@@ -73,6 +75,7 @@ jobs:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
           NORAUTO_MIGRATION_ONLY: "1"
           NORAUTO_RELEASE_SHA: startup-v13-ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
         run: npm start
 
       - name: Compile secure-document binding verification
