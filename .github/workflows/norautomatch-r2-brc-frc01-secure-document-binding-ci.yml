@@ -1,9 +1,9 @@
-name: NorAutoMatch R2 BRC-FRC-14 Publication Secret Anchor CI
+name: NorAutoMatch R2 FRC-15 Fresh Rechallenge Evidence
 
 on:
   push:
     branches:
-      - "remediation/r2-frc14-publication-secret-anchor"
+      - "evidence/r2-frc14-fresh-rechallenge-frc15-20261008"
   pull_request:
     branches:
       - "remediation/r2-frc13-authenticated-publication"
