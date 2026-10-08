@@ -525,7 +525,6 @@ async function main() {
     const expiryConversationId = "site-00000000-0000-4000-8000-000000000201";
     const expiryEventId = "site-00000000-0000-4000-8000-000000000202";
     const expiryToken = "expiryToken_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcdefghijklmnop";
-    const expiryHash = createHash("sha256").update(expiryToken, "utf8").digest("hex");
 
     await pool.query(
       `insert into crm_conversation_events (
@@ -542,12 +541,15 @@ async function main() {
       [workspaceId, provider, expiryConversationId, repB],
     );
 
-    await pool.query(
-      `insert into crm_site_chat_access (
-        workspace_id, conversation_id, access_token_hash, created_at, expires_at
-      ) values ($1,$2,$3,current_timestamp,clock_timestamp() + interval '1 second')`,
-      [workspaceId, expiryConversationId, expiryHash],
-    );
+    const expiryIssuedAt = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000) + 1000);
+    const expiryRegistration = await registerSiteChatAccess({
+      pool,
+      workspaceId,
+      conversationId: expiryConversationId,
+      accessToken: expiryToken,
+      now: expiryIssuedAt,
+    });
+    assert.equal(expiryRegistration.status, "COMMITTED");
 
     const expiryLock = await pool.connect();
     try {
@@ -583,8 +585,8 @@ async function main() {
 
       await assert.rejects(
         expiredWhileWaiting,
-        /SITE_CHAT_REPLY_THREAD_NOT_ACTIVE/,
-        "publication must re-evaluate expiry at mutation time after waiting for ownership lock",
+        /SITE_CHAT_REPLY_AUTHENTIC_ACCESS_REQUIRED/,
+        "publication must re-evaluate authenticated access expiry after waiting for ownership lock",
       );
     } catch (error) {
       try { await expiryLock.query("rollback"); } catch {}
