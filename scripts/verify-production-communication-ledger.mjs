@@ -12,6 +12,7 @@ try {
     "infrastructure/norautomatch-conversation-ownership-r0.sql",
     "infrastructure/norautomatch-conversation-communication-ledger-r0.sql",
     "infrastructure/norautomatch-site-chat-thread-r0.sql",
+    "infrastructure/norautomatch-site-chat-access-integrity-r1.sql",
   ];
 
   for (const migrationName of requiredMigrations) {
@@ -42,6 +43,9 @@ try {
     "crm_site_chat_reply_insert_truth_guard",
     "crm_site_chat_replies_immutable",
     "crm_site_chat_replies_no_truncate",
+    "crm_site_chat_access_update_integrity",
+    "crm_site_chat_access_no_delete",
+    "crm_site_chat_access_no_truncate",
   ]) {
     const trigger = await client.query(
       "select 1 from pg_trigger where tgname = $1 and not tgisinternal",
@@ -55,6 +59,9 @@ try {
     "norauto_enforce_site_chat_reply_insert_truth",
     "norauto_reject_site_chat_reply_mutation",
     "norauto_reject_site_chat_reply_truncate",
+    "norauto_enforce_site_chat_access_update_integrity",
+    "norauto_reject_site_chat_access_delete",
+    "norauto_reject_site_chat_access_truncate",
   ]) {
     const functionCheck = await client.query(
       "select 1 from pg_proc where proname = $1",
