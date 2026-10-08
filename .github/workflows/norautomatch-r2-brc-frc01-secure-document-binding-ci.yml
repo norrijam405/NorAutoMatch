@@ -1,12 +1,12 @@
-name: NorAutoMatch R2 BRC-FRC-14 Publication Secret Anchor CI
+name: NorAutoMatch R2 BRC-FRC-15 Schema Qualified Trust CI
 
 on:
   push:
     branches:
-      - "remediation/r2-frc14-publication-secret-anchor"
+      - "remediation/r2-frc15-schema-qualified-trust-chain"
   pull_request:
     branches:
-      - "remediation/r2-frc13-authenticated-publication"
+      - "remediation/r2-frc14-publication-secret-anchor"
 
 permissions:
   contents: read

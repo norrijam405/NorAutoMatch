@@ -17,6 +17,7 @@ try {
     "infrastructure/norautomatch-site-chat-access-authenticity-r2.sql",
     "infrastructure/norautomatch-site-chat-publication-authenticity-r3.sql",
     "infrastructure/norautomatch-site-chat-publication-secret-anchor-r4.sql",
+    "infrastructure/norautomatch-site-chat-schema-qualified-trust-r5.sql",
   ];
 
   for (const migrationName of requiredMigrations) {
@@ -104,6 +105,33 @@ try {
   );
   if (pgcrypto.rowCount !== 1) throw new Error("PRODUCTION_PGCRYPTO_EXTENSION_MISSING");
 
+  for (const functionName of [
+    "norauto_site_chat_publication_secret_trusted",
+    "norauto_enforce_site_chat_reply_access_at_commit",
+  ]) {
+    const hardened = await client.query(
+      `select pg_get_functiondef(p.oid) as definition, p.proconfig
+         from pg_proc p
+         join pg_namespace n on n.oid=p.pronamespace
+        where n.nspname='public' and p.proname=$1`,
+      [functionName],
+    );
+    if (hardened.rowCount !== 1) throw new Error(`PRODUCTION_HARDENED_FUNCTION_MISSING:${functionName}`);
+    const definition = hardened.rows[0]?.definition ?? "";
+    const config = hardened.rows[0]?.proconfig ?? [];
+    if (!config.some((value) => value === "search_path=pg_catalog, public")) {
+      throw new Error(`PRODUCTION_FUNCTION_SEARCH_PATH_NOT_HARDENED:${functionName}`);
+    }
+    if (functionName === "norauto_site_chat_publication_secret_trusted"
+        && !definition.includes("public.crm_site_chat_publication_secret_anchor")) {
+      throw new Error("PRODUCTION_TRUST_ANCHOR_RELATION_NOT_SCHEMA_QUALIFIED");
+    }
+    if (functionName === "norauto_enforce_site_chat_reply_access_at_commit"
+        && !definition.includes("public.crm_site_chat_access")) {
+      throw new Error("PRODUCTION_SITE_CHAT_ACCESS_RELATION_NOT_SCHEMA_QUALIFIED");
+    }
+  }
+
   const configuredSecret = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_SECRET?.trim() ?? "";
   if (configuredSecret.length < 32) {
     throw new Error("PRODUCTION_SITE_CHAT_PUBLICATION_SECRET_NOT_CONFIGURED");
@@ -144,7 +172,7 @@ try {
     throw new Error(`PRODUCTION_SITE_CHAT_ACCESS_PRIMARY_KEY_DRIFT:${pkColumns.join(",")}`);
   }
 
-  console.log("PASS production startup installed ownership + communication ledger + site-chat read/publication authenticity + immutable secret anchor");
+  console.log("PASS production startup installed ownership + communication ledger + site-chat schema-qualified trust chain");
 } finally {
   await client.end();
 }
