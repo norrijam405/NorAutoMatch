@@ -39,6 +39,82 @@ async function main() {
       [workspaceId, provider, conversationId, repA],
     );
 
+    const frc12ConversationId = "site-00000000-0000-4000-8000-000000000301";
+    const frc12EventId = "site-00000000-0000-4000-8000-000000000302";
+    const frc12Rep = "synthetic-rep-frc12";
+    const frc12LegitimateToken = "legitimateCapability_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcdef";
+    const frc12AttackerToken = "attackerPreseedToken_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcdef";
+    const frc12AttackerHash = createHash("sha256").update(frc12AttackerToken, "utf8").digest("hex");
+
+    await pool.query(
+      `insert into crm_conversation_events (
+        workspace_id,provider,event_id,conversation_id,event_type,observed_at,
+        normalized_payload,routing_decision,routing_reasons,processing_state
+      ) values ($1,$2,$3,$4,'CONVERSATION_ENDED_OR_HANDOFF_READY',current_timestamp,$5::jsonb,'CONTACTABLE','[]'::jsonb,'RECEIVED')`,
+      [workspaceId, provider, frc12EventId, frc12ConversationId, JSON.stringify({ synthetic: true, frc12: true })],
+    );
+
+    await pool.query(
+      `insert into crm_conversation_assignments (
+        workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at
+      ) values ($1,$2,$3,$4,'ASSIGNED',current_timestamp,current_timestamp)`,
+      [workspaceId, provider, frc12ConversationId, frc12Rep],
+    );
+
+    await pool.query(
+      `insert into crm_site_chat_access (
+        workspace_id, conversation_id, access_token_hash, issuance_proof, created_at, expires_at
+      ) values ($1,$2,$3,$4,current_timestamp,clock_timestamp() + interval '7 days')`,
+      [workspaceId, frc12ConversationId, frc12AttackerHash, "a".repeat(64)],
+    );
+
+    const frc12Registered = await registerSiteChatAccess({
+      pool,
+      workspaceId,
+      conversationId: frc12ConversationId,
+      accessToken: frc12LegitimateToken,
+    });
+    assert.equal(frc12Registered.status, "COMMITTED", "attacker pre-seeding must not block legitimate issuance");
+
+    await publishSiteChatReply({
+      pool,
+      workspaceId,
+      provider,
+      eventId: frc12EventId,
+      body: "FRC-12 legitimate reply",
+      publishedBy: frc12Rep,
+    });
+
+    const frc12Rows = await pool.query<{ count: string }>(
+      `select count(*)::text as count
+         from crm_site_chat_access
+        where workspace_id=$1 and conversation_id=$2`,
+      [workspaceId, frc12ConversationId],
+    );
+    assert.equal(frc12Rows.rows[0]?.count, "2", "untrusted pre-seed may coexist but must carry no authority");
+
+    assert.equal(
+      (await readSiteChatReplies({
+        pool,
+        workspaceId,
+        conversationId: frc12ConversationId,
+        accessToken: frc12AttackerToken,
+      })).length,
+      0,
+      "attacker pre-seeded token must remain unauthorized",
+    );
+
+    const frc12LegitimateReplies = await readSiteChatReplies({
+      pool,
+      workspaceId,
+      conversationId: frc12ConversationId,
+      accessToken: frc12LegitimateToken,
+    });
+    assert.equal(frc12LegitimateReplies.length, 1, "legitimate issuance must retain thread read authority");
+    assert.equal(frc12LegitimateReplies[0]?.body, "FRC-12 legitimate reply");
+
+    console.log("PASS FRC-12 pre-issuance attacker row is unauthenticated and does not block legitimate capability");
+
     const registered = await registerSiteChatAccess({ pool, workspaceId, conversationId, accessToken: token });
     assert.equal(registered.status, "COMMITTED");
 

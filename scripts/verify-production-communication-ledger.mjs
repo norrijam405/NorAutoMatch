@@ -13,6 +13,7 @@ try {
     "infrastructure/norautomatch-conversation-communication-ledger-r0.sql",
     "infrastructure/norautomatch-site-chat-thread-r0.sql",
     "infrastructure/norautomatch-site-chat-access-integrity-r1.sql",
+    "infrastructure/norautomatch-site-chat-access-authenticity-r2.sql",
   ];
 
   for (const migrationName of requiredMigrations) {
@@ -70,7 +71,30 @@ try {
     if (functionCheck.rowCount !== 1) throw new Error(`PRODUCTION_FUNCTION_MISSING:${functionName}`);
   }
 
-  console.log("PASS production startup installed ownership + communication ledger + site-chat truth guards");
+  const proofColumn = await client.query(
+    `select 1
+       from information_schema.columns
+      where table_schema='public'
+        and table_name='crm_site_chat_access'
+        and column_name='issuance_proof'`,
+  );
+  if (proofColumn.rowCount !== 1) throw new Error("PRODUCTION_SITE_CHAT_ISSUANCE_PROOF_COLUMN_MISSING");
+
+  const primaryKey = await client.query(
+    `select array_agg(a.attname order by u.ordinality)::text[] as columns
+       from pg_constraint c
+       join lateral unnest(c.conkey) with ordinality as u(attnum, ordinality) on true
+       join pg_attribute a on a.attrelid=c.conrelid and a.attnum=u.attnum
+      where c.conrelid='crm_site_chat_access'::regclass
+        and c.contype='p'
+      group by c.oid`,
+  );
+  const pkColumns = primaryKey.rows[0]?.columns ?? [];
+  if (pkColumns.join(",") !== "workspace_id,conversation_id,access_token_hash") {
+    throw new Error(`PRODUCTION_SITE_CHAT_ACCESS_PRIMARY_KEY_DRIFT:${pkColumns.join(",")}`);
+  }
+
+  console.log("PASS production startup installed ownership + communication ledger + site-chat truth/authenticity guards");
 } finally {
   await client.end();
 }

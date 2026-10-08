@@ -1,7 +1,8 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Pool } from "pg";
 
 const SITE_CHAT_ACCESS_DAYS = 7;
+const DEVELOPMENT_SITE_CHAT_HMAC_SECRET = "development-only-norautomatch-site-chat-access-v2";
 
 export type SiteChatReply = {
   replyId: string;
@@ -11,12 +12,95 @@ export type SiteChatReply = {
   authorityEffect: "NONE";
 };
 
-function tokenHash(token: string) {
-  return createHash("sha256").update(token, "utf8").digest("hex");
-}
+type SiteChatAccessRow = {
+  access_token_hash: string;
+  issuance_proof: string | null;
+  created_at: Date | string;
+  expires_at: Date | string;
+  last_seen_at?: Date | string | null;
+};
 
 function validToken(token: string) {
   return token.length >= 64 && token.length <= 160 && /^[A-Za-z0-9_-]+$/.test(token);
+}
+
+function normalizeSecret(value: string | undefined, label: string) {
+  const normalized = value?.trim() ?? "";
+  if (!normalized || normalized.length < 32) throw new Error(`${label}_NOT_CONFIGURED`);
+  return normalized;
+}
+
+function siteChatSecrets() {
+  const currentRaw = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_SECRET?.trim();
+  const previousRaw = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET?.trim();
+
+  const current = currentRaw
+    ? normalizeSecret(currentRaw, "SITE_CHAT_ACCESS_HMAC_SECRET")
+    : process.env.NODE_ENV === "production"
+      ? normalizeSecret(undefined, "SITE_CHAT_ACCESS_HMAC_SECRET")
+      : DEVELOPMENT_SITE_CHAT_HMAC_SECRET;
+
+  const previous = previousRaw
+    ? normalizeSecret(previousRaw, "SITE_CHAT_ACCESS_PREVIOUS_HMAC_SECRET")
+    : undefined;
+
+  if (previous && previous === current) throw new Error("SITE_CHAT_ACCESS_HMAC_SECRET_ROTATION_INVALID");
+  return { current, previous };
+}
+
+function hmacHex(secret: string, purpose: string, values: string[]) {
+  return createHmac("sha256", secret)
+    .update(JSON.stringify([purpose, ...values]), "utf8")
+    .digest("hex");
+}
+
+function tokenHash(workspaceId: string, conversationId: string, token: string, secret: string) {
+  return hmacHex(secret, "norautomatch:site-chat-access-token:v2", [workspaceId, conversationId, token]);
+}
+
+function issuanceProof(input: {
+  workspaceId: string;
+  conversationId: string;
+  accessTokenHash: string;
+  createdAt: string;
+  expiresAt: string;
+}, secret: string) {
+  return hmacHex(secret, "norautomatch:site-chat-access-issuance:v2", [
+    input.workspaceId,
+    input.conversationId,
+    input.accessTokenHash,
+    input.createdAt,
+    input.expiresAt,
+  ]);
+}
+
+function equalHex(leftValue: string, rightValue: string) {
+  const left = Buffer.from(leftValue, "hex");
+  const right = Buffer.from(rightValue, "hex");
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function validIssuanceProof(
+  row: SiteChatAccessRow,
+  workspaceId: string,
+  conversationId: string,
+  secrets: { current: string; previous?: string },
+) {
+  if (!row.issuance_proof || !/^[0-9a-f]{64}$/.test(row.issuance_proof)) return false;
+  const createdAt = new Date(row.created_at).toISOString();
+  const expiresAt = new Date(row.expires_at).toISOString();
+  const candidates = [secrets.current, secrets.previous].filter((value): value is string => Boolean(value));
+
+  return candidates.some((secret) => equalHex(
+    row.issuance_proof!,
+    issuanceProof({
+      workspaceId,
+      conversationId,
+      accessTokenHash: row.access_token_hash,
+      createdAt,
+      expiresAt,
+    }, secret),
+  ));
 }
 
 export async function registerSiteChatAccess(input: {
@@ -29,36 +113,79 @@ export async function registerSiteChatAccess(input: {
   if (!validToken(input.accessToken)) throw new Error("SITE_CHAT_ACCESS_TOKEN_INVALID");
   const now = input.now ?? new Date();
   if (!Number.isFinite(now.getTime())) throw new Error("SITE_CHAT_ACCESS_TIME_INVALID");
-  const expiresAt = new Date(now.getTime() + SITE_CHAT_ACCESS_DAYS * 24 * 60 * 60 * 1000);
-  const hash = tokenHash(input.accessToken);
 
-  const existing = await input.pool.query<{ access_token_hash: string; expires_at: Date | string }>(
-    `select access_token_hash, expires_at
-       from crm_site_chat_access
-      where workspace_id=$1 and conversation_id=$2
-      limit 1`,
-    [input.workspaceId, input.conversationId],
-  );
+  const secrets = siteChatSecrets();
+  const createdAt = now.toISOString();
+  const expiresAt = new Date(now.getTime() + SITE_CHAT_ACCESS_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const currentHash = tokenHash(input.workspaceId, input.conversationId, input.accessToken, secrets.current);
+  const tokenHashes = [
+    currentHash,
+    secrets.previous ? tokenHash(input.workspaceId, input.conversationId, input.accessToken, secrets.previous) : null,
+  ].filter((value): value is string => Boolean(value));
 
-  if (existing.rowCount === 1) {
-    const stored = existing.rows[0];
-    if (!stored) throw new Error("SITE_CHAT_ACCESS_IDENTITY_DRIFT");
-    const left = Buffer.from(stored.access_token_hash, "hex");
-    const right = Buffer.from(hash, "hex");
-    if (left.length !== right.length || !timingSafeEqual(left, right)) {
+  const client = await input.pool.connect();
+  try {
+    await client.query("begin");
+    await client.query(
+      "select pg_advisory_xact_lock(hashtextextended($1, 0))",
+      [`norautomatch:site-chat-access:${input.workspaceId}:${input.conversationId}`],
+    );
+
+    const existing = await client.query<SiteChatAccessRow>(
+      `select access_token_hash, issuance_proof, created_at, expires_at, last_seen_at
+         from crm_site_chat_access
+        where workspace_id=$1 and conversation_id=$2
+        for update`,
+      [input.workspaceId, input.conversationId],
+    );
+
+    const authenticRows = existing.rows.filter((row) =>
+      validIssuanceProof(row, input.workspaceId, input.conversationId, secrets),
+    );
+
+    const sameToken = authenticRows.find((row) =>
+      tokenHashes.some((hash) => equalHex(row.access_token_hash, hash)),
+    );
+
+    if (sameToken) {
+      await client.query("commit");
+      return {
+        status: "DEDUPLICATED" as const,
+        expiresAt: new Date(sameToken.expires_at).toISOString(),
+      };
+    }
+
+    if (authenticRows.length > 0) {
       throw new Error("SITE_CHAT_ACCESS_IDENTITY_COLLISION");
     }
-    return { status: "DEDUPLICATED" as const, expiresAt: new Date(stored.expires_at).toISOString() };
+
+    const proof = issuanceProof({
+      workspaceId: input.workspaceId,
+      conversationId: input.conversationId,
+      accessTokenHash: currentHash,
+      createdAt,
+      expiresAt,
+    }, secrets.current);
+
+    await client.query(
+      `insert into crm_site_chat_access (
+         workspace_id, conversation_id, access_token_hash, issuance_proof, created_at, expires_at
+       ) values ($1,$2,$3,$4,$5,$6)`,
+      [input.workspaceId, input.conversationId, currentHash, proof, createdAt, expiresAt],
+    );
+
+    await client.query("commit");
+    return { status: "COMMITTED" as const, expiresAt };
+  } catch (error) {
+    try {
+      await client.query("rollback");
+    } catch (rollbackError) {
+      throw new AggregateError([error, rollbackError], "Site-chat access issuance failed and rollback also failed.");
+    }
+    throw error;
+  } finally {
+    client.release();
   }
-
-  await input.pool.query(
-    `insert into crm_site_chat_access (
-       workspace_id, conversation_id, access_token_hash, created_at, expires_at
-     ) values ($1,$2,$3,$4,$5)`,
-    [input.workspaceId, input.conversationId, hash, now.toISOString(), expiresAt.toISOString()],
-  );
-
-  return { status: "COMMITTED" as const, expiresAt: expiresAt.toISOString() };
 }
 
 export async function readSiteChatReplies(input: {
@@ -70,28 +197,35 @@ export async function readSiteChatReplies(input: {
 }): Promise<SiteChatReply[]> {
   if (!validToken(input.accessToken)) return [];
   const now = input.now ?? new Date();
-  const hash = tokenHash(input.accessToken);
+  const secrets = siteChatSecrets();
+  const hashes = [
+    tokenHash(input.workspaceId, input.conversationId, input.accessToken, secrets.current),
+    secrets.previous ? tokenHash(input.workspaceId, input.conversationId, input.accessToken, secrets.previous) : null,
+  ].filter((value): value is string => Boolean(value));
 
-  const access = await input.pool.query<{ access_token_hash: string; expires_at: Date | string }>(
-    `select access_token_hash, expires_at
+  const access = await input.pool.query<SiteChatAccessRow>(
+    `select access_token_hash, issuance_proof, created_at, expires_at, last_seen_at
        from crm_site_chat_access
-      where workspace_id=$1 and conversation_id=$2
-      limit 1`,
-    [input.workspaceId, input.conversationId],
+      where workspace_id=$1
+        and conversation_id=$2
+        and access_token_hash = any($3::text[])
+      order by expires_at desc`,
+    [input.workspaceId, input.conversationId, hashes],
   );
-  const row = access.rows[0];
-  if (!row) return [];
-  if (Date.parse(new Date(row.expires_at).toISOString()) <= now.getTime()) return [];
 
-  const left = Buffer.from(row.access_token_hash, "hex");
-  const right = Buffer.from(hash, "hex");
-  if (left.length !== right.length || !timingSafeEqual(left, right)) return [];
+  const row = access.rows.find((candidate) =>
+    validIssuanceProof(candidate, input.workspaceId, input.conversationId, secrets)
+    && new Date(candidate.expires_at).getTime() > now.getTime(),
+  );
+  if (!row) return [];
 
   await input.pool.query(
     `update crm_site_chat_access
-        set last_seen_at=$3
-      where workspace_id=$1 and conversation_id=$2`,
-    [input.workspaceId, input.conversationId, now.toISOString()],
+        set last_seen_at=greatest(coalesce(last_seen_at,$4::timestamptz),$4::timestamptz)
+      where workspace_id=$1
+        and conversation_id=$2
+        and access_token_hash=$3`,
+    [input.workspaceId, input.conversationId, row.access_token_hash, now.toISOString()],
   );
 
   const result = await input.pool.query<{
@@ -167,9 +301,13 @@ export async function publishSiteChatReply(input: {
     }
 
     const access = await client.query<{ active: boolean }>(
-      `select expires_at > clock_timestamp() as active
+      `select true as active
          from crm_site_chat_access
-        where workspace_id=$1 and conversation_id=$2
+        where workspace_id=$1
+          and conversation_id=$2
+          and expires_at > clock_timestamp()
+        order by expires_at desc
+        limit 1
         for update`,
       [input.workspaceId, row.conversation_id],
     );
