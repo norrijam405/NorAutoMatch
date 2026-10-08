@@ -299,6 +299,102 @@ async function main() {
 
     console.log("PASS FRC-14 transaction-local HMAC secret must match immutable bootstrap trust anchor");
 
+    const frc15ConversationId = "site-00000000-0000-4000-8000-000000000601";
+    const frc15EventId = "site-00000000-0000-4000-8000-000000000602";
+    const frc15Rep = "synthetic-rep-frc15";
+    const frc15AttackerSecret = "attacker-temp-shadow-secret-0123456789abcdef012345";
+    const frc15AccessHash = "8".repeat(64);
+    const frc15Material = [
+      "norautomatch:site-chat-publication:v1",
+      workspaceId,
+      frc15ConversationId,
+      frc15AccessHash,
+    ].join("\u001f");
+    const frc15ForgedProof = createHmac("sha256", frc15AttackerSecret)
+      .update(frc15Material, "utf8")
+      .digest("hex");
+    const frc15AttackerDigest = createHash("sha256")
+      .update(frc15AttackerSecret, "utf8")
+      .digest("hex");
+
+    await pool.query(
+      `insert into crm_conversation_events (
+        workspace_id,provider,event_id,conversation_id,event_type,observed_at,
+        normalized_payload,routing_decision,routing_reasons,processing_state
+      ) values ($1,$2,$3,$4,'CONVERSATION_ENDED_OR_HANDOFF_READY',current_timestamp,$5::jsonb,'CONTACTABLE','[]'::jsonb,'RECEIVED')`,
+      [workspaceId, provider, frc15EventId, frc15ConversationId, JSON.stringify({ synthetic: true, frc15: true })],
+    );
+
+    await pool.query(
+      `insert into crm_conversation_assignments (
+        workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at
+      ) values ($1,$2,$3,$4,'ASSIGNED',current_timestamp,current_timestamp)`,
+      [workspaceId, provider, frc15ConversationId, frc15Rep],
+    );
+
+    await assert.rejects(
+      async () => {
+        const frc15Client = await pool.connect();
+        try {
+          await frc15Client.query("begin");
+          await frc15Client.query(
+            `create temporary table crm_site_chat_publication_secret_anchor (
+              anchor_id text primary key,
+              current_secret_sha256 char(64) not null,
+              previous_secret_sha256 char(64)
+            ) on commit drop`,
+          );
+          await frc15Client.query(
+            `insert into crm_site_chat_publication_secret_anchor (
+              anchor_id, current_secret_sha256, previous_secret_sha256
+            ) values ('ACTIVE', $1, null)`,
+            [frc15AttackerDigest],
+          );
+          await frc15Client.query("set local search_path = pg_temp, public");
+          await frc15Client.query(
+            `insert into public.crm_site_chat_access (
+              workspace_id, conversation_id, access_token_hash, issuance_proof, publication_proof, created_at, expires_at
+            ) values ($1,$2,$3,null,$4,current_timestamp,clock_timestamp() + interval '7 days')`,
+            [workspaceId, frc15ConversationId, frc15AccessHash, frc15ForgedProof],
+          );
+          await frc15Client.query(
+            "select set_config('norautomatch.site_chat_publication_hmac_secret', $1, true)",
+            [frc15AttackerSecret],
+          );
+          await frc15Client.query(
+            `insert into public.crm_site_chat_replies (
+              workspace_id, conversation_id, source_event_id, body, published_by
+            ) values ($1,$2,$3,$4,$5)`,
+            [
+              workspaceId,
+              frc15ConversationId,
+              frc15EventId,
+              "FRC-15 temp anchor shadow publication must fail",
+              frc15Rep,
+            ],
+          );
+          await frc15Client.query("commit");
+        } catch (error) {
+          try { await frc15Client.query("rollback"); } catch {}
+          throw error;
+        } finally {
+          frc15Client.release();
+        }
+      },
+      /SITE_CHAT_REPLY_AUTHENTIC_ACCESS_REQUIRED/,
+      "temporary anchor shadow must not substitute for public trust anchor",
+    );
+
+    const frc15Count = await pool.query<{ count: string }>(
+      `select count(*)::text as count
+         from public.crm_site_chat_replies
+        where workspace_id=$1 and conversation_id=$2`,
+      [workspaceId, frc15ConversationId],
+    );
+    assert.equal(frc15Count.rows[0]?.count, "0", "FRC-15 shadow-forged reply must roll back");
+
+    console.log("PASS FRC-15 temporary relation shadow cannot replace schema-qualified trust anchor");
+
     const registered = await registerSiteChatAccess({ pool, workspaceId, conversationId, accessToken: token });
     assert.equal(registered.status, "COMMITTED");
 
