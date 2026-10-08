@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { createPostgresCrmPool } from "../src/lib/crm-postgres-adapter";
 import { registerSiteChatAccess, readSiteChatReplies, publishSiteChatReply } from "../src/lib/site-chat-thread";
@@ -171,6 +172,37 @@ async function main() {
     replies = await readSiteChatReplies({ pool, workspaceId, conversationId, accessToken: token });
     assert.equal(replies.length, 2);
     assert.equal(replies[1]?.body, "The current owner can publish.");
+
+    const attackerToken = "attackerCapabilityToken_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcd";
+    const attackerHash = createHash("sha256").update(attackerToken, "utf8").digest("hex");
+
+    const capabilityRewrite = await pool.query(
+      `update crm_site_chat_access
+          set access_token_hash=$3
+        where workspace_id=$1 and conversation_id=$2`,
+      [workspaceId, conversationId, attackerHash],
+    );
+    assert.equal(capabilityRewrite.rowCount, 1, "direct SQL can currently rewrite the site-thread browser capability");
+
+    const attackerReplies = await readSiteChatReplies({
+      pool,
+      workspaceId,
+      conversationId,
+      accessToken: attackerToken,
+    });
+    assert.equal(attackerReplies.length, 2, "attacker-chosen token became authorized after direct SQL capability rewrite");
+    assert.equal(attackerReplies[0]?.body, "A human-reviewed same-site reply.");
+    assert.equal(attackerReplies[1]?.body, "The current owner can publish.");
+
+    const originalAfterRewrite = await readSiteChatReplies({
+      pool,
+      workspaceId,
+      conversationId,
+      accessToken: token,
+    });
+    assert.equal(originalAfterRewrite.length, 0, "original browser capability is displaced by direct SQL rewrite");
+
+    console.log("FRC11_WITNESS site-chat access capability hash rewrite authorized attacker-chosen token");
 
     const currentOwnerReply = await pool.query<{ reply_id: string }>(
       `select reply_id
