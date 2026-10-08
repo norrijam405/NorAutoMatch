@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { createPostgresCrmPool } from "../src/lib/crm-postgres-adapter";
 import { registerSiteChatAccess, readSiteChatReplies, publishSiteChatReply } from "../src/lib/site-chat-thread";
@@ -219,6 +219,85 @@ async function main() {
     assert.equal(frc13Count.rows[0]?.count, "1", "only authenticated publication may persist");
 
     console.log("PASS FRC-13 publication requires cryptographically authentic site-chat access");
+
+    const frc14ConversationId = "site-00000000-0000-4000-8000-000000000501";
+    const frc14EventId = "site-00000000-0000-4000-8000-000000000502";
+    const frc14Rep = "synthetic-rep-frc14";
+    const frc14AttackerSecret = "attacker-controlled-publication-secret-0123456789abcdef";
+    const frc14AccessHash = "9".repeat(64);
+    const frc14Material = [
+      "norautomatch:site-chat-publication:v1",
+      workspaceId,
+      frc14ConversationId,
+      frc14AccessHash,
+    ].join("\u001f");
+    const frc14ForgedProof = createHmac("sha256", frc14AttackerSecret)
+      .update(frc14Material, "utf8")
+      .digest("hex");
+
+    await pool.query(
+      `insert into crm_conversation_events (
+        workspace_id,provider,event_id,conversation_id,event_type,observed_at,
+        normalized_payload,routing_decision,routing_reasons,processing_state
+      ) values ($1,$2,$3,$4,'CONVERSATION_ENDED_OR_HANDOFF_READY',current_timestamp,$5::jsonb,'CONTACTABLE','[]'::jsonb,'RECEIVED')`,
+      [workspaceId, provider, frc14EventId, frc14ConversationId, JSON.stringify({ synthetic: true, frc14: true })],
+    );
+
+    await pool.query(
+      `insert into crm_conversation_assignments (
+        workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at
+      ) values ($1,$2,$3,$4,'ASSIGNED',current_timestamp,current_timestamp)`,
+      [workspaceId, provider, frc14ConversationId, frc14Rep],
+    );
+
+    await assert.rejects(
+      async () => {
+        const frc14Client = await pool.connect();
+        try {
+          await frc14Client.query("begin");
+          await frc14Client.query(
+            `insert into crm_site_chat_access (
+              workspace_id, conversation_id, access_token_hash, issuance_proof, publication_proof, created_at, expires_at
+            ) values ($1,$2,$3,null,$4,current_timestamp,clock_timestamp() + interval '7 days')`,
+            [workspaceId, frc14ConversationId, frc14AccessHash, frc14ForgedProof],
+          );
+          await frc14Client.query(
+            "select set_config('norautomatch.site_chat_publication_hmac_secret', $1, true)",
+            [frc14AttackerSecret],
+          );
+          await frc14Client.query(
+            `insert into crm_site_chat_replies (
+              workspace_id, conversation_id, source_event_id, body, published_by
+            ) values ($1,$2,$3,$4,$5)`,
+            [
+              workspaceId,
+              frc14ConversationId,
+              frc14EventId,
+              "FRC-14 self-asserted publication must fail",
+              frc14Rep,
+            ],
+          );
+          await frc14Client.query("commit");
+        } catch (error) {
+          try { await frc14Client.query("rollback"); } catch {}
+          throw error;
+        } finally {
+          frc14Client.release();
+        }
+      },
+      /SITE_CHAT_REPLY_AUTHENTIC_ACCESS_REQUIRED/,
+      "attacker-chosen transaction-local secret must not self-authenticate at deferred commit",
+    );
+
+    const frc14Count = await pool.query<{ count: string }>(
+      `select count(*)::text as count
+         from crm_site_chat_replies
+        where workspace_id=$1 and conversation_id=$2`,
+      [workspaceId, frc14ConversationId],
+    );
+    assert.equal(frc14Count.rows[0]?.count, "0", "FRC-14 forged reply must roll back");
+
+    console.log("PASS FRC-14 transaction-local HMAC secret must match immutable bootstrap trust anchor");
 
     const registered = await registerSiteChatAccess({ pool, workspaceId, conversationId, accessToken: token });
     assert.equal(registered.status, "COMMITTED");
