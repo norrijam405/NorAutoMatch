@@ -1,0 +1,46 @@
+{
+  "pilot": "NORAUTOMATCH_R2_5LANE_DESTROYER_DEFENDER_PILOT",
+  "date": "2026-10-09",
+  "repository": "norrijam405/NorAutoMatch",
+  "frozen_candidate": "98f61d355b1c6127e3464338b81caeaa81381f66",
+  "frozen_tree": "e368f5370efb0b8de65300b819819daa0c8a6b83",
+  "lanes": [
+    {
+      "id": "D1",
+      "finding": "BRC-FRC-01",
+      "surface": "secure-document customer binding",
+      "historical_pr": 63
+    },
+    {
+      "id": "D2",
+      "finding": "BRC-FRC-03",
+      "surface": "communication ledger immutability",
+      "historical_pr": 65
+    },
+    {
+      "id": "D3",
+      "finding": "BRC-FRC-06",
+      "surface": "provider receipt truth",
+      "historical_pr": 68
+    },
+    {
+      "id": "D4",
+      "finding": "BRC-FRC-10",
+      "surface": "site-chat reply immutability",
+      "historical_pr": 72
+    },
+    {
+      "id": "D5",
+      "finding": "BRC-FRC-15",
+      "surface": "publication trust-chain shadowing",
+      "historical_pr": 77
+    }
+  ],
+  "governance": {
+    "destroyer_may_remediate": false,
+    "defender_may_self_certify": false,
+    "merge_authority": false,
+    "deployment_authority": false,
+    "production_authority": false
+  }
+}
