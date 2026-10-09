@@ -32,6 +32,7 @@ const migrations = [
   "infrastructure/norautomatch-site-chat-publication-authenticity-r3.sql",
   "infrastructure/norautomatch-site-chat-publication-secret-anchor-r4.sql",
   "infrastructure/norautomatch-site-chat-schema-qualified-trust-r5.sql",
+  "infrastructure/norautomatch-site-chat-publication-secret-rotation-r6.sql",
 ];
 
 function sha256(text) {
@@ -206,6 +207,55 @@ async function applyMigrations(connectionString) {
           console.log(`CUSTOMER_BINDING_TRUST_ANCHOR_ROTATED ${expectedCurrent}`);
         } else {
           console.log(`CUSTOMER_BINDING_TRUST_ANCHOR_CURRENT ${expectedCurrent}`);
+        }
+      }
+    }
+
+    const siteChatCurrentSecret = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_SECRET?.trim() ?? "";
+    if (siteChatCurrentSecret.length >= 32) {
+      const siteChatAnchor = await client.query(
+        `select current_secret_sha256, previous_secret_sha256
+           from public.crm_site_chat_publication_secret_anchor
+          where anchor_id='ACTIVE'`,
+      );
+
+      if (siteChatAnchor.rowCount === 1) {
+        const expectedCurrent = sha256(siteChatCurrentSecret);
+        const recordedCurrent = siteChatAnchor.rows[0].current_secret_sha256?.trim();
+
+        if (recordedCurrent !== expectedCurrent) {
+          const siteChatPreviousSecret =
+            process.env.NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET?.trim() ?? "";
+          if (siteChatPreviousSecret.length < 32) {
+            throw new Error("SITE_CHAT_PUBLICATION_ROTATION_PREVIOUS_SECRET_REQUIRED");
+          }
+
+          await client.query("BEGIN");
+          try {
+            await client.query(
+              "select set_config('norautomatch.site_chat_rotation_current_secret', $1, true)",
+              [siteChatCurrentSecret],
+            );
+            await client.query(
+              "select set_config('norautomatch.site_chat_rotation_previous_secret', $1, true)",
+              [siteChatPreviousSecret],
+            );
+            await client.query(
+              `update public.crm_site_chat_publication_secret_anchor
+                  set current_secret_sha256=$1,
+                      previous_secret_sha256=$2
+                where anchor_id='ACTIVE'`,
+              [expectedCurrent, recordedCurrent],
+            );
+            await client.query("COMMIT");
+          } catch (error) {
+            await client.query("ROLLBACK");
+            throw error;
+          }
+
+          console.log(`SITE_CHAT_PUBLICATION_TRUST_ANCHOR_ROTATED ${expectedCurrent}`);
+        } else {
+          console.log(`SITE_CHAT_PUBLICATION_TRUST_ANCHOR_CURRENT ${expectedCurrent}`);
         }
       }
     }
