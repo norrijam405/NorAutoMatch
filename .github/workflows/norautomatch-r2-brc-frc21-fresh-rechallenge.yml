@@ -1,0 +1,121 @@
+name: NorAutoMatch R2 BRC-FRC-21 Fresh Rechallenge
+
+on:
+  push:
+    branches:
+      - "evidence/r2-frc21-fresh-rechallenge-20261009"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frc21-fresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Checkout predecessor
+        uses: actions/checkout@v4
+        with:
+          ref: 11b0ca7d363767294f20a4f0a6a3852318b42ddb
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          sudo -u postgres dropdb --if-exists norauto_frc21_fresh
+          sudo -u postgres createdb -O norauto norauto_frc21_fresh
+
+      - name: Bootstrap predecessor database
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc21_fresh
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc21-predecessor
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc21-fresh-secret-0123456789abcdef
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_frc21_fresh -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          npm start
+
+      - name: Checkout exact FRC-21 successor
+        uses: actions/checkout@v4
+        with:
+          ref: d87948625d01a1b112e99ac4531e406e9a7f92c3
+          clean: true
+          fetch-depth: 0
+      - run: npm ci
+
+      - name: Verify exact successor identity
+        run: |
+          test "$(git rev-parse HEAD)" = "d87948625d01a1b112e99ac4531e406e9a7f92c3"
+          test "$(git rev-parse HEAD^{tree})" = "5ee2311e8300e7a08f546de1ef6e1ab9c893749f"
+
+      - name: Upgrade predecessor database with additive FRC-21 migration
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc21_fresh
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc21-successor
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc21-fresh-secret-0123456789abcdef
+        run: |
+          npm start
+          npm start
+
+      - name: Historical and fresh FRC-21 challenges
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc21_fresh
+        run: |
+          npx tsc -p tsconfig.communication-ledger.json
+          node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js
+          node scripts/frc19-communication-relation-shadow.integration.mjs
+          node scripts/frc19-persistent-schema-shadow.integration.mjs
+          node scripts/frc21-redacted-communication-source.integration.mjs
+
+      - name: Fresh REDACTED handoff-opened variation
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc21_fresh
+        run: |
+          node --input-type=module <<'NODE'
+          import pg from "pg";
+          const {Pool}=pg;
+          const pool=new Pool({connectionString:process.env.NORAUTO_CRM_DATABASE_URL});
+          try {
+            let rejected=false;
+            try {
+              await pool.query(`
+                insert into public.crm_conversation_contact_events (
+                  client_action_id,workspace_id,provider,conversation_id,source_event_id,
+                  channel,event_type,actor_subject_id,target_hash,target_hint,evidence_authority,evidence_ref,delivery_outcome
+                ) values (
+                  '00000000-0000-4000-8000-000000002102'::uuid,
+                  'communication-ledger-test','NORAUTO_SITE_CHAT','communication-ledger-conversation-001',
+                  'communication-ledger-event-001','EMAIL','CHANNEL_HANDOFF_OPENED','rep-test-001',
+                  $1,'***@example.com','INTERNAL_UI',null,null
+                )
+              `,["3".repeat(64)]);
+            } catch(e) {
+              rejected=/COMMUNICATION_SOURCE_EVENT_NOT_ELIGIBLE/.test(String(e));
+            }
+            if(!rejected) throw new Error("FRC21_REDACTED_HANDOFF_OPENED_NOT_REJECTED");
+            console.log("PASS FRC-21 fresh REDACTED handoff-opened variation");
+          } finally { await pool.end(); }
+          NODE
+
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run typecheck
+      - run: npm run build
