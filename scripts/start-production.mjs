@@ -72,6 +72,31 @@ async function verifyMigrationInvariant(client, migrationName) {
       throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-crm-v14-authenticated-customer-opportunity-bindings.sql");
     }
   }
+
+
+  if (migrationName === "infrastructure/norautomatch-conversation-communication-ledger-redacted-source-r1.sql") {
+    const result = await client.query(`
+      select pg_get_functiondef(p.oid) as definition, p.proconfig
+        from pg_proc p
+        join pg_namespace n on n.oid=p.pronamespace
+       where n.nspname='public'
+         and p.proname='norautomatch_enforce_communication_evidence_insert_truth'
+    `);
+    const row = result.rows[0];
+    const definition = row?.definition ?? "";
+    const config = row?.proconfig ?? [];
+    const fixedSearchPath = Array.isArray(config)
+      && config.includes("search_path=pg_catalog, public");
+    if (
+      result.rowCount !== 1
+      || !fixedSearchPath
+      || !definition.includes("REDACTED")
+      || !definition.includes("public.crm_conversation_events")
+      || !definition.includes("public.crm_conversation_assignments")
+    ) {
+      throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-communication-ledger-redacted-source-r1.sql");
+    }
+  }
 }
 
 async function applyMigrations(connectionString) {
