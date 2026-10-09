@@ -149,6 +149,7 @@ jobs:
           NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
         run: |
           createdb -h 127.0.0.1 -U norauto norauto_frc18_fresh
+          psql -h 127.0.0.1 -U norauto -d norauto_frc18_fresh -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
           v14_sha="$(sha256sum infrastructure/norautomatch-crm-v14-authenticated-customer-opportunity-bindings.sql | awk '{print $1}')"
           psql -h 127.0.0.1 -U norauto -d norauto_frc18_fresh -v ON_ERROR_STOP=1 -v v14="$v14_sha" <<'SQL'
           create table norautomatch_schema_migrations (
