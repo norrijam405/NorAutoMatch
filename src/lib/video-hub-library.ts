@@ -14,11 +14,11 @@ export const videoHubManagerFormSchema = z.object({
     publicationState: z.enum(["NOT_PUBLISHED", "UNVERIFIED", "PUBLISHED", "REMOVED"]),
     publicationEvidenceRef: z.string().trim().min(1).max(512).nullable().default(null),
   }).superRefine((value, ctx) => {
-    if (value.publicationState === "PUBLISHED" && !value.publicationEvidenceRef) {
+    if (value.publicationState === "PUBLISHED") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["publicationEvidenceRef"],
-        message: "Published social links require publication evidence.",
+        path: ["publicationState"],
+        message: "Published social links require independently verified provider evidence; manual publication claims are not accepted.",
       });
     }
   })).max(20),
