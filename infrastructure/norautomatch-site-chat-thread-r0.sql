@@ -82,7 +82,7 @@ create or replace function public.norauto_enforce_site_chat_reply_insert_truth()
 returns trigger
 language plpgsql
 set search_path = pg_catalog, public
-as $
+as $$
 declare
   event_processing_state text;
   current_assignment_state text;
