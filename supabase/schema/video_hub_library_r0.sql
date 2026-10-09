@@ -30,7 +30,6 @@ as $func$
       select 1
       from jsonb_array_elements(p_channels) as item
       where item->>'publicationState' = 'PUBLISHED'
-        and nullif(btrim(item->>'publicationEvidenceRef'), '') is null
     );
 $func$;
 
@@ -153,4 +152,4 @@ for each row
 execute function public.norautomatch_touch_video_hub_entry_updated_at();
 
 comment on table public.video_hub_entries is
-  'Canonical NorAutoMatch video metadata. Manually entered social links remain UNVERIFIED; PUBLISHED requires evidence. No social publishing authority is implied.';
+  'Canonical NorAutoMatch video metadata. Manually entered social links remain UNVERIFIED; PUBLISHED is fail-closed until an independently governed provider-verification path exists. No social publishing authority is implied.';
