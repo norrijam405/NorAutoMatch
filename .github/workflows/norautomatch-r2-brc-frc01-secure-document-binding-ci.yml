@@ -5,6 +5,7 @@ on:
     branches:
       - "remediation/r2-frc15-schema-qualified-trust-chain"
       - "remediation/r2-frc19-communication-schema-qualified-truth"
+      - "evidence/r2-frc19-fresh-rechallenge-20261009"
   pull_request:
     branches:
       - "remediation/r2-frc14-publication-secret-anchor"
@@ -107,6 +108,11 @@ jobs:
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
         run: node scripts/frc19-communication-relation-shadow.integration.mjs
+
+      - name: Fresh Re-Challenge FRC-19 persistent schema shadow
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node scripts/frc19-persistent-schema-shadow.integration.mjs
 
       - name: Clean communication verification output
         run: rm -rf .tmp-communication-ledger
