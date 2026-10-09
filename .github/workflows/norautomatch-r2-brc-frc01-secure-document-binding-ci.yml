@@ -87,6 +87,7 @@ jobs:
       - name: Challenge cross-customer secure-document linkage
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
         run: node .tmp-secure-document-binding/scripts/secure-document-opportunity-binding.integration.js
 
       - name: Clean verification output
