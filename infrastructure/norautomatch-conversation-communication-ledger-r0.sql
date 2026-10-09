@@ -86,9 +86,10 @@ for each statement
 execute function norautomatch_reject_communication_evidence_truncate();
 
 
-create or replace function norautomatch_enforce_communication_evidence_insert_truth()
+create or replace function public.norautomatch_enforce_communication_evidence_insert_truth()
 returns trigger
 language plpgsql
+set search_path = pg_catalog, public
 as $$
 declare
   source_payload jsonb;
@@ -98,7 +99,7 @@ declare
 begin
   select normalized_payload, processing_state
     into source_payload, source_processing_state
-    from crm_conversation_events
+    from public.crm_conversation_events
    where workspace_id = new.workspace_id
      and provider = new.provider
      and event_id = new.source_event_id
@@ -111,7 +112,7 @@ begin
 
   select a.assignment_state, a.assignee_subject_id
     into current_assignment_state, current_assignee
-    from crm_conversation_assignments a
+    from public.crm_conversation_assignments a
    where workspace_id = new.workspace_id
      and provider = new.provider
      and conversation_id = new.conversation_id
@@ -143,4 +144,4 @@ drop trigger if exists crm_conversation_contact_events_insert_truth
 create trigger crm_conversation_contact_events_insert_truth
 before insert on crm_conversation_contact_events
 for each row
-execute function norautomatch_enforce_communication_evidence_insert_truth();
+execute function public.norautomatch_enforce_communication_evidence_insert_truth();

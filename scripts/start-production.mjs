@@ -37,6 +37,40 @@ function sha256(text) {
   return createHash("sha256").update(text).digest("hex");
 }
 
+async function verifyMigrationInvariant(client, migrationName) {
+  if (migrationName === "infrastructure/norautomatch-crm-v13-customer-opportunity-bindings.sql") {
+    const result = await client.query(`
+      select
+        to_regclass('public.crm_opportunity_customer_bindings') is not null as binding_table,
+        exists (
+          select 1 from pg_trigger
+           where tgname='customer_secure_document_opportunity_binding_guard'
+             and not tgisinternal
+        ) as document_guard
+    `);
+    const row = result.rows[0];
+    if (!row?.binding_table || !row?.document_guard) {
+      throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-crm-v13-customer-opportunity-bindings.sql");
+    }
+  }
+
+  if (migrationName === "infrastructure/norautomatch-crm-v14-authenticated-customer-opportunity-bindings.sql") {
+    const result = await client.query(`
+      select
+        to_regclass('public.crm_customer_binding_secret_anchor') is not null as trust_anchor,
+        exists (
+          select 1 from pg_trigger
+           where tgname='crm_opportunity_customer_bindings_insert_authenticity'
+             and not tgisinternal
+        ) as insert_guard
+    `);
+    const row = result.rows[0];
+    if (!row?.trust_anchor || !row?.insert_guard) {
+      throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-crm-v14-authenticated-customer-opportunity-bindings.sql");
+    }
+  }
+}
+
 async function applyMigrations(connectionString) {
   const client = new Client({ connectionString });
   await client.connect();
@@ -64,6 +98,7 @@ async function applyMigrations(connectionString) {
         if (recorded !== digest) {
           throw new Error(`MIGRATION_CHECKSUM_MISMATCH:${migrationName}:recorded=${recorded}:current=${digest}`);
         }
+        await verifyMigrationInvariant(client, migrationName);
         console.log(`MIGRATION_ALREADY_APPLIED ${migrationName} ${digest}`);
         continue;
       }
@@ -118,6 +153,7 @@ async function applyMigrations(connectionString) {
         throw error;
       }
 
+      await verifyMigrationInvariant(client, migrationName);
       console.log(`MIGRATION_APPLIED ${migrationName} ${digest}`);
     }
   } finally {
