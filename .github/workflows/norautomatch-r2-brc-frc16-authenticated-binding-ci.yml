@@ -1,0 +1,94 @@
+name: NorAutoMatch R2 BRC-FRC-16 Authenticated Customer Binding CI
+
+on:
+  push:
+    branches:
+      - "remediation/r2-frc16-authenticated-customer-binding"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frc16-builder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Production dependency security gate
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Start runner PostgreSQL
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          sudo -u postgres dropdb --if-exists norauto_frc16
+          sudo -u postgres createdb -O norauto norauto_frc16
+
+      - name: Prepare secure-document prerequisite
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: psql -h 127.0.0.1 -U norauto -d norauto_frc16 -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+
+      - name: Run real production migration launcher
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc16
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc16-builder-ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
+        run: npm start
+
+      - name: Verify production v13 and v14
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc16
+        run: |
+          node scripts/verify-production-v13.mjs
+          node scripts/verify-production-v14.mjs
+
+      - name: Re-run production migration launcher for idempotency
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc16
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc16-builder-ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
+        run: npm start
+
+      - name: Compile historical secure-document binding surface
+        run: npx tsc -p tsconfig.secure-document-binding.json
+
+      - name: Re-run historical BRC-FRC-01 boundary
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc16
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
+        run: node .tmp-secure-document-binding/scripts/secure-document-opportunity-binding.integration.js
+
+      - name: Re-test FRC-16 direct-SQL authority mint
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc16
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
+        run: node scripts/customer-opportunity-binding.frc16.integration.mjs
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Production build
+        run: npm run build
