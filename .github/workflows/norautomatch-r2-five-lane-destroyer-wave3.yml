@@ -87,18 +87,7 @@ jobs:
             export NORAUTO_CRM_DATABASE_URL="postgres://norauto:norauto-ci-password@127.0.0.1:5432/wave3_d2"
             node scripts/wave3-d2-migration-ledger-preseed-challenge.mjs &&
             NORAUTO_MIGRATION_ONLY=1             NORAUTO_RELEASE_SHA="wave3-d2"             NORAUTO_PUBLIC_ABUSE_HMAC_SECRET="$HMAC_SECRET"             npm start &&
-            node --input-type=module <<'NODE'
-            import pg from "pg";
-            const { Pool } = pg;
-            const pool = new Pool({connectionString:process.env.NORAUTO_CRM_DATABASE_URL});
-            try {
-              const q=await pool.query("select to_regclass('public.crm_opportunity_customer_bindings') as bindings, to_regclass('public.crm_customer_binding_secret_anchor') as anchor");
-              if(!q.rows[0]?.bindings || !q.rows[0]?.anchor) {
-                throw new Error("NEW_FINDING_D2_PRESEEDED_MIGRATION_LEDGER_SKIPS_UNAPPLIED_SECURITY_MIGRATIONS");
-              }
-              console.log("PASS D2 preseeded migration metadata cannot suppress security migration installation");
-            } finally { await pool.end(); }
-            NODE
+            node scripts/wave3-d2-migration-post-bootstrap-verify.mjs
           ) > d2.log 2>&1 &
           p2=$!
 
