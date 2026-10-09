@@ -5,6 +5,7 @@ on:
     branches:
       - "remediation/r2-frc15-schema-qualified-trust-chain"
       - "remediation/r2-frc18-migration-ledger-invariant-verification"
+      - "evidence/r2-frc18-fresh-rechallenge-20261009"
   pull_request:
     branches:
       - "remediation/r2-frc14-publication-secret-anchor"
@@ -138,6 +139,38 @@ jobs:
           test "$status" -ne 0
           echo "$output" | grep "MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-crm-v13-customer-opportunity-bindings.sql"
           echo "PASS FRC-18 pre-seeded migration metadata cannot suppress missing security invariants"
+
+      - name: Fresh Re-Challenge FRC-18 later-migration-only preseed
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc18_fresh
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc18-fresh-rechallenge
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
+        run: |
+          createdb -h 127.0.0.1 -U norauto norauto_frc18_fresh
+          v14_sha="$(sha256sum infrastructure/norautomatch-crm-v14-authenticated-customer-opportunity-bindings.sql | awk '{print $1}')"
+          psql -h 127.0.0.1 -U norauto -d norauto_frc18_fresh -v ON_ERROR_STOP=1 -v v14="$v14_sha" <<'SQL'
+          create table norautomatch_schema_migrations (
+            migration_name text primary key,
+            sha256 char(64) not null check (sha256 ~ '^[0-9a-f]{64}
+      - name: Production build
+        run: npm run build
+),
+            release_sha text not null,
+            applied_at timestamptz not null default current_timestamp
+          );
+          insert into norautomatch_schema_migrations(migration_name,sha256,release_sha)
+          values ('infrastructure/norautomatch-crm-v14-authenticated-customer-opportunity-bindings.sql', :'v14', 'fresh-forged-receipt');
+          SQL
+          set +e
+          output="$(npm start 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -ne 0
+          echo "$output" | grep "MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-crm-v14-authenticated-customer-opportunity-bindings.sql"
+          echo "PASS FRC-18 fresh later-migration-only preseed fails closed"
 
       - name: Typecheck application
         run: npm run typecheck
