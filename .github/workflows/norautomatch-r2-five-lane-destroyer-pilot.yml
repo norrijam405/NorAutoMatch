@@ -1,0 +1,195 @@
+name: NorAutoMatch R2 Five-Lane Destroyer Pilot
+
+on:
+  push:
+    branches:
+      - "orchestration/r2-5lane-destroyer-defender-pilot-20261009"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DB_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+  HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
+
+jobs:
+  d1-secure-document-binding:
+    name: D1 BRC-FRC-01 secure-document binding
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Prepare prerequisite
+        env: {PGPASSWORD: norauto-ci-password}
+        run: psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+      - name: Bootstrap exact candidate schema
+        env:
+          NORAUTO_CRM_DATABASE_URL: ${{ env.DB_URL }}
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: five-lane-d1
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ${{ env.HMAC_SECRET }}
+        run: npm start
+      - run: npx tsc -p tsconfig.secure-document-binding.json
+      - name: Challenge BRC-FRC-01
+        env: {NORAUTO_CRM_DATABASE_URL: "${{ env.DB_URL }}"}
+        run: node .tmp-secure-document-binding/scripts/secure-document-opportunity-binding.integration.js
+
+  d2-communication-ledger-immutability:
+    name: D2 BRC-FRC-03 communication immutability
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - name: Prepare prerequisite
+        env: {PGPASSWORD: norauto-ci-password}
+        run: psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+      - name: Bootstrap exact candidate schema
+        env:
+          NORAUTO_CRM_DATABASE_URL: ${{ env.DB_URL }}
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: five-lane-d2
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ${{ env.HMAC_SECRET }}
+        run: npm start
+      - run: npx tsc -p tsconfig.communication-ledger.json
+      - name: Challenge BRC-FRC-03
+        env: {NORAUTO_CRM_DATABASE_URL: "${{ env.DB_URL }}"}
+        run: node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js
+
+  d3-provider-receipt-truth:
+    name: D3 BRC-FRC-06 provider-receipt truth
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - name: Prepare prerequisite
+        env: {PGPASSWORD: norauto-ci-password}
+        run: psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+      - name: Bootstrap exact candidate schema
+        env:
+          NORAUTO_CRM_DATABASE_URL: ${{ env.DB_URL }}
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: five-lane-d3
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ${{ env.HMAC_SECRET }}
+        run: npm start
+      - run: npx tsc -p tsconfig.communication-ledger.json
+      - name: Challenge BRC-FRC-06
+        env: {NORAUTO_CRM_DATABASE_URL: "${{ env.DB_URL }}"}
+        run: node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js
+
+  d4-site-chat-immutability:
+    name: D4 BRC-FRC-10 site-chat reply immutability
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - name: Prepare prerequisite
+        env: {PGPASSWORD: norauto-ci-password}
+        run: psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+      - name: Bootstrap exact candidate schema
+        env:
+          NORAUTO_CRM_DATABASE_URL: ${{ env.DB_URL }}
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: five-lane-d4
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ${{ env.HMAC_SECRET }}
+        run: npm start
+      - run: npx tsc -p tsconfig.site-chat-thread.json
+      - name: Challenge BRC-FRC-10
+        env:
+          NORAUTO_CRM_DATABASE_URL: ${{ env.DB_URL }}
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ${{ env.HMAC_SECRET }}
+        run: node .tmp-site-chat-thread/scripts/site-chat-thread.integration.js
+
+  d5-publication-trust-chain:
+    name: D5 BRC-FRC-15 publication trust chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - name: Prepare prerequisite
+        env: {PGPASSWORD: norauto-ci-password}
+        run: psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+      - name: Bootstrap exact candidate schema
+        env:
+          NORAUTO_CRM_DATABASE_URL: ${{ env.DB_URL }}
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: five-lane-d5
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ${{ env.HMAC_SECRET }}
+        run: npm start
+      - run: npx tsc -p tsconfig.site-chat-thread.json
+      - name: Challenge BRC-FRC-15
+        env:
+          NORAUTO_CRM_DATABASE_URL: ${{ env.DB_URL }}
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ${{ env.HMAC_SECRET }}
+        run: node .tmp-site-chat-thread/scripts/site-chat-thread.integration.js
