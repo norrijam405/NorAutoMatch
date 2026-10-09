@@ -1,0 +1,153 @@
+name: NorAutoMatch R2 BRC-FRC-22 Fresh Rechallenge
+
+on:
+  push:
+    branches:
+      - "evidence/r2-frc22-fresh-rechallenge-20261009"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frc22-fresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout predecessor
+        uses: actions/checkout@v4
+        with:
+          ref: 11b0ca7d363767294f20a4f0a6a3852318b42ddb
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          sudo -u postgres dropdb --if-exists norauto_frc22_fresh
+          sudo -u postgres createdb -O norauto norauto_frc22_fresh
+
+      - name: Bootstrap predecessor database
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc22_fresh
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc22-predecessor
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc22-fresh-old-secret-0123456789abcdef
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_frc22_fresh -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          npm start
+
+      - name: Checkout exact FRC-22 successor
+        uses: actions/checkout@v4
+        with:
+          ref: 27544d03eea7ee3735c554d304eb75a4f1e4d036
+          clean: true
+          fetch-depth: 0
+      - run: npm ci
+
+      - name: Verify exact successor identity
+        run: |
+          test "$(git rev-parse HEAD)" = "27544d03eea7ee3735c554d304eb75a4f1e4d036"
+          test "$(git rev-parse HEAD^{tree})" = "e5111a540e3b1c46d68742f05629cc573fa45cdc"
+
+      - name: Upgrade predecessor and rotate once
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc22_fresh
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc22-successor
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc22-fresh-new-secret-abcdef0123456789
+          NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET: ci-frc22-fresh-old-secret-0123456789abcdef
+        run: |
+          npm start
+          node scripts/verify-production-v15.mjs
+          node scripts/verify-production-communication-ledger.mjs
+          NORAUTO_FRC22_SUFFIX=c node scripts/frc22-binding-rotation.integration.mjs
+
+      - name: Fresh rotation authorization attacks
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc22_fresh
+        run: |
+          node --input-type=module <<'NODE'
+          import pg from "pg";
+          const {Pool}=pg;
+          const pool=new Pool({connectionString:process.env.NORAUTO_CRM_DATABASE_URL});
+          async function expectReject(fn, pattern, label) {
+            let rejected=false;
+            try { await fn(); } catch(e) { rejected=pattern.test(String(e)); }
+            if(!rejected) throw new Error("FRC22_EXPECTED_REJECTION_MISSING:"+label);
+          }
+          try {
+            await expectReject(
+              ()=>pool.query("update public.crm_customer_binding_secret_anchor set binding_secret_sha256=$1 where anchor_id='ACTIVE'",["1".repeat(64)]),
+              /CUSTOMER_BINDING_TRUST_ANCHOR_IMMUTABLE/,
+              "binding raw update"
+            );
+            await expectReject(
+              ()=>pool.query("update public.crm_site_chat_publication_secret_anchor set current_secret_sha256=$1 where anchor_id='ACTIVE'",["2".repeat(64)]),
+              /SITE_CHAT_PUBLICATION_TRUST_ANCHOR_IMMUTABLE/,
+              "site-chat raw update"
+            );
+
+            const c=await pool.connect();
+            try {
+              await c.query("begin");
+              await c.query("select set_config('norautomatch.customer_binding_rotation_current_secret',$1,true)",["candidate-new-secret-0123456789abcdef"]);
+              await c.query("select set_config('norautomatch.customer_binding_rotation_previous_secret',$1,true)",["wrong-previous-secret-0123456789abcdef"]);
+              await expectReject(
+                ()=>c.query("update public.crm_customer_binding_secret_anchor set binding_secret_sha256=$1,previous_secret_sha256=binding_secret_sha256 where anchor_id='ACTIVE'",["3".repeat(64)]),
+                /CUSTOMER_BINDING_ROTATION_PREVIOUS_SECRET_MISMATCH/,
+                "binding wrong previous"
+              );
+              await c.query("rollback");
+            } finally { c.release(); }
+
+            const s=await pool.connect();
+            try {
+              await s.query("begin");
+              await s.query("select set_config('norautomatch.site_chat_rotation_current_secret',$1,true)",["candidate-new-secret-0123456789abcdef"]);
+              await s.query("select set_config('norautomatch.site_chat_rotation_previous_secret',$1,true)",["wrong-previous-secret-0123456789abcdef"]);
+              await expectReject(
+                ()=>s.query("update public.crm_site_chat_publication_secret_anchor set current_secret_sha256=$1,previous_secret_sha256=current_secret_sha256 where anchor_id='ACTIVE'",["4".repeat(64)]),
+                /SITE_CHAT_PUBLICATION_ROTATION_PREVIOUS_SECRET_MISMATCH/,
+                "site-chat wrong previous"
+              );
+              await s.query("rollback");
+            } finally { s.release(); }
+
+            console.log("PASS FRC-22 raw anchor mutation rejected");
+            console.log("PASS FRC-22 wrong previous secret cannot authorize either anchor rotation");
+          } finally { await pool.end(); }
+          NODE
+
+      - name: Broad regressions after rotation
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc22_fresh
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc22-fresh-new-secret-abcdef0123456789
+          NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET: ci-frc22-fresh-old-secret-0123456789abcdef
+        run: |
+          npx tsc -p tsconfig.communication-ledger.json
+          node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js
+          npx tsc -p tsconfig.site-chat-thread.json
+          node .tmp-site-chat-thread/scripts/site-chat-thread.integration.js
+          node scripts/frc19-communication-relation-shadow.integration.mjs
+          node scripts/frc20-site-chat-relation-shadow.integration.mjs
+
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run typecheck
+      - run: npm run build
