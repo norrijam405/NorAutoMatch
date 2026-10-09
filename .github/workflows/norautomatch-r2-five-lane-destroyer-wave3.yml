@@ -24,7 +24,7 @@ jobs:
           git merge-base --is-ancestor e7f4c5bfc64ec898e885b9b2cb31b461e5cfd1a7 HEAD
           git diff --name-only e7f4c5bfc64ec898e885b9b2cb31b461e5cfd1a7...HEAD > /tmp/changed.txt
           cat /tmp/changed.txt
-          if grep -Ev '^(scripts/wave3-d[1-5]-.*|handoffs/R2_5LANE_DESTROYER_WAVE3_ACTIVATION_2026-10-09.md|.github/workflows/norautomatch-r2-five-lane-destroyer-wave3.yml)$' /tmp/changed.txt | grep -q .; then
+          if grep -Ev '^(scripts/wave3-d[1-5]-.*|handoffs/R2_5LANE_DESTROYER_WAVE3_ACTIVATION_2026-10-09.md|receipts/R2_5LANE_DESTROYER_WAVE3_.*|.github/workflows/norautomatch-r2-five-lane-destroyer-wave3.yml)$' /tmp/changed.txt | grep -q .; then
             echo "ERROR: product code changed in challenge harness branch"
             exit 1
           fi
