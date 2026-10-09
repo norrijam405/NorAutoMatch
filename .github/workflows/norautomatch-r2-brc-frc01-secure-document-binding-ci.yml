@@ -153,10 +153,7 @@ jobs:
           psql -h 127.0.0.1 -U norauto -d norauto_frc18_fresh -v ON_ERROR_STOP=1 -v v14="$v14_sha" <<'SQL'
           create table norautomatch_schema_migrations (
             migration_name text primary key,
-            sha256 char(64) not null check (sha256 ~ '^[0-9a-f]{64}
-      - name: Production build
-        run: npm run build
-),
+            sha256 char(64) not null check (sha256 ~ '^[0-9a-f]{64}$'),
             release_sha text not null,
             applied_at timestamptz not null default current_timestamp
           );
