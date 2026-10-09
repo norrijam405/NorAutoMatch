@@ -1,0 +1,156 @@
+name: NorAutoMatch R2 Five-Lane Destroyer Round 4
+
+on:
+  push:
+    branches:
+      - "evidence/r2-5lane-destroyer-round4-20261009"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  round4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Verify frozen integrated product ancestor
+        run: |
+          git merge-base --is-ancestor 11b0ca7d363767294f20a4f0a6a3852318b42ddb HEAD
+          test "$(git rev-parse 11b0ca7d363767294f20a4f0a6a3852318b42ddb^{tree})" = "ff3dd6363e64d4f1525d6c0d53254dfd9c7b3dc8"
+
+      - name: Start PostgreSQL and isolated databases
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          for db in norauto_r4d1 norauto_r4d2 norauto_r4d3 norauto_r4d4 norauto_r4d5; do
+            sudo -u postgres dropdb --if-exists "$db"
+            sudo -u postgres createdb -O norauto "$db"
+          done
+
+      - name: Prepare D1 Video Hub
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_r4d1 -v ON_ERROR_STOP=1 -f scripts/video-hub-ci-prereqs.sql
+          psql -h 127.0.0.1 -U norauto -d norauto_r4d1 -v ON_ERROR_STOP=1 -f supabase/schema/video_hub_library_r0.sql
+          psql -h 127.0.0.1 -U norauto -d norauto_r4d1 -v ON_ERROR_STOP=1 <<'SQL'
+          insert into auth.users(id) values ('00000000-0000-4000-8000-000000000001');
+          insert into public.app_memberships(user_id,app_id,active,role)
+          values ('00000000-0000-4000-8000-000000000001','norautomatch',true,'founder');
+          SQL
+
+      - name: Bootstrap D2-D5 CRM databases
+        env:
+          PGPASSWORD: norauto-ci-password
+          OLD_SECRET: ci-round4-old-governed-secret-0123456789abcdef
+        run: |
+          set -euo pipefail
+          for lane in d2 d3 d4 d5; do
+            db="norauto_r4$lane"
+            psql -h 127.0.0.1 -U norauto -d "$db" -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+            NORAUTO_CRM_DATABASE_URL="postgres://norauto:norauto-ci-password@127.0.0.1:5432/$db"             NORAUTO_MIGRATION_ONLY=1             NORAUTO_RELEASE_SHA="round4-$lane"             NORAUTO_PUBLIC_ABUSE_HMAC_SECRET="$OLD_SECRET"             npm start
+          done
+
+      - name: Seed D3 communication history
+        run: |
+          npx tsc -p tsconfig.communication-ledger.json
+          NORAUTO_CRM_DATABASE_URL=postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r4d3           node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js
+
+      - name: Seed D4 site-chat history
+        env:
+          OLD_SECRET: ci-round4-old-governed-secret-0123456789abcdef
+        run: |
+          npx tsc -p tsconfig.site-chat-thread.json
+          NORAUTO_CRM_DATABASE_URL=postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r4d4           NORAUTO_PUBLIC_ABUSE_HMAC_SECRET="$OLD_SECRET"           node .tmp-site-chat-thread/scripts/site-chat-thread.integration.js
+
+      - name: Exercise D5 production restart under rotated secret
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r4d5
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: round4-d5-rotated
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-round4-new-governed-secret-abcdef0123456789
+          NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET: ci-round4-old-governed-secret-0123456789abcdef
+        run: npm start
+
+      - name: Run five lanes concurrently
+        env:
+          OLD_SECRET: ci-round4-old-governed-secret-0123456789abcdef
+          NEW_SECRET: ci-round4-new-governed-secret-abcdef0123456789
+        run: |
+          set +e
+
+          (
+            NORAUTO_CRM_DATABASE_URL=postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r4d1             node scripts/round4-d1-video-malformed-published.mjs
+          ) > d1.log 2>&1 & p1=$!
+
+          (
+            export NORAUTO_CRM_DATABASE_URL=postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r4d2
+            export NORAUTO_MIGRATION_ONLY=1
+            export NORAUTO_RELEASE_SHA=round4-d2-tampered
+            export NORAUTO_PUBLIC_ABUSE_HMAC_SECRET="$OLD_SECRET"
+            PGPASSWORD=norauto-ci-password psql -h 127.0.0.1 -U norauto -d norauto_r4d2 -v ON_ERROR_STOP=1 -c "drop trigger crm_opportunity_customer_bindings_insert_authenticity on public.crm_opportunity_customer_bindings"
+            if npm start > d2-start.log 2>&1; then
+              cat d2-start.log
+              echo "NEW_FINDING_D2_RECORDED_MIGRATION_CAN_HIDE_MISSING_V14_GUARD"
+              exit 1
+            fi
+            cat d2-start.log
+            grep -q "MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-crm-v14-authenticated-customer-opportunity-bindings.sql" d2-start.log
+            echo "PASS D2 Round4: missing recorded v14 guard fails closed"
+          ) > d2.log 2>&1 & p2=$!
+
+          (
+            NORAUTO_CRM_DATABASE_URL=postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r4d3             node scripts/round4-d3-redacted-communication-source.mjs
+          ) > d3.log 2>&1 & p3=$!
+
+          (
+            export NORAUTO_CRM_DATABASE_URL=postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r4d4
+            export NORAUTO_PUBLIC_ABUSE_HMAC_SECRET="$OLD_SECRET"
+            node scripts/frc20-site-chat-relation-shadow.integration.mjs
+            node scripts/frc20-persistent-schema-shadow.integration.mjs
+            echo "PASS D4 Round4: FRC-20 temp and persistent relation shadows remain blocked"
+          ) > d4.log 2>&1 & p4=$!
+
+          (
+            NORAUTO_CRM_DATABASE_URL=postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r4d5             NORAUTO_ROTATED_BINDING_SECRET="$NEW_SECRET"             node scripts/round4-d5-binding-rotation.mjs
+          ) > d5.log 2>&1 & p5=$!
+
+          s1=0; wait "$p1" || s1=$?
+          s2=0; wait "$p2" || s2=$?
+          s3=0; wait "$p3" || s3=$?
+          s4=0; wait "$p4" || s4=$?
+          s5=0; wait "$p5" || s5=$?
+
+          for lane in d1 d2 d3 d4 d5; do
+            echo "===== $lane ====="
+            cat "$lane.log"
+          done
+          echo "LANE_STATUS D1=$s1 D2=$s2 D3=$s3 D4=$s4 D5=$s5"
+
+          if [ "$s1" -ne 0 ] || [ "$s2" -ne 0 ] || [ "$s3" -ne 0 ] || [ "$s4" -ne 0 ] || [ "$s5" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Typecheck
+        if: always()
+        run: npm run typecheck
