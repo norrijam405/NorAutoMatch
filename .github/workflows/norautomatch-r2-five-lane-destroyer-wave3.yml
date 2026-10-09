@@ -1,0 +1,142 @@
+name: NorAutoMatch R2 Five-Lane Destroyer Wave 3
+
+on:
+  push:
+    branches:
+      - "evidence/r2-5lane-destroyer-wave3-20261009"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wave3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Verify harness overlay only
+        run: |
+          git merge-base --is-ancestor e7f4c5bfc64ec898e885b9b2cb31b461e5cfd1a7 HEAD
+          git diff --name-only e7f4c5bfc64ec898e885b9b2cb31b461e5cfd1a7...HEAD > /tmp/changed.txt
+          cat /tmp/changed.txt
+          if grep -Ev '^(scripts/wave3-d[1-5]-.*|handoffs/R2_5LANE_DESTROYER_WAVE3_ACTIVATION_2026-10-09.md|.github/workflows/norautomatch-r2-five-lane-destroyer-wave3.yml)$' /tmp/changed.txt | grep -q .; then
+            echo "ERROR: product code changed in challenge harness branch"
+            exit 1
+          fi
+      - run: npm ci
+      - name: Start PostgreSQL and create isolated lane databases
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          for db in wave3_d1 wave3_d2 wave3_d3 wave3_d4 wave3_d5; do
+            sudo -u postgres dropdb --if-exists "$db"
+            sudo -u postgres createdb -O norauto "$db"
+          done
+      - name: Prepare D1 video schema
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: |
+          psql -h 127.0.0.1 -U norauto -d wave3_d1 -v ON_ERROR_STOP=1 -f scripts/video-hub-ci-prereqs.sql
+          psql -h 127.0.0.1 -U norauto -d wave3_d1 -v ON_ERROR_STOP=1 -f supabase/schema/video_hub_library_r0.sql
+      - name: Prepare D3-D5 production schemas
+        env:
+          PGPASSWORD: norauto-ci-password
+          HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
+        run: |
+          set -euo pipefail
+          for lane in d3 d4 d5; do
+            db="wave3_$lane"
+            psql -h 127.0.0.1 -U norauto -d "$db" -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+            NORAUTO_CRM_DATABASE_URL="postgres://norauto:norauto-ci-password@127.0.0.1:5432/$db"             NORAUTO_MIGRATION_ONLY=1             NORAUTO_RELEASE_SHA="wave3-$lane"             NORAUTO_PUBLIC_ABUSE_HMAC_SECRET="$HMAC_SECRET"             npm start
+          done
+      - name: Compile governed challenge surfaces
+        run: |
+          npx tsc -p tsconfig.video-hub-library.json
+          npx tsc -p tsconfig.communication-ledger.json
+          npx tsc -p tsconfig.site-chat-thread.json
+      - name: Execute five isolated lanes
+        env:
+          HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
+        run: |
+          set +e
+          (
+            export NORAUTO_CRM_DATABASE_URL="postgres://norauto:norauto-ci-password@127.0.0.1:5432/wave3_d1"
+            node .tmp-video-hub-library/scripts/video-hub-library.behavior.js &&
+            node scripts/wave3-d1-video-publication-evidence-challenge.mjs
+          ) > d1.log 2>&1 &
+          p1=$!
+
+          (
+            export NORAUTO_CRM_DATABASE_URL="postgres://norauto:norauto-ci-password@127.0.0.1:5432/wave3_d2"
+            node scripts/wave3-d2-migration-ledger-preseed-challenge.mjs &&
+            NORAUTO_MIGRATION_ONLY=1             NORAUTO_RELEASE_SHA="wave3-d2"             NORAUTO_PUBLIC_ABUSE_HMAC_SECRET="$HMAC_SECRET"             npm start &&
+            node --input-type=module <<'NODE'
+            import pg from "pg";
+            const { Pool } = pg;
+            const pool = new Pool({connectionString:process.env.NORAUTO_CRM_DATABASE_URL});
+            try {
+              const q=await pool.query("select to_regclass('public.crm_opportunity_customer_bindings') as bindings, to_regclass('public.crm_customer_binding_secret_anchor') as anchor");
+              if(!q.rows[0]?.bindings || !q.rows[0]?.anchor) {
+                throw new Error("NEW_FINDING_D2_PRESEEDED_MIGRATION_LEDGER_SKIPS_UNAPPLIED_SECURITY_MIGRATIONS");
+              }
+              console.log("PASS D2 preseeded migration metadata cannot suppress security migration installation");
+            } finally { await pool.end(); }
+            NODE
+          ) > d2.log 2>&1 &
+          p2=$!
+
+          (
+            export NORAUTO_CRM_DATABASE_URL="postgres://norauto:norauto-ci-password@127.0.0.1:5432/wave3_d3"
+            node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js &&
+            node scripts/wave3-d3-communication-relation-shadow-challenge.mjs
+          ) > d3.log 2>&1 &
+          p3=$!
+
+          (
+            export NORAUTO_CRM_DATABASE_URL="postgres://norauto:norauto-ci-password@127.0.0.1:5432/wave3_d4"
+            export NORAUTO_PUBLIC_ABUSE_HMAC_SECRET="$HMAC_SECRET"
+            node .tmp-site-chat-thread/scripts/site-chat-thread.integration.js &&
+            node scripts/wave3-d4-site-chat-relation-shadow-challenge.mjs
+          ) > d4.log 2>&1 &
+          p4=$!
+
+          (
+            export NORAUTO_CRM_DATABASE_URL="postgres://norauto:norauto-ci-password@127.0.0.1:5432/wave3_d5"
+            export NORAUTO_PUBLIC_ABUSE_HMAC_SECRET="$HMAC_SECRET"
+            node .tmp-site-chat-thread/scripts/site-chat-thread.integration.js &&
+            node scripts/wave3-d5-site-chat-access-upsert-challenge.mjs
+          ) > d5.log 2>&1 &
+          p5=$!
+
+          s1=0; wait "$p1" || s1=$?
+          s2=0; wait "$p2" || s2=$?
+          s3=0; wait "$p3" || s3=$?
+          s4=0; wait "$p4" || s4=$?
+          s5=0; wait "$p5" || s5=$?
+
+          for lane in d1 d2 d3 d4 d5; do
+            echo "===== $lane ====="
+            cat "$lane.log"
+          done
+          echo "LANE_STATUS D1=$s1 D2=$s2 D3=$s3 D4=$s4 D5=$s5"
+          if [ "$s1" -ne 0 ] || [ "$s2" -ne 0 ] || [ "$s3" -ne 0 ] || [ "$s4" -ne 0 ] || [ "$s5" -ne 0 ]; then
+            exit 1
+          fi
+      - name: Product typecheck
+        if: always()
+        run: npm run typecheck
