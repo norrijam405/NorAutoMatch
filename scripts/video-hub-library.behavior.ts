@@ -51,7 +51,7 @@ assert.throws(
       ],
     },
   }),
-  /Published social links require publication evidence/,
+  /independently verified provider evidence/,
 );
 
 assert.throws(
