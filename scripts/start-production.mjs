@@ -22,6 +22,7 @@ const migrations = [
   "infrastructure/norautomatch-crm-v11-manager-session-revocation.sql",
   "infrastructure/norautomatch-crm-v12-inventory-provider-cache.sql",
   "infrastructure/norautomatch-crm-v13-customer-opportunity-bindings.sql",
+  "infrastructure/norautomatch-crm-v14-authenticated-customer-opportunity-bindings.sql",
   "infrastructure/norautomatch-conversation-ownership-r0.sql",
   "infrastructure/norautomatch-conversation-communication-ledger-r0.sql",
   "infrastructure/norautomatch-site-chat-thread-r0.sql",
@@ -69,6 +70,17 @@ async function applyMigrations(connectionString) {
 
       await client.query("BEGIN");
       try {
+        if (migrationName === "infrastructure/norautomatch-crm-v14-authenticated-customer-opportunity-bindings.sql") {
+          const bindingSecret = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_SECRET?.trim() ?? "";
+          if (bindingSecret.length < 32) {
+            throw new Error("CUSTOMER_BINDING_TRUST_ANCHOR_SECRET_NOT_CONFIGURED");
+          }
+          await client.query(
+            "select set_config('norautomatch.bootstrap_customer_binding_hmac_secret', $1, true)",
+            [bindingSecret],
+          );
+        }
+
         if (migrationName === "infrastructure/norautomatch-site-chat-publication-secret-anchor-r4.sql") {
           const currentSecret = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_SECRET?.trim() ?? "";
           const previousSecret = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET?.trim() ?? "";
