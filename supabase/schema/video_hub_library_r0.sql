@@ -30,7 +30,10 @@ as $func$
       select 1
       from jsonb_array_elements(p_channels) as item
       where item->>'publicationState' = 'PUBLISHED'
-        and nullif(btrim(item->>'publicationEvidenceRef'), '') is null
+        and (
+          jsonb_typeof(item->'publicationEvidenceRef') is distinct from 'string'
+          or nullif(btrim(item->>'publicationEvidenceRef'), '') is null
+        )
     );
 $func$;
 
