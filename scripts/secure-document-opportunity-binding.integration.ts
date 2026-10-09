@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { createPostgresCrmPool } from "../src/lib/crm-postgres-adapter";
-import { requireVerifiedCustomerOpportunityBinding } from "../src/lib/customer-opportunity-binding";
+import { createVerifiedCustomerOpportunityBinding, requireVerifiedCustomerOpportunityBinding } from "../src/lib/customer-opportunity-binding";
 import { readDeskDocumentReadiness } from "../src/lib/crm-document-readiness";
 
 async function main() {
   const connectionString = process.env.NORAUTO_CRM_DATABASE_URL;
   if (!connectionString) throw new Error("NORAUTO_CRM_DATABASE_URL required");
+
+  const serverSecret = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_SECRET;
+  if (!serverSecret || serverSecret.trim().length < 32) throw new Error("NORAUTO_PUBLIC_ABUSE_HMAC_SECRET required");
 
   const pool = createPostgresCrmPool(connectionString);
   const workspaceId = "norautomatch";
@@ -40,12 +43,15 @@ async function main() {
         )`,
         [opportunityId, workspaceId, keyChar.repeat(64), `namh_${keyChar.repeat(24)}`],
       );
-      await pool.query(
-        `insert into crm_opportunity_customer_bindings (
-          workspace_id, opportunity_id, customer_user_id, evidence_ref, authority
-        ) values ($1,$2,$3::uuid,$4,'AUTHENTICATED_CUSTOMER')`,
-        [workspaceId, opportunityId, userId, `synthetic-binding:${opportunityId}`],
-      );
+      await createVerifiedCustomerOpportunityBinding({
+        pool,
+        workspaceId,
+        opportunityId,
+        customerUserId: userId,
+        evidenceRef: `synthetic-binding:${opportunityId}`,
+        authority: "AUTHENTICATED_CUSTOMER",
+        serverSecret,
+      });
     }
 
     await pool.query(
