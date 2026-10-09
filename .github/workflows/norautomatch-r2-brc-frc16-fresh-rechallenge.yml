@@ -1,0 +1,246 @@
+name: NorAutoMatch R2 BRC-FRC-16 Fresh Rechallenge
+
+on:
+  push:
+    branches:
+      - "evidence/r2-frc16-fresh-rechallenge-20261009"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frc16-fresh-rechallenge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Checkout exact frozen successor
+        uses: actions/checkout@v4
+        with:
+          ref: e7f4c5bfc64ec898e885b9b2cb31b461e5cfd1a7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+
+      - name: Verify frozen commit and tree
+        run: |
+          test "$(git rev-parse HEAD)" = "e7f4c5bfc64ec898e885b9b2cb31b461e5cfd1a7"
+          test "$(git rev-parse HEAD^{tree})" = "195b81bc6459570e8409cade05ec51c4cc064f7f"
+
+      - name: Start runner PostgreSQL
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          sudo -u postgres dropdb --if-exists norauto_frc16_rechallenge
+          sudo -u postgres createdb -O norauto norauto_frc16_rechallenge
+
+      - name: Prepare prerequisite and bootstrap exact candidate
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc16_rechallenge
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc16-fresh-rechallenge
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_frc16_rechallenge -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          npm start
+          node scripts/verify-production-v13.mjs
+          node scripts/verify-production-v14.mjs
+          npm start
+
+      - name: Compile governed regression surfaces
+        run: |
+          npx tsc -p tsconfig.secure-document-binding.json
+          npx tsc -p tsconfig.communication-ledger.json
+          npx tsc -p tsconfig.site-chat-thread.json
+
+      - name: Re-test historical BRC-FRC-01 and FRC-16
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc16_rechallenge
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
+        run: |
+          node .tmp-secure-document-binding/scripts/secure-document-opportunity-binding.integration.js
+          node scripts/customer-opportunity-binding.frc16.integration.mjs
+
+      - name: Fresh adversarial FRC-16 challenge
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc16_rechallenge
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
+        run: |
+          node --input-type=module <<'NODE'
+          import pg from "pg";
+          const {Pool}=pg;
+          const pool=new Pool({connectionString:process.env.NORAUTO_CRM_DATABASE_URL});
+          const goodSecret=process.env.NORAUTO_PUBLIC_ABUSE_HMAC_SECRET;
+          const workspace="norautomatch";
+          const user="00000000-0000-4000-8000-00000000fc16";
+          const opp="namo_"+"c".repeat(24);
+
+          async function expectReject(fn,re){
+            let ok=false;
+            try { await fn(); } catch(e) { ok=re.test(String(e)); }
+            if(!ok) throw new Error("EXPECTED_REJECTION_NOT_OBSERVED:"+re);
+          }
+
+          async function directInsert(client,evidence){
+            return client.query(`
+              insert into public.crm_opportunity_customer_bindings
+                (workspace_id,opportunity_id,customer_user_id,evidence_ref,authority)
+              values ($1,$2,$3::uuid,$4,'AUTHENTICATED_CUSTOMER')
+            `,[workspace,opp,user,evidence]);
+          }
+
+          try {
+            await pool.query("delete from public.crm_opportunity_customer_bindings where opportunity_id=$1",[opp]).catch(()=>{});
+            await pool.query("delete from public.crm_opportunities where opportunity_id=$1",[opp]);
+            await pool.query(`
+              insert into public.crm_opportunities (
+                opportunity_id,workspace_id,intake_idempotency_key,pipeline,stage,desk_state,
+                customer,buying_intent,inventory_evidence,attribution,latest_handoff_id,created_at,updated_at
+              ) values (
+                $1,$2,$3,'Standard Retail','NEW','MANAGER_REVIEW_PENDING',
+                '{}'::jsonb,'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,$4,clock_timestamp(),clock_timestamp()
+              )
+            `,[opp,workspace,"c".repeat(64),"namh_"+"c".repeat(24)]);
+
+            await expectReject(
+              ()=>directInsert(pool,"fresh:raw-direct-sql"),
+              /CUSTOMER_OPPORTUNITY_BINDING_AUTHENTICITY_REQUIRED/
+            );
+
+            const tempClient=await pool.connect();
+            try {
+              await tempClient.query("begin");
+              await tempClient.query(`
+                create temporary table crm_customer_binding_secret_anchor (
+                  anchor_id text primary key,
+                  binding_secret_sha256 char(64) not null
+                ) on commit drop
+              `);
+              await tempClient.query(
+                "insert into crm_customer_binding_secret_anchor values ('ACTIVE',$1)",
+                ["0".repeat(64)]
+              );
+              await tempClient.query("set local search_path=pg_temp,public");
+              await tempClient.query(
+                "select set_config('norautomatch.customer_binding_hmac_secret',$1,true)",
+                ["attacker-temp-shadow-secret-0123456789abcdef"]
+              );
+              await expectReject(
+                ()=>directInsert(tempClient,"fresh:temp-anchor-shadow"),
+                /CUSTOMER_OPPORTUNITY_BINDING_AUTHENTICITY_REQUIRED/
+              );
+              await tempClient.query("rollback");
+            } finally { tempClient.release(); }
+
+            const fnClient=await pool.connect();
+            try {
+              await fnClient.query("begin");
+              await fnClient.query("create schema if not exists attacker_binding_shadow");
+              await fnClient.query(`
+                create or replace function attacker_binding_shadow.norautomatch_customer_binding_secret_trusted(text)
+                returns boolean language sql immutable as 'select true'
+              `);
+              await fnClient.query("set local search_path=attacker_binding_shadow,public");
+              await fnClient.query(
+                "select set_config('norautomatch.customer_binding_hmac_secret',$1,true)",
+                ["attacker-function-shadow-secret-0123456789abcdef"]
+              );
+              await expectReject(
+                ()=>directInsert(fnClient,"fresh:function-shadow"),
+                /CUSTOMER_OPPORTUNITY_BINDING_AUTHENTICITY_REQUIRED/
+              );
+              await fnClient.query("rollback");
+            } finally { fnClient.release(); }
+
+            await expectReject(
+              ()=>pool.query("update public.crm_customer_binding_secret_anchor set binding_secret_sha256=$1 where anchor_id='ACTIVE'",["1".repeat(64)]),
+              /CUSTOMER_BINDING_TRUST_ANCHOR_IMMUTABLE/
+            );
+            await expectReject(
+              ()=>pool.query("delete from public.crm_customer_binding_secret_anchor where anchor_id='ACTIVE'"),
+              /CUSTOMER_BINDING_TRUST_ANCHOR_IMMUTABLE/
+            );
+            await expectReject(
+              ()=>pool.query("truncate table public.crm_customer_binding_secret_anchor"),
+              /CUSTOMER_BINDING_TRUST_ANCHOR_CANNOT_BE_TRUNCATED/
+            );
+
+            const legit=await pool.connect();
+            try {
+              await legit.query("begin");
+              await legit.query(
+                "select set_config('norautomatch.customer_binding_hmac_secret',$1,true)",
+                [goodSecret]
+              );
+              await directInsert(legit,"fresh:legitimate-seed");
+              await legit.query("commit");
+            } catch(e) {
+              try { await legit.query("rollback"); } catch {}
+              throw e;
+            } finally { legit.release(); }
+
+            const upsert=await pool.connect();
+            try {
+              await upsert.query("begin");
+              await upsert.query(
+                "select set_config('norautomatch.customer_binding_hmac_secret',$1,true)",
+                [goodSecret]
+              );
+              await expectReject(
+                ()=>upsert.query(`
+                  insert into public.crm_opportunity_customer_bindings
+                    (workspace_id,opportunity_id,customer_user_id,evidence_ref,authority)
+                  values ($1,$2,$3::uuid,'fresh:upsert-rewrite','AUTHENTICATED_CUSTOMER')
+                  on conflict (workspace_id,opportunity_id)
+                  do update set evidence_ref=excluded.evidence_ref
+                `,[workspace,opp,user]),
+                /immutable evidence/
+              );
+              await upsert.query("rollback");
+            } finally { upsert.release(); }
+
+            const preserved=await pool.query(
+              "select evidence_ref from public.crm_opportunity_customer_bindings where workspace_id=$1 and opportunity_id=$2",
+              [workspace,opp]
+            );
+            if(preserved.rows[0]?.evidence_ref!=="fresh:legitimate-seed"){
+              throw new Error("FRC16_UPSERT_CHANGED_PRESERVED_BINDING");
+            }
+
+            console.log("PASS FRC-16 fresh temp-anchor shadow rejected");
+            console.log("PASS FRC-16 fresh function/search-path shadow rejected");
+            console.log("PASS FRC-16 trust anchor UPDATE/DELETE/TRUNCATE rejected");
+            console.log("PASS FRC-16 authenticated UPSERT cannot rewrite immutable binding");
+          } finally {
+            await pool.end();
+          }
+          NODE
+
+      - name: Broader R2 regression — communication and site chat
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc16_rechallenge
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
+        run: |
+          node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js
+          node .tmp-site-chat-thread/scripts/site-chat-thread.integration.js
+
+      - name: Typecheck and build
+        run: |
+          npm run typecheck
+          npm run build
