@@ -111,10 +111,23 @@ jobs:
 
       - name: FRC-18 migration invariant regression
         env:
-          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_combined
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_combined_frc18
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: combined-frc18-preseed
           NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-new-secret-abcdef0123456789
           NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET: ci-combined-old-secret-0123456789abcdef
-        run: node scripts/frc18-migration-ledger-preseed.integration.mjs
+        run: |
+          createdb -h 127.0.0.1 -U norauto norauto_combined_frc18
+          node scripts/frc18-migration-ledger-preseed.integration.mjs
+          set +e
+          output="$(npm start 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -ne 0
+          echo "$output" | grep "MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-crm-v13-customer-opportunity-bindings.sql"
+          echo "PASS FRC-18 pre-seeded migration metadata cannot suppress missing security invariants"
 
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
