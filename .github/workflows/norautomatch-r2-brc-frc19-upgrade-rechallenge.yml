@@ -1,0 +1,78 @@
+name: NorAutoMatch R2 BRC-FRC-19 Upgrade Rechallenge
+
+on:
+  push:
+    branches:
+      - "evidence/r2-frc19-upgrade-rechallenge-20261009"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade-rechallenge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout frozen predecessor
+        uses: actions/checkout@v4
+        with:
+          ref: e7f4c5bfc64ec898e885b9b2cb31b461e5cfd1a7
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          sudo -u postgres dropdb --if-exists norauto_frc19_upgrade
+          sudo -u postgres createdb -O norauto norauto_frc19_upgrade
+
+      - name: Prepare predecessor database
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc19_upgrade
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc19-predecessor
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc19-governed-secret-0123456789abcdef
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_frc19_upgrade -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          npm start
+
+      - name: Checkout frozen FRC-19 Builder candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 8dda26a98be882ac03c9ea97563ff9e3bbcad839
+          clean: true
+          fetch-depth: 0
+
+      - run: npm ci
+
+      - name: Verify exact candidate and tree
+        run: |
+          test "$(git rev-parse HEAD)" = "8dda26a98be882ac03c9ea97563ff9e3bbcad839"
+          test "$(git rev-parse HEAD^{tree})" = "117d0e477a90e3d83553512410d1d5d3e088ac47"
+
+      - name: Candidate must upgrade predecessor without checksum drift
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc19_upgrade
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc19-candidate
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc19-governed-secret-0123456789abcdef
+        run: npm start
