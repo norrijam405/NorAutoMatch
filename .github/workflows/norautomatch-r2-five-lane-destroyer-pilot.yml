@@ -1,9 +1,6 @@
 name: NorAutoMatch R2 Five-Lane Destroyer Pilot
 
 on:
-  push:
-    branches:
-      - "orchestration/r2-5lane-destroyer-defender-pilot-20261009"
   workflow_dispatch:
 
 permissions:
