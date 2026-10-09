@@ -1,0 +1,59 @@
+name: NorAutoMatch R2 BRC-FRC-24 FRC21 Migration Invariant CI
+on:
+  push:
+    branches:
+      - "remediation/r2-frc24-frc21-migration-invariant"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  frc24:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          sudo -u postgres dropdb --if-exists norauto_frc24
+          sudo -u postgres createdb -O norauto norauto_frc24
+      - name: Prepare and preseed FRC-21 migration
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc24
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_frc24 -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          node scripts/frc24-preseed-frc21-migration.mjs
+      - name: Startup must reject missing recorded FRC-21 invariant
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc24
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc24-preseed
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc24-secret-0123456789abcdef
+        run: |
+          set +e
+          output="$(npm start 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -ne 0
+          echo "$output" | grep "MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-communication-ledger-redacted-source-r1.sql"
+      - run: npm run typecheck
+      - run: npm run build
