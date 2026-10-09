@@ -1,0 +1,60 @@
+name: NorAutoMatch R2 BRC-FRC-17 Video Evidence Type CI
+
+on:
+  push:
+    branches:
+      - "remediation/r2-frc17-video-publication-evidence-type"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frc17-builder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          sudo -u postgres dropdb --if-exists norauto_frc17
+          sudo -u postgres createdb -O norauto norauto_frc17
+      - name: Historical BRC-FC-01 behavior
+        run: |
+          npx tsc -p tsconfig.video-hub-library.json
+          node .tmp-video-hub-library/scripts/video-hub-library.behavior.js
+      - name: Apply Video Hub schema
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_frc17 -v ON_ERROR_STOP=1 -f scripts/video-hub-ci-prereqs.sql
+          psql -h 127.0.0.1 -U norauto -d norauto_frc17 -v ON_ERROR_STOP=1 -f supabase/schema/video_hub_library_r0.sql
+          psql -h 127.0.0.1 -U norauto -d norauto_frc17 -v ON_ERROR_STOP=1 <<'SQL'
+          insert into auth.users(id) values ('00000000-0000-4000-8000-000000000001');
+          insert into public.app_memberships(user_id,app_id,active,role)
+          values ('00000000-0000-4000-8000-000000000001','norautomatch',true,'founder');
+          SQL
+      - name: Re-test FRC-17
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc17
+        run: node scripts/video-hub.frc17.integration.mjs
+      - run: npm run typecheck
+      - run: npm run build
