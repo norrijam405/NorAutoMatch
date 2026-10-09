@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "remediation/r2-frc15-schema-qualified-trust-chain"
+      - "remediation/r2-frc19-communication-schema-qualified-truth"
   pull_request:
     branches:
       - "remediation/r2-frc14-publication-secret-anchor"
@@ -100,6 +101,11 @@ jobs:
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
         run: node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js
+
+      - name: Re-test FRC-19 temporary relation shadow
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node scripts/frc19-communication-relation-shadow.integration.mjs
 
       - name: Clean communication verification output
         run: rm -rf .tmp-communication-ledger
