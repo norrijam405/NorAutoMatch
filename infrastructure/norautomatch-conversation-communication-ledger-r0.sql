@@ -90,7 +90,7 @@ create or replace function public.norautomatch_enforce_communication_evidence_in
 returns trigger
 language plpgsql
 set search_path = pg_catalog, public
-as $
+as $$
 declare
   source_payload jsonb;
   source_processing_state text;
