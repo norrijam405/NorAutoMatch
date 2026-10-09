@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "remediation/r2-frc15-schema-qualified-trust-chain"
+      - "evidence/r2-frc17-frc20-combined-rechallenge-20261009"
   pull_request:
     branches:
       - "remediation/r2-frc14-publication-secret-anchor"
@@ -33,6 +34,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify combined product overlay
+        run: |
+          git merge-base --is-ancestor 11b0ca7d363767294f20a4f0a6a3852318b42ddb HEAD
+          git diff --name-only 11b0ca7d363767294f20a4f0a6a3852318b42ddb...HEAD > /tmp/combined-overlay.txt
+          cat /tmp/combined-overlay.txt
+          if grep -Ev '^(.github/workflows/|receipts/|handoffs/)' /tmp/combined-overlay.txt | grep -q .; then
+            echo "ERROR: combined challenge overlay changed product files"
+            exit 1
+          fi
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -86,6 +99,7 @@ jobs:
       - name: Challenge cross-customer secure-document linkage
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
         run: node .tmp-secure-document-binding/scripts/secure-document-opportunity-binding.integration.js
 
       - name: Clean verification output
@@ -101,6 +115,16 @@ jobs:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
         run: node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js
 
+      - name: Re-test FRC-19 temporary relation shadow
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node scripts/frc19-communication-relation-shadow.integration.mjs
+
+      - name: Re-test FRC-19 persistent schema shadow
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node scripts/frc19-persistent-schema-shadow.integration.mjs
+
       - name: Clean communication verification output
         run: rm -rf .tmp-communication-ledger
 
@@ -115,8 +139,39 @@ jobs:
           NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
         run: node .tmp-site-chat-thread/scripts/site-chat-thread.integration.js
 
+      - name: Re-test FRC-20 temporary relation shadow
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
+        run: node scripts/frc20-site-chat-relation-shadow.integration.mjs
+
+      - name: Re-test FRC-20 persistent schema shadow
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
+        run: node scripts/frc20-persistent-schema-shadow.integration.mjs
+
       - name: Clean site-chat verification output
         run: rm -rf .tmp-site-chat-thread
+
+      - name: Re-test FRC-18 pre-seeded migration ledger
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_combined_frc18
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: combined-frc18-retest
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
+        run: |
+          createdb -h 127.0.0.1 -U norauto norauto_combined_frc18
+          node scripts/frc18-migration-ledger-preseed.integration.mjs
+          set +e
+          output="$(npm start 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -ne 0
+          echo "$output" | grep "MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-crm-v13-customer-opportunity-bindings.sql"
+          echo "PASS combined FRC-18 preseed fails closed"
 
       - name: Typecheck application
         run: npm run typecheck
