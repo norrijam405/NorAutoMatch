@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "remediation/2026-10-06-r2-brc-fc01-video-truth"
+      - "remediation/r2-frc17-video-publication-evidence-authenticity"
   pull_request:
     branches:
       - "remediation/2026-10-05-r2-frc03-access-lock"
@@ -113,12 +114,12 @@ jobs:
             echo "PASS: database rejected PUBLISHED social metadata without evidence"
           fi
 
-          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 <<'SQL'
+          if psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 <<'SQL'
           insert into public.video_hub_entries (
             id,title,summary,canonical_url,visibility,vehicle_vins,topics,channels,created_by
           ) values (
             '00000000-0000-4000-8000-000000000103',
-            'Evidence-backed publication',
+            'Self-asserted publication evidence',
             '',
             'https://example.com/video/evidenced',
             'PUBLIC',
@@ -127,17 +128,22 @@ jobs:
             '[{"channel":"YOUTUBE","url":"https://youtube.com/watch?v=evidenced","publicationState":"PUBLISHED","publicationEvidenceRef":"provider-receipt:synthetic-proof-001"}]'::jsonb,
             '00000000-0000-4000-8000-000000000001'
           );
-
           SQL
+          then
+            echo "ERROR: database accepted self-asserted PUBLISHED social evidence"
+            exit 1
+          else
+            echo "PASS: database rejects self-asserted PUBLISHED social evidence"
+          fi
 
           unverified_count=$(psql -h 127.0.0.1 -U norauto -d norauto_ci -tAc "select count(*) from public.video_hub_entries where id='00000000-0000-4000-8000-000000000101'")
           false_published_count=$(psql -h 127.0.0.1 -U norauto -d norauto_ci -tAc "select count(*) from public.video_hub_entries where id='00000000-0000-4000-8000-000000000102'")
-          evidenced_count=$(psql -h 127.0.0.1 -U norauto -d norauto_ci -tAc "select count(*) from public.video_hub_entries where id='00000000-0000-4000-8000-000000000103'")
+          self_asserted_count=$(psql -h 127.0.0.1 -U norauto -d norauto_ci -tAc "select count(*) from public.video_hub_entries where id='00000000-0000-4000-8000-000000000103'")
 
           test "$unverified_count" = "1"
           test "$false_published_count" = "0"
-          test "$evidenced_count" = "1"
-          echo "PASS: database preserves UNVERIFIED truth and requires evidence for PUBLISHED"
+          test "$self_asserted_count" = "0"
+          echo "PASS: database preserves UNVERIFIED truth and fails closed on manual PUBLISHED claims"
 
       - name: Clean generated verification output
         run: rm -rf .tmp-video-hub-library
