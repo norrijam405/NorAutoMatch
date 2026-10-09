@@ -1,0 +1,140 @@
+name: NorAutoMatch R2 Five-Lane Destroyer Round 5
+
+on:
+  push:
+    branches:
+      - "evidence/r2-5lane-destroyer-round5-20261009"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  round5:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+
+      - name: Verify frozen product ancestor
+        run: |
+          git merge-base --is-ancestor 6699dd76b5a558697f6b605b8edea1811fcb6ed8 HEAD
+          test "$(git rev-parse 6699dd76b5a558697f6b605b8edea1811fcb6ed8^{tree})" = "dcf359594c24637f23a225474f3bfbd3fe6d4aad"
+
+      - name: Start PostgreSQL and isolate five databases
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          for db in norauto_r5d1 norauto_r5d2 norauto_r5d3 norauto_r5d4 norauto_r5d5; do
+            sudo -u postgres dropdb --if-exists "$db"
+            sudo -u postgres createdb -O norauto "$db"
+            PGPASSWORD=norauto-ci-password psql -h 127.0.0.1 -U norauto -d "$db" -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          done
+
+      - name: Bootstrap D1, D3, D4 under original secret
+        env:
+          OLD_SECRET: ci-round5-old-secret-0123456789abcdef
+        run: |
+          for lane in d1 d3 d4; do
+            NORAUTO_CRM_DATABASE_URL="postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r5$lane"             NORAUTO_MIGRATION_ONLY=1             NORAUTO_RELEASE_SHA="round5-$lane-old"             NORAUTO_PUBLIC_ABUSE_HMAC_SECRET="$OLD_SECRET"             npm start
+          done
+
+      - name: Rotate D1 and D4 to new governed secret
+        env:
+          OLD_SECRET: ci-round5-old-secret-0123456789abcdef
+          NEW_SECRET: ci-round5-new-secret-abcdef0123456789
+        run: |
+          for lane in d1 d4; do
+            NORAUTO_CRM_DATABASE_URL="postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r5$lane"             NORAUTO_MIGRATION_ONLY=1             NORAUTO_RELEASE_SHA="round5-$lane-new"             NORAUTO_PUBLIC_ABUSE_HMAC_SECRET="$NEW_SECRET"             NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET="$OLD_SECRET"             npm start
+          done
+
+      - name: Prepare D2 with pre-seeded FRC-21 migration ledger
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r5d2
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: round5-d2
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-round5-old-secret-0123456789abcdef
+        run: |
+          node scripts/round5-d2-preseed-frc21-migration.mjs
+          npm start
+
+      - name: Prepare D5 with pre-seeded r6 migration ledger
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r5d5
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: round5-d5
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-round5-old-secret-0123456789abcdef
+        run: |
+          node scripts/round5-d5-preseed-r6.mjs
+          npm start
+
+      - name: Seed D3 historical communication truth
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r5d3
+        run: |
+          npx tsc -p tsconfig.communication-ledger.json
+          node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js
+
+      - name: Run five fresh lanes concurrently
+        env:
+          OLD_SECRET: ci-round5-old-secret-0123456789abcdef
+          NEW_SECRET: ci-round5-new-secret-abcdef0123456789
+        run: |
+          set +e
+          (
+            NORAUTO_CRM_DATABASE_URL=postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r5d1             NORAUTO_PREVIOUS_SECRET="$OLD_SECRET"             node scripts/round5-d1-previous-binding-secret.mjs
+          ) > d1.log 2>&1 & p1=$!
+
+          (
+            NORAUTO_CRM_DATABASE_URL=postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r5d2             node scripts/round5-d2-redacted-after-preseed.mjs
+          ) > d2.log 2>&1 & p2=$!
+
+          (
+            NORAUTO_CRM_DATABASE_URL=postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r5d3             node scripts/round5-d3-assignment-rewrite.mjs
+          ) > d3.log 2>&1 & p3=$!
+
+          (
+            NORAUTO_CRM_DATABASE_URL=postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r5d4             NORAUTO_CURRENT_SECRET="$NEW_SECRET"             NORAUTO_PREVIOUS_SECRET="$OLD_SECRET"             node scripts/round5-d4-previous-sitechat-secret.mjs
+          ) > d4.log 2>&1 & p4=$!
+
+          (
+            NORAUTO_CRM_DATABASE_URL=postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r5d5             node scripts/round5-d5-check-r6.mjs
+          ) > d5.log 2>&1 & p5=$!
+
+          s1=0; wait "$p1" || s1=$?
+          s2=0; wait "$p2" || s2=$?
+          s3=0; wait "$p3" || s3=$?
+          s4=0; wait "$p4" || s4=$?
+          s5=0; wait "$p5" || s5=$?
+
+          for lane in d1 d2 d3 d4 d5; do
+            echo "===== $lane ====="
+            cat "$lane.log"
+          done
+          echo "LANE_STATUS D1=$s1 D2=$s2 D3=$s3 D4=$s4 D5=$s5"
+
+          if [ "$s1" -ne 0 ] || [ "$s2" -ne 0 ] || [ "$s3" -ne 0 ] || [ "$s4" -ne 0 ] || [ "$s5" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Typecheck
+        if: always()
+        run: npm run typecheck
