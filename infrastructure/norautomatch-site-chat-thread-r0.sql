@@ -78,10 +78,11 @@ comment on function norauto_enforce_site_chat_reply_access_at_commit() is
   'Deferred commit-time guard: same-site reply commit requires an access row that remains present and unexpired at commit. The access row is locked through commit.';
 
 
-create or replace function norauto_enforce_site_chat_reply_insert_truth()
+create or replace function public.norauto_enforce_site_chat_reply_insert_truth()
 returns trigger
 language plpgsql
-as $$
+set search_path = pg_catalog, public
+as $
 declare
   event_processing_state text;
   current_assignment_state text;
@@ -89,7 +90,7 @@ declare
 begin
   select e.processing_state
     into event_processing_state
-    from crm_conversation_events e
+    from public.crm_conversation_events e
    where e.workspace_id = new.workspace_id
      and e.provider = 'NORAUTO_SITE_CHAT'
      and e.event_id = new.source_event_id
@@ -103,7 +104,7 @@ begin
 
   select a.assignment_state, a.assignee_subject_id
     into current_assignment_state, current_assignee
-    from crm_conversation_assignments a
+    from public.crm_conversation_assignments a
    where a.workspace_id = new.workspace_id
      and a.provider = 'NORAUTO_SITE_CHAT'
      and a.conversation_id = new.conversation_id
@@ -123,7 +124,7 @@ drop trigger if exists crm_site_chat_reply_insert_truth_guard
 create trigger crm_site_chat_reply_insert_truth_guard
 before insert on crm_site_chat_replies
 for each row
-execute function norauto_enforce_site_chat_reply_insert_truth();
+execute function public.norauto_enforce_site_chat_reply_insert_truth();
 
 
 create or replace function norauto_reject_site_chat_reply_mutation()
