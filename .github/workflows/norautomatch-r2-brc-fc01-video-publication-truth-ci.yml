@@ -5,6 +5,7 @@ on:
     branches:
       - "remediation/2026-10-06-r2-brc-fc01-video-truth"
       - "remediation/r2-frc17-video-publication-evidence-authenticity"
+      - "evidence/r2-frc17-fresh-rechallenge-20261009"
   pull_request:
     branches:
       - "remediation/2026-10-05-r2-frc03-access-lock"
@@ -144,6 +145,44 @@ jobs:
           test "$false_published_count" = "0"
           test "$self_asserted_count" = "0"
           echo "PASS: database preserves UNVERIFIED truth and fails closed on manual PUBLISHED claims"
+
+      - name: Fresh Re-Challenge FRC-17 mutation and mixed-channel claims
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: |
+          if psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 <<'SQL'
+          update public.video_hub_entries
+             set channels='[{"channel":"YOUTUBE","url":"https://youtube.com/watch?v=upgraded","publicationState":"PUBLISHED","publicationEvidenceRef":"later-self-asserted-receipt"}]'::jsonb
+           where id='00000000-0000-4000-8000-000000000101';
+          SQL
+          then
+            echo "ERROR: database allowed UNVERIFIED-to-PUBLISHED self-asserted mutation"
+            exit 1
+          else
+            echo "PASS FRC-17 fresh mutation claim rejected"
+          fi
+
+          if psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 <<'SQL'
+          insert into public.video_hub_entries (
+            id,title,summary,canonical_url,visibility,vehicle_vins,topics,channels,created_by
+          ) values (
+            '00000000-0000-4000-8000-000000000104',
+            'Mixed-channel hidden publication claim',
+            '',
+            'https://example.com/video/mixed',
+            'PUBLIC',
+            '{}',
+            '{}',
+            '[{"channel":"OTHER","url":"https://example.com/manual","publicationState":"UNVERIFIED","publicationEvidenceRef":null},{"channel":"YOUTUBE","url":"https://youtube.com/watch?v=hidden","publicationState":"PUBLISHED","publicationEvidenceRef":"hidden-self-asserted-receipt"}]'::jsonb,
+            '00000000-0000-4000-8000-000000000001'
+          );
+          SQL
+          then
+            echo "ERROR: database accepted hidden PUBLISHED claim in mixed channel array"
+            exit 1
+          else
+            echo "PASS FRC-17 fresh mixed-channel publication claim rejected"
+          fi
 
       - name: Clean generated verification output
         run: rm -rf .tmp-video-hub-library
