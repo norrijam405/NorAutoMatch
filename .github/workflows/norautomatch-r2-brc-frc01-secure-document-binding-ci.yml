@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "remediation/r2-frc15-schema-qualified-trust-chain"
+      - "remediation/r2-frc20-site-chat-insert-schema-qualified-truth"
   pull_request:
     branches:
       - "remediation/r2-frc14-publication-secret-anchor"
@@ -114,6 +115,12 @@ jobs:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
           NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
         run: node .tmp-site-chat-thread/scripts/site-chat-thread.integration.js
+
+      - name: Re-test FRC-20 temporary relation shadow
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
+        run: node scripts/frc20-site-chat-relation-shadow.integration.mjs
 
       - name: Clean site-chat verification output
         run: rm -rf .tmp-site-chat-thread
