@@ -54,30 +54,30 @@ assert.throws(
   /Published social links require publication evidence/,
 );
 
-const evidencedEntry = buildVideoHubEntry({
-  videoId: "edaa94a7-42ce-4201-b447-ab8427eed6b7",
-  createdAt: "2026-10-05T06:17:00.000Z",
-  form: {
-    title: "Evidence-backed publication",
-    summary: "",
-    canonicalUrl: "https://example.com/video/evidenced",
-    visibility: "PUBLIC",
-    vehicleVins: [],
-    topics: [],
-    channels: [
-      {
-        channel: "YOUTUBE",
-        url: "https://youtube.com/watch?v=evidenced",
-        publicationState: "PUBLISHED",
-        publicationEvidenceRef: "provider-receipt:synthetic-proof-001",
-      },
-    ],
-  },
-});
-
-assert.deepEqual(publicVideoLinks(evidencedEntry), [
-  { channel: "YOUTUBE", url: "https://youtube.com/watch?v=evidenced" },
-]);
+assert.throws(
+  () => buildVideoHubEntry({
+    videoId: "edaa94a7-42ce-4201-b447-ab8427eed6b7",
+    createdAt: "2026-10-05T06:17:00.000Z",
+    form: {
+      title: "Self-asserted publication reference",
+      summary: "",
+      canonicalUrl: "https://example.com/video/evidenced",
+      visibility: "PUBLIC",
+      vehicleVins: [],
+      topics: [],
+      channels: [
+        {
+          channel: "YOUTUBE",
+          url: "https://youtube.com/watch?v=evidenced",
+          publicationState: "PUBLISHED",
+          publicationEvidenceRef: "provider-receipt:synthetic-proof-001",
+        },
+      ],
+    },
+  }),
+  /independently verified provider evidence/,
+  "manual evidence text must not mint PUBLISHED truth",
+);
 
 assert.deepEqual(parseDelimitedValues("Rogue, Rogue\nSUV", 25), ["Rogue", "SUV"]);
 
