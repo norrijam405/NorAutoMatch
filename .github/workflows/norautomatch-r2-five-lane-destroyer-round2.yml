@@ -1,0 +1,126 @@
+name: NorAutoMatch R2 Five-Lane Destroyer Round 2
+
+on:
+  push:
+    branches:
+      - "orchestration/r2-5lane-destroyer-defender-pilot-20261009"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  five-isolated-lanes:
+    name: Five isolated fresh adversarial lanes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Start runner PostgreSQL without Docker Hub
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          for db in norauto_d1 norauto_d2 norauto_d3 norauto_d4 norauto_d5; do
+            sudo -u postgres dropdb --if-exists "$db"
+            sudo -u postgres createdb -O norauto "$db"
+          done
+
+      - name: Prepare and bootstrap five isolated databases
+        env:
+          PGPASSWORD: norauto-ci-password
+          HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
+        run: |
+          set -euo pipefail
+          for lane in d1 d2 d3 d4 d5; do
+            db="norauto_$lane"
+            psql -h 127.0.0.1 -U norauto -d "$db" -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+            NORAUTO_CRM_DATABASE_URL="postgres://norauto:norauto-ci-password@127.0.0.1:5432/$db"             NORAUTO_MIGRATION_ONLY=1             NORAUTO_RELEASE_SHA="five-lane-round2-$lane"             NORAUTO_PUBLIC_ABUSE_HMAC_SECRET="$HMAC_SECRET"             npm start
+          done
+
+      - name: Compile governed historical challenge surfaces
+        run: |
+          npx tsc -p tsconfig.secure-document-binding.json
+          npx tsc -p tsconfig.communication-ledger.json
+          npx tsc -p tsconfig.site-chat-thread.json
+
+      - name: Run five historical plus fresh lanes concurrently
+        env:
+          HMAC_SECRET: ci-only-site-chat-hmac-secret-0123456789abcdef
+        run: |
+          set +e
+
+          (
+            export NORAUTO_CRM_DATABASE_URL="postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_d1"
+            node .tmp-secure-document-binding/scripts/secure-document-opportunity-binding.integration.js &&
+            node scripts/five-lane-d1-fresh-adversarial.mjs
+          ) > d1.log 2>&1 &
+          p1=$!
+
+          (
+            export NORAUTO_CRM_DATABASE_URL="postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_d2"
+            node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js &&
+            node scripts/five-lane-d2-fresh-adversarial.mjs
+          ) > d2.log 2>&1 &
+          p2=$!
+
+          (
+            export NORAUTO_CRM_DATABASE_URL="postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_d3"
+            node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js &&
+            node scripts/five-lane-d3-fresh-adversarial.mjs
+          ) > d3.log 2>&1 &
+          p3=$!
+
+          (
+            export NORAUTO_CRM_DATABASE_URL="postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_d4"
+            export NORAUTO_PUBLIC_ABUSE_HMAC_SECRET="$HMAC_SECRET"
+            node .tmp-site-chat-thread/scripts/site-chat-thread.integration.js &&
+            node scripts/five-lane-d4-fresh-adversarial.mjs
+          ) > d4.log 2>&1 &
+          p4=$!
+
+          (
+            export NORAUTO_CRM_DATABASE_URL="postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_d5"
+            export NORAUTO_PUBLIC_ABUSE_HMAC_SECRET="$HMAC_SECRET"
+            node .tmp-site-chat-thread/scripts/site-chat-thread.integration.js &&
+            node scripts/five-lane-d5-fresh-adversarial.mjs
+          ) > d5.log 2>&1 &
+          p5=$!
+
+          s1=0; wait "$p1" || s1=$?
+          s2=0; wait "$p2" || s2=$?
+          s3=0; wait "$p3" || s3=$?
+          s4=0; wait "$p4" || s4=$?
+          s5=0; wait "$p5" || s5=$?
+
+          for lane in d1 d2 d3 d4 d5; do
+            echo "===== $lane ====="
+            cat "$lane.log"
+          done
+
+          echo "LANE_STATUS D1=$s1 D2=$s2 D3=$s3 D4=$s4 D5=$s5"
+          if [ "$s1" -ne 0 ] || [ "$s2" -ne 0 ] || [ "$s3" -ne 0 ] || [ "$s4" -ne 0 ] || [ "$s5" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Product typecheck
+        if: always()
+        run: npm run typecheck
