@@ -7,7 +7,7 @@ const pool = new Pool({connectionString: cs});
 
 const workspaceId = "norautomatch";
 const userVictim = "00000000-0000-4000-8000-00000000fa01";
-const oppTarget = "namo_freshd1_target000000001";
+const oppTarget = "namo_"+"c".repeat(24);
 const docId = "00000000-0000-4000-8000-00000000fd01";
 
 try {
