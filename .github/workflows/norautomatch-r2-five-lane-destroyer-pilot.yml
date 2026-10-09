@@ -49,6 +49,9 @@ jobs:
       - name: Challenge BRC-FRC-01
         env: {NORAUTO_CRM_DATABASE_URL: "${{ env.DB_URL }}"}
         run: node .tmp-secure-document-binding/scripts/secure-document-opportunity-binding.integration.js
+      - name: Fresh adversarial D1 — self-asserted direct-SQL binding
+        env: {NORAUTO_CRM_DATABASE_URL: "${{ env.DB_URL }}"}
+        run: node scripts/five-lane-d1-fresh-adversarial.mjs
 
   d2-communication-ledger-immutability:
     name: D2 BRC-FRC-03 communication immutability
