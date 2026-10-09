@@ -23,6 +23,7 @@ const migrations = [
   "infrastructure/norautomatch-crm-v12-inventory-provider-cache.sql",
   "infrastructure/norautomatch-crm-v13-customer-opportunity-bindings.sql",
   "infrastructure/norautomatch-crm-v14-authenticated-customer-opportunity-bindings.sql",
+  "infrastructure/norautomatch-crm-v15-customer-binding-secret-rotation.sql",
   "infrastructure/norautomatch-conversation-ownership-r0.sql",
   "infrastructure/norautomatch-conversation-communication-ledger-r0.sql",
   "infrastructure/norautomatch-site-chat-thread-r0.sql",
@@ -119,6 +120,58 @@ async function applyMigrations(connectionString) {
       }
 
       console.log(`MIGRATION_APPLIED ${migrationName} ${digest}`);
+    }
+
+    const bindingCurrentSecret = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_SECRET?.trim() ?? "";
+    if (bindingCurrentSecret.length >= 32) {
+      const anchor = await client.query(
+        `select binding_secret_sha256, previous_secret_sha256
+           from public.crm_customer_binding_secret_anchor
+          where anchor_id='ACTIVE'`,
+      );
+
+      if (anchor.rowCount === 1) {
+        const bindingDigest = (secret) =>
+          sha256(`norautomatch:customer-binding:v1\u001f${secret}`);
+
+        const expectedCurrent = bindingDigest(bindingCurrentSecret);
+        const recordedCurrent = anchor.rows[0].binding_secret_sha256?.trim();
+
+        if (recordedCurrent !== expectedCurrent) {
+          const bindingPreviousSecret =
+            process.env.NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET?.trim() ?? "";
+          if (bindingPreviousSecret.length < 32) {
+            throw new Error("CUSTOMER_BINDING_ROTATION_PREVIOUS_SECRET_REQUIRED");
+          }
+
+          await client.query("BEGIN");
+          try {
+            await client.query(
+              "select set_config('norautomatch.customer_binding_rotation_current_secret', $1, true)",
+              [bindingCurrentSecret],
+            );
+            await client.query(
+              "select set_config('norautomatch.customer_binding_rotation_previous_secret', $1, true)",
+              [bindingPreviousSecret],
+            );
+            await client.query(
+              `update public.crm_customer_binding_secret_anchor
+                  set binding_secret_sha256=$1,
+                      previous_secret_sha256=$2
+                where anchor_id='ACTIVE'`,
+              [expectedCurrent, recordedCurrent],
+            );
+            await client.query("COMMIT");
+          } catch (error) {
+            await client.query("ROLLBACK");
+            throw error;
+          }
+
+          console.log(`CUSTOMER_BINDING_TRUST_ANCHOR_ROTATED ${expectedCurrent}`);
+        } else {
+          console.log(`CUSTOMER_BINDING_TRUST_ANCHOR_CURRENT ${expectedCurrent}`);
+        }
+      }
     }
   } finally {
     await client.end();
