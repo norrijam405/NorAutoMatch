@@ -87,6 +87,9 @@ jobs:
       - name: Challenge BRC-FRC-03
         env: {NORAUTO_CRM_DATABASE_URL: "${{ env.DB_URL }}"}
         run: node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js
+      - name: Fresh adversarial D2 — UPSERT rewrite attempt
+        env: {NORAUTO_CRM_DATABASE_URL: "${{ env.DB_URL }}"}
+        run: node scripts/five-lane-d2-fresh-adversarial.mjs
 
   d3-provider-receipt-truth:
     name: D3 BRC-FRC-06 provider-receipt truth
@@ -122,6 +125,9 @@ jobs:
       - name: Challenge BRC-FRC-06
         env: {NORAUTO_CRM_DATABASE_URL: "${{ env.DB_URL }}"}
         run: node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js
+      - name: Fresh adversarial D3 — INSERT SELECT forged receipt
+        env: {NORAUTO_CRM_DATABASE_URL: "${{ env.DB_URL }}"}
+        run: node scripts/five-lane-d3-fresh-adversarial.mjs
 
   d4-site-chat-immutability:
     name: D4 BRC-FRC-10 site-chat reply immutability
@@ -159,6 +165,11 @@ jobs:
           NORAUTO_CRM_DATABASE_URL: ${{ env.DB_URL }}
           NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ${{ env.HMAC_SECRET }}
         run: node .tmp-site-chat-thread/scripts/site-chat-thread.integration.js
+      - name: Fresh adversarial D4 — UPSERT rewrite published reply
+        env:
+          NORAUTO_CRM_DATABASE_URL: ${{ env.DB_URL }}
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ${{ env.HMAC_SECRET }}
+        run: node scripts/five-lane-d4-fresh-adversarial.mjs
 
   d5-publication-trust-chain:
     name: D5 BRC-FRC-15 publication trust chain
@@ -196,3 +207,8 @@ jobs:
           NORAUTO_CRM_DATABASE_URL: ${{ env.DB_URL }}
           NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ${{ env.HMAC_SECRET }}
         run: node .tmp-site-chat-thread/scripts/site-chat-thread.integration.js
+      - name: Fresh adversarial D5 — function search-path shadow
+        env:
+          NORAUTO_CRM_DATABASE_URL: ${{ env.DB_URL }}
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ${{ env.HMAC_SECRET }}
+        run: node scripts/five-lane-d5-fresh-adversarial.mjs
