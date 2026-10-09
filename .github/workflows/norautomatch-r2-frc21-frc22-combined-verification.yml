@@ -1,0 +1,121 @@
+name: NorAutoMatch R2 FRC-21 FRC-22 Combined Verification
+
+on:
+  push:
+    branches:
+      - "integration/r2-frc21-frc22-combined-20261009"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  combined:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - name: Checkout predecessor
+        uses: actions/checkout@v4
+        with:
+          ref: 11b0ca7d363767294f20a4f0a6a3852318b42ddb
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          sudo -u postgres dropdb --if-exists norauto_combined
+          sudo -u postgres createdb -O norauto norauto_combined
+
+      - name: Bootstrap predecessor
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_combined
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: combined-predecessor
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-old-secret-0123456789abcdef
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_combined -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          npm start
+
+      - name: Checkout exact combined candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 6699dd76b5a558697f6b605b8edea1811fcb6ed8
+          clean: true
+          fetch-depth: 0
+      - run: npm ci
+
+      - name: Verify exact candidate and tree
+        run: |
+          test "$(git rev-parse HEAD)" = "6699dd76b5a558697f6b605b8edea1811fcb6ed8"
+          test "$(git rev-parse HEAD^{tree})" = "dcf359594c24637f23a225474f3bfbd3fe6d4aad"
+
+      - name: Upgrade predecessor and rotate governed secret
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_combined
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: combined-successor
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-new-secret-abcdef0123456789
+          NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET: ci-combined-old-secret-0123456789abcdef
+        run: |
+          npm start
+          npm start
+          node scripts/verify-production-v15.mjs
+          node scripts/verify-production-communication-ledger.mjs
+          NORAUTO_FRC22_SUFFIX=d node scripts/frc22-binding-rotation.integration.mjs
+
+      - name: Communication regression matrix
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_combined
+        run: |
+          npx tsc -p tsconfig.communication-ledger.json
+          node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js
+          node scripts/frc19-communication-relation-shadow.integration.mjs
+          node scripts/frc19-persistent-schema-shadow.integration.mjs
+          node scripts/frc21-redacted-communication-source.integration.mjs
+
+      - name: Site-chat regression matrix
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_combined
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-new-secret-abcdef0123456789
+          NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET: ci-combined-old-secret-0123456789abcdef
+        run: |
+          npx tsc -p tsconfig.site-chat-thread.json
+          node .tmp-site-chat-thread/scripts/site-chat-thread.integration.js
+          node scripts/frc20-site-chat-relation-shadow.integration.mjs
+          node scripts/frc20-persistent-schema-shadow.integration.mjs
+
+      - name: Secure-document / FRC-16 regression
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_combined
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-new-secret-abcdef0123456789
+        run: |
+          npx tsc -p tsconfig.secure-document-binding.json
+          node .tmp-secure-document-binding/scripts/secure-document-opportunity-binding.integration.js
+          node scripts/customer-opportunity-binding.frc16.integration.mjs
+
+      - name: FRC-18 migration invariant regression
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_combined
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-new-secret-abcdef0123456789
+          NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET: ci-combined-old-secret-0123456789abcdef
+        run: node scripts/frc18-migration-ledger-preseed.integration.mjs
+
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run typecheck
+      - run: npm run build
