@@ -211,6 +211,30 @@ async function verifyMigrationInvariant(client, migrationName) {
     }
   }
 
+  if (migrationName === "infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql") {
+    const fn = await client.query(`
+      select pg_get_functiondef(p.oid) as definition, p.proconfig
+        from pg_proc p
+        join pg_namespace n on n.oid=p.pronamespace
+       where n.nspname='public'
+         and p.proname='norautomatch_enforce_assignment_event_insert_authenticity'
+    `);
+    const row = fn.rows[0];
+    const definition = row?.definition ?? "";
+    const config = row?.proconfig ?? [];
+    if (
+      fn.rowCount !== 1
+      || !Array.isArray(config)
+      || !config.includes("search_path=pg_catalog, public")
+      || !definition.includes("public.crm_conversation_assignments")
+      || !definition.includes("CONVERSATION_ASSIGNMENT_EVENT_STATE_REQUIRED")
+      || !definition.includes("current_state")
+      || !definition.includes("current_assignee")
+    ) {
+      throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql");
+    }
+  }
+
   if (migrationName === "infrastructure/norautomatch-conversation-communication-ledger-redacted-source-r1.sql") {
     const result = await client.query(`
       select pg_get_functiondef(p.oid) as definition, p.proconfig
