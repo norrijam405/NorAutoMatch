@@ -49,6 +49,8 @@ jobs:
           done
 
       - name: D1 preseed v16 current-only binding migration
+        id: d1
+        continue-on-error: true
         env:
           PGPASSWORD: norauto-ci-password
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r6d1
@@ -61,6 +63,8 @@ jobs:
           NORAUTO_PREVIOUS_SECRET=ci-r6-d1-old-secret-0123456789abcdef           node scripts/frc23-previous-binding-secret.integration.mjs
 
       - name: D2 preseed FRC-25 assignment-auth migration
+        id: d2
+        continue-on-error: true
         env:
           PGPASSWORD: norauto-ci-password
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r6d2
@@ -72,6 +76,8 @@ jobs:
           node scripts/round6-d2-assignment-preseed.mjs
 
       - name: D3 preseed r7 current-only publication migration
+        id: d3
+        continue-on-error: true
         env:
           PGPASSWORD: norauto-ci-password
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r6d3
@@ -94,13 +100,26 @@ jobs:
           done
 
       - name: D4 assignment-event append-only challenge
+        id: d4
+        continue-on-error: true
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r6d4
         run: node scripts/round6-d4-assignment-events-immutable.mjs
 
       - name: D5 assignment-event authenticity challenge
+        id: d5
+        continue-on-error: true
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r6d5
         run: node scripts/round6-d5-assignment-event-forgery.mjs
 
+      - name: Aggregate five-lane result
+        if: always()
+        run: |
+          echo "LANE_STATUS D1=${{ steps.d1.outcome }} D2=${{ steps.d2.outcome }} D3=${{ steps.d3.outcome }} D4=${{ steps.d4.outcome }} D5=${{ steps.d5.outcome }}"
+          if [ "${{ steps.d1.outcome }}" != "success" ] ||              [ "${{ steps.d2.outcome }}" != "success" ] ||              [ "${{ steps.d3.outcome }}" != "success" ] ||              [ "${{ steps.d4.outcome }}" != "success" ] ||              [ "${{ steps.d5.outcome }}" != "success" ]; then
+            exit 1
+          fi
+
       - run: npm run typecheck
+        if: always()
