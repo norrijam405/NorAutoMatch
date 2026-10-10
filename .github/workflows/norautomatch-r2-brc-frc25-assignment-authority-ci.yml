@@ -1,0 +1,68 @@
+name: NorAutoMatch R2 BRC-FRC-25 Conversation Assignment Authority CI
+
+on:
+  push:
+    branches:
+      - "remediation/r2-frc25-conversation-assignment-authority"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frc25-builder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          sudo -u postgres dropdb --if-exists norauto_frc25
+          sudo -u postgres createdb -O norauto norauto_frc25
+
+      - name: Prepare and bootstrap
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc25
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc25-builder
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc25-governed-secret-0123456789abcdef
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_frc25 -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          npm start
+
+      - name: FRC-25 direct SQL ownership attack
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc25
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc25-governed-secret-0123456789abcdef
+        run: node scripts/frc25-conversation-assignment-authority.integration.mjs
+
+      - name: Historical communication regression
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_frc25
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc25-governed-secret-0123456789abcdef
+        run: |
+          npx tsc -p tsconfig.communication-ledger.json
+          node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js
+
+      - run: npm run typecheck
+      - run: npm run build
