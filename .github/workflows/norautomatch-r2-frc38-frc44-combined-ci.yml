@@ -54,7 +54,7 @@ jobs:
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r4pre
           NORAUTO_PRESEED_MIGRATION: infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql
-          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-r4-0123456789abcdef
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-r4-secret-0123456789abcdef
           NORAUTO_MIGRATION_ONLY: "1"
           NORAUTO_RELEASE_SHA: combined-r4
         run: |
@@ -71,7 +71,7 @@ jobs:
         env:
           PGPASSWORD: norauto-ci-password
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_security
-          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-security-0123456789abcdef
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-security-secret-0123456789abcdef
           NORAUTO_MIGRATION_ONLY: "1"
           NORAUTO_RELEASE_SHA: combined-security
         run: |
@@ -96,7 +96,7 @@ jobs:
           npm start
           if psql -h 127.0.0.1 -U norauto -d norauto_security -v ON_ERROR_STOP=1 <<'SQL'
           begin;
-          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-combined-security-0123456789abcdef',true);
+          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-combined-security-secret-0123456789abcdef',true);
           insert into public.crm_conversation_assignment_events
             (workspace_id,provider,conversation_id,action,actor_subject_id,assignee_subject_id)
           values ('combined-orphan','NORAUTO_SITE_CHAT','missing','CLAIMED','attacker','attacker');
@@ -119,7 +119,7 @@ jobs:
         env:
           PGPASSWORD: norauto-ci-password
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_events
-          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-events-0123456789abcdef
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-events-secret-0123456789abcdef
           NORAUTO_MIGRATION_ONLY: "1"
           NORAUTO_RELEASE_SHA: combined-events
         run: |
@@ -133,7 +133,7 @@ jobs:
             ('multi','NORAUTO_SITE_CHAT','multi-event','multi-conversation','CONVERSATION_ENDED_OR_HANDOFF_READY',
              clock_timestamp(),'{}'::jsonb,'CONTACTABLE','[]'::jsonb,'RECEIVED');
           begin;
-          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-combined-events-0123456789abcdef',true);
+          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-combined-events-secret-0123456789abcdef',true);
           insert into public.crm_conversation_assignments
             (workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at)
           values ('multi','NORAUTO_SITE_CHAT','multi-conversation','rep-a','ASSIGNED',clock_timestamp(),clock_timestamp());
@@ -142,7 +142,7 @@ jobs:
 
           if psql -h 127.0.0.1 -U norauto -d norauto_events -v ON_ERROR_STOP=1 <<'SQL'
           begin;
-          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-combined-events-0123456789abcdef',true);
+          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-combined-events-secret-0123456789abcdef',true);
           insert into public.crm_conversation_assignment_events
             (workspace_id,provider,conversation_id,action,actor_subject_id,assignee_subject_id)
           values
@@ -159,14 +159,14 @@ jobs:
         env:
           PGPASSWORD: norauto-ci-password
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_owner
-          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-owner-0123456789abcdef
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-owner-secret-0123456789abcdef
           NORAUTO_MIGRATION_ONLY: "1"
           NORAUTO_RELEASE_SHA: combined-owner
         run: |
           npm start
           if psql -h 127.0.0.1 -U norauto -d norauto_owner -v ON_ERROR_STOP=1 <<'SQL'
           begin;
-          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-combined-owner-0123456789abcdef',true);
+          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-combined-owner-secret-0123456789abcdef',true);
           insert into public.crm_conversation_assignments
             (workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at)
           values ('owner','NORAUTO_SITE_CHAT','nonexistent','rep-a','ASSIGNED',clock_timestamp(),clock_timestamp());
@@ -182,7 +182,7 @@ jobs:
       - name: Broad regression bootstrap
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_broad
-          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-broad-0123456789abcdef
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-broad-secret-0123456789abcdef
           NORAUTO_MIGRATION_ONLY: "1"
           NORAUTO_RELEASE_SHA: combined-broad
         run: npm start
@@ -190,7 +190,7 @@ jobs:
       - name: Broad regressions
         env:
           NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_broad
-          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-broad-0123456789abcdef
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-broad-secret-0123456789abcdef
         run: |
           npx tsc -p tsconfig.secure-document-binding.json
           node .tmp-secure-document-binding/scripts/secure-document-opportunity-binding.integration.js
