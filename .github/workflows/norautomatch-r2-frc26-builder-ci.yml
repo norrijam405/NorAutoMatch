@@ -1,0 +1,58 @@
+name: NorAutoMatch R2 FRC-26 Builder CI
+on:
+  push:
+    branches: ["remediation/r2-frc26-current-only-sitechat-issuance"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  frc26:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Prepare schema prerequisite
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+      - name: Bootstrap and rotate
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc26
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc26-old-secret-0123456789abcdef
+        run: npm start
+      - name: Rotate
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc26-rotated
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc26-new-secret-abcdef0123456789
+          NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET: ci-frc26-old-secret-0123456789abcdef
+        run: npm start
+      - name: Challenge previous secret
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc26-new-secret-abcdef0123456789
+          NORAUTO_PREVIOUS_SECRET: ci-frc26-old-secret-0123456789abcdef
+        run: node scripts/frc26-previous-sitechat-secret.integration.mjs
+      - run: npm run typecheck
+      - run: npm run build
