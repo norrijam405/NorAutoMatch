@@ -1,0 +1,133 @@
+name: NorAutoMatch R2 FRC-33-37 Combined Verification
+
+on:
+  push:
+    branches: ["integration/r2-frc33-frc37-combined-20261010"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  combined:
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify frozen combined product
+        run: |
+          test "$(git rev-parse ee9b702f7621ef5940cf68e18fc80f097331c0c2^{tree})" = "f3bc1a092f7445fef2e6c8664b1fec247b4ae03c"
+          git merge-base --is-ancestor ee9b702f7621ef5940cf68e18fc80f097331c0c2 HEAD
+
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+
+      - name: Start PostgreSQL and isolated databases
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          for db in norauto_r2pre norauto_r3pre norauto_r37 norauto_broad; do
+            sudo -u postgres dropdb --if-exists "$db"
+            sudo -u postgres createdb -O norauto "$db"
+            PGPASSWORD=norauto-ci-password psql -h 127.0.0.1 -U norauto -d "$db" -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          done
+
+      - name: FRC-33 FRC-35 combined r2 invariant
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r2pre
+          NORAUTO_PRESEED_MIGRATION: infrastructure/norautomatch-conversation-assignment-events-immutable-r2.sql
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-r2-secret-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: combined-r2
+        run: |
+          node scripts/frc28-preseed-v16.mjs
+          set +e
+          output="$(npm start 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -ne 0
+          echo "$output" | grep "MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-immutable-r2.sql"
+
+      - name: FRC-34 FRC-36 combined r3 invariant
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r3pre
+          NORAUTO_PRESEED_MIGRATION: infrastructure/norautomatch-conversation-assignment-events-authenticity-r3.sql
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-r3-secret-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: combined-r3
+        run: |
+          node scripts/frc28-preseed-v16.mjs
+          set +e
+          output="$(npm start 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -ne 0
+          echo "$output" | grep "MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-authenticity-r3.sql"
+
+      - name: FRC-37 combined state binding
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r37
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-r37-secret-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: combined-r37
+          PGPASSWORD: norauto-ci-password
+        run: |
+          npm start
+          if psql -h 127.0.0.1 -U norauto -d norauto_r37 -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-combined-r37-secret-0123456789abcdef',true);
+          insert into public.crm_conversation_assignment_events
+            (workspace_id,provider,conversation_id,action,actor_subject_id,assignee_subject_id)
+          values ('combined-r37','NORAUTO_SITE_CHAT','nonexistent-conversation','CLAIMED','orphan','orphan');
+          commit;
+          SQL
+          then
+            echo "ERROR: orphan assignment evidence accepted"
+            exit 1
+          fi
+          npx tsc -p tsconfig.conversation-ownership.json
+          node .tmp-conversation-ownership/scripts/conversation-ownership.integration.js
+
+      - name: Broad regression bootstrap
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_broad
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-broad-secret-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: combined-broad
+        run: npm start
+
+      - name: Broad regressions
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_broad
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-combined-broad-secret-0123456789abcdef
+        run: |
+          npx tsc -p tsconfig.secure-document-binding.json
+          node .tmp-secure-document-binding/scripts/secure-document-opportunity-binding.integration.js
+          npx tsc -p tsconfig.communication-ledger.json
+          node .tmp-communication-ledger/scripts/conversation-communication-ledger.integration.js
+          npx tsc -p tsconfig.site-chat-thread.json
+          node .tmp-site-chat-thread/scripts/site-chat-thread.integration.js
+
+      - run: npm run typecheck
+      - run: npm run build
