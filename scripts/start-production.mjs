@@ -77,6 +77,41 @@ async function verifyMigrationInvariant(client, migrationName) {
   }
 
 
+  if (migrationName === "infrastructure/norautomatch-conversation-ownership-authenticity-r1.sql") {
+    const result = await client.query(`
+      select pg_get_functiondef(p.oid) as definition, p.proconfig
+        from pg_proc p
+        join pg_namespace n on n.oid=p.pronamespace
+       where n.nspname='public'
+         and p.proname='norautomatch_enforce_conversation_assignment_mutation_authenticity'
+    `);
+    const triggerResult = await client.query(`
+      select 1
+        from pg_trigger t
+        join pg_class c on c.oid=t.tgrelid
+        join pg_namespace n on n.oid=c.relnamespace
+       where n.nspname='public'
+         and c.relname='crm_conversation_assignments'
+         and t.tgname='crm_conversation_assignments_mutation_authenticity'
+         and not t.tgisinternal
+    `);
+    const row = result.rows[0];
+    const definition = row?.definition ?? "";
+    const config = row?.proconfig ?? [];
+    const fixedSearchPath = Array.isArray(config)
+      && config.includes("search_path=pg_catalog, public");
+    if (
+      result.rowCount !== 1
+      || triggerResult.rowCount !== 1
+      || !fixedSearchPath
+      || !definition.includes("norautomatch.conversation_assignment_hmac_secret")
+      || !definition.includes("public.norautomatch_conversation_assignment_secret_trusted")
+      || !definition.includes("CONVERSATION_ASSIGNMENT_AUTHENTICITY_REQUIRED")
+    ) {
+      throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-ownership-authenticity-r1.sql");
+    }
+  }
+
   if (migrationName === "infrastructure/norautomatch-conversation-communication-ledger-redacted-source-r1.sql") {
     const result = await client.query(`
       select pg_get_functiondef(p.oid) as definition, p.proconfig
