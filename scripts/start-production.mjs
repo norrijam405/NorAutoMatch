@@ -28,6 +28,7 @@ const migrations = [
   "infrastructure/norautomatch-conversation-ownership-r0.sql",
   "infrastructure/norautomatch-conversation-ownership-authenticity-r1.sql",
   "infrastructure/norautomatch-conversation-ownership-upstream-existence-r2.sql",
+  "infrastructure/norautomatch-conversation-ownership-upstream-anchor-r3.sql",
   "infrastructure/norautomatch-conversation-assignment-events-immutable-r2.sql",
   "infrastructure/norautomatch-conversation-assignment-events-authenticity-r3.sql",
   "infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql",
@@ -139,6 +140,59 @@ async function verifyMigrationInvariant(client, migrationName) {
       || !definition.includes("CONVERSATION_ASSIGNMENT_AUTHENTICITY_REQUIRED")
     ) {
       throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-ownership-authenticity-r1.sql");
+    }
+  }
+
+  if (migrationName === "infrastructure/norautomatch-conversation-ownership-upstream-anchor-r3.sql") {
+    const result = await client.query(`
+      select p.oid, p.prosrc, p.proconfig, p.prosecdef, l.lanname
+        from pg_proc p
+        join pg_namespace n on n.oid=p.pronamespace
+        join pg_language l on l.oid=p.prolang
+       where n.nspname='public'
+         and p.proname='norautomatch_assignment_upstream_security_anchor'
+    `);
+    const trigger = await client.query(`
+      select t.tgfoid, t.tgenabled, t.tgtype, t.tgqual, t.tgnargs
+        from pg_trigger t
+        join pg_class c on c.oid=t.tgrelid
+        join pg_namespace n on n.oid=c.relnamespace
+       where n.nspname='public'
+         and c.relname='crm_conversation_assignments'
+         and t.tgname='crm_conversation_assignments_upstream_anchor'
+         and not t.tgisinternal
+    `);
+    const expectedSource = `
+begin
+  if not exists (
+    select 1
+      from public.crm_conversation_events e
+     where e.workspace_id = new.workspace_id
+       and e.provider = new.provider
+       and e.conversation_id = new.conversation_id
+  ) then
+    raise exception 'CONVERSATION_ASSIGNMENT_UPSTREAM_EVENT_REQUIRED';
+  end if;
+  return new;
+end;
+`;
+    const row = result.rows[0];
+    const config = row?.proconfig ?? [];
+    if (
+      result.rowCount !== 1
+      || trigger.rowCount !== 1
+      || trigger.rows[0]?.tgfoid !== row?.oid
+      || trigger.rows[0]?.tgenabled !== "O"
+      || Number(trigger.rows[0]?.tgtype) !== 23
+      || trigger.rows[0]?.tgqual !== null
+      || Number(trigger.rows[0]?.tgnargs) !== 0
+      || row?.prosecdef !== false
+      || row?.lanname !== "plpgsql"
+      || !Array.isArray(config)
+      || !config.includes("search_path=pg_catalog, public")
+      || sha256(row?.prosrc ?? "") !== sha256(expectedSource)
+    ) {
+      throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-ownership-upstream-anchor-r3.sql");
     }
   }
 
