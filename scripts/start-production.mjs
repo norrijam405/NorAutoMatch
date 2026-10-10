@@ -27,9 +27,13 @@ const migrations = [
   "infrastructure/norautomatch-crm-v16-current-only-customer-binding-issuance.sql",
   "infrastructure/norautomatch-conversation-ownership-r0.sql",
   "infrastructure/norautomatch-conversation-ownership-authenticity-r1.sql",
+  "infrastructure/norautomatch-conversation-ownership-upstream-existence-r2.sql",
   "infrastructure/norautomatch-conversation-assignment-events-immutable-r2.sql",
   "infrastructure/norautomatch-conversation-assignment-events-authenticity-r3.sql",
   "infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql",
+  "infrastructure/norautomatch-conversation-assignment-events-sequencing-r5.sql",
+  "infrastructure/norautomatch-conversation-assignment-events-concurrency-r6.sql",
+  "infrastructure/norautomatch-conversation-assignment-events-security-anchor-r7.sql",
   "infrastructure/norautomatch-conversation-communication-ledger-r0.sql",
   "infrastructure/norautomatch-conversation-communication-ledger-redacted-source-r1.sql",
   "infrastructure/norautomatch-site-chat-thread-r0.sql",
@@ -208,6 +212,148 @@ async function verifyMigrationInvariant(client, migrationName) {
       || !definition.includes("CONVERSATION_ASSIGNMENT_EVENT_RELEASE_TRUTH_INVALID")
     ) {
       throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-authenticity-r3.sql");
+    }
+  }
+
+  if (migrationName === "infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql") {
+    const fn = await client.query(`
+      select pg_get_functiondef(p.oid) as definition, p.proconfig
+        from pg_proc p
+        join pg_namespace n on n.oid=p.pronamespace
+       where n.nspname='public'
+         and p.proname='norautomatch_enforce_assignment_event_insert_authenticity'
+    `);
+    const row = fn.rows[0];
+    const definition = row?.definition ?? "";
+    const config = row?.proconfig ?? [];
+    if (
+      fn.rowCount !== 1
+      || !Array.isArray(config)
+      || !config.includes("search_path=pg_catalog, public")
+      || !definition.includes("public.crm_conversation_assignments")
+      || !definition.includes("CONVERSATION_ASSIGNMENT_EVENT_STATE_REQUIRED")
+      || !definition.includes("current_state")
+      || !definition.includes("current_assignee")
+    ) {
+      throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql");
+    }
+
+    const probeSecret = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_SECRET?.trim() ?? "";
+    if (probeSecret.length < 32) {
+      throw new Error("MIGRATION_INVARIANT_PROBE_SECRET_NOT_CONFIGURED:infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql");
+    }
+
+    await client.query("BEGIN");
+    try {
+      await client.query(
+        "select set_config('norautomatch.conversation_assignment_hmac_secret', $1, true)",
+        [probeSecret],
+      );
+      let rejected = false;
+      try {
+        await client.query(`
+          insert into public.crm_conversation_assignment_events (
+            workspace_id,provider,conversation_id,action,actor_subject_id,assignee_subject_id
+          ) values (
+            '__migration_probe__','NORAUTO_SITE_CHAT','__missing_conversation__',
+            'CLAIMED','__probe_actor__','__probe_actor__'
+          )
+        `);
+      } catch (error) {
+        if (String(error).includes("CONVERSATION_ASSIGNMENT_EVENT_STATE_REQUIRED")) {
+          rejected = true;
+        } else {
+          throw error;
+        }
+      }
+      if (!rejected) {
+        throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql");
+      }
+    } finally {
+      await client.query("ROLLBACK");
+    }
+  }
+
+  if (migrationName === "infrastructure/norautomatch-conversation-assignment-events-security-anchor-r7.sql") {
+    const result = await client.query(`
+      select p.oid, p.prosrc, p.proconfig, p.prosecdef, l.lanname
+        from pg_proc p
+        join pg_namespace n on n.oid=p.pronamespace
+        join pg_language l on l.oid=p.prolang
+       where n.nspname='public'
+         and p.proname='norautomatch_assignment_event_security_anchor'
+    `);
+    const trigger = await client.query(`
+      select t.tgfoid, t.tgenabled, t.tgtype, t.tgqual, t.tgnargs
+        from pg_trigger t
+        join pg_class c on c.oid=t.tgrelid
+        join pg_namespace n on n.oid=c.relnamespace
+       where n.nspname='public'
+         and c.relname='crm_conversation_assignment_events'
+         and t.tgname='crm_conversation_assignment_events_security_anchor'
+         and not t.tgisinternal
+    `);
+    const expectedSource = `
+declare
+  candidate_secret text;
+  current_state text;
+  current_assignee text;
+begin
+  candidate_secret := current_setting(
+    'norautomatch.conversation_assignment_hmac_secret',
+    true
+  );
+
+  if not public.norautomatch_conversation_assignment_secret_trusted(candidate_secret) then
+    raise exception 'CONVERSATION_ASSIGNMENT_EVENT_AUTHENTICITY_REQUIRED';
+  end if;
+
+  select a.assignment_state, a.assignee_subject_id
+    into current_state, current_assignee
+    from public.crm_conversation_assignments a
+   where a.workspace_id = new.workspace_id
+     and a.provider = new.provider
+     and a.conversation_id = new.conversation_id;
+
+  if not found then
+    raise exception 'CONVERSATION_ASSIGNMENT_EVENT_STATE_REQUIRED';
+  end if;
+
+  if new.action='CLAIMED' then
+    if new.assignee_subject_id is null
+       or new.actor_subject_id is distinct from new.assignee_subject_id
+       or current_state is distinct from 'ASSIGNED'
+       or current_assignee is distinct from new.assignee_subject_id then
+      raise exception 'CONVERSATION_ASSIGNMENT_EVENT_CLAIM_TRUTH_INVALID';
+    end if;
+  elsif new.action='RELEASED' then
+    if new.assignee_subject_id is not null
+       or current_state is distinct from 'UNASSIGNED'
+       or current_assignee is not null then
+      raise exception 'CONVERSATION_ASSIGNMENT_EVENT_RELEASE_TRUTH_INVALID';
+    end if;
+  end if;
+
+  return new;
+end;
+`;
+    const row = result.rows[0];
+    const config = row?.proconfig ?? [];
+    if (
+      result.rowCount !== 1
+      || trigger.rowCount !== 1
+      || trigger.rows[0]?.tgfoid !== row?.oid
+      || trigger.rows[0]?.tgenabled !== "O"
+      || Number(trigger.rows[0]?.tgtype) !== 7
+      || trigger.rows[0]?.tgqual !== null
+      || Number(trigger.rows[0]?.tgnargs) !== 0
+      || row?.prosecdef !== false
+      || row?.lanname !== "plpgsql"
+      || !Array.isArray(config)
+      || !config.includes("search_path=pg_catalog, public")
+      || sha256(row?.prosrc ?? "") !== sha256(expectedSource)
+    ) {
+      throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-security-anchor-r7.sql");
     }
   }
 
