@@ -13,10 +13,12 @@ const provider="NORAUTO_SITE_CHAT";
 const conversation="frc26-conversation";
 const event="frc26-event";
 const rep="frc26-rep";
-const hash="6".repeat(64);
-const material=["norautomatch:site-chat-publication:v1",workspace,conversation,hash].join("\u001f");
-const previousProof=createHmac("sha256",previous).update(material,"utf8").digest("hex");
-const currentProof=createHmac("sha256",current).update(material,"utf8").digest("hex");
+const previousHash="6".repeat(64);
+const currentHash="8".repeat(64);
+const previousMaterial=["norautomatch:site-chat-publication:v1",workspace,conversation,previousHash].join("\u001f");
+const currentMaterial=["norautomatch:site-chat-publication:v1",workspace,conversation,currentHash].join("\u001f");
+const previousProof=createHmac("sha256",previous).update(previousMaterial,"utf8").digest("hex");
+const currentProof=createHmac("sha256",current).update(currentMaterial,"utf8").digest("hex");
 
 async function seedConversation() {
   await pool.query("delete from public.crm_site_chat_replies where workspace_id=$1 and conversation_id=$2",[workspace,conversation]).catch(()=>{});
@@ -34,12 +36,11 @@ async function seedConversation() {
     [workspace,provider,conversation,rep]);
 }
 
-async function attemptPublication(secret, proof, body) {
-  await pool.query("delete from public.crm_site_chat_access where workspace_id=$1 and conversation_id=$2",[workspace,conversation]).catch(()=>{});
+async function attemptPublication(secret, tokenHash, proof, body) {
   await pool.query(`insert into public.crm_site_chat_access
     (workspace_id,conversation_id,access_token_hash,issuance_proof,publication_proof,created_at,expires_at)
     values ($1,$2,$3,null,$4,clock_timestamp(),clock_timestamp()+interval '7 days')`,
-    [workspace,conversation,hash,proof]);
+    [workspace,conversation,tokenHash,proof]);
 
   const c=await pool.connect();
   try {
@@ -62,10 +63,10 @@ async function attemptPublication(secret, proof, body) {
 try {
   await seedConversation();
 
-  const oldAccepted=await attemptPublication(previous,previousProof,"frc26 previous-secret publication");
+  const oldAccepted=await attemptPublication(previous,previousHash,previousProof,"frc26 previous-secret publication");
   if(oldAccepted) throw new Error("FRC26_PREVIOUS_SECRET_STILL_MINTS_NEW_PUBLICATION_AUTHORITY");
 
-  const currentAccepted=await attemptPublication(current,currentProof,"frc26 current-secret publication");
+  const currentAccepted=await attemptPublication(current,currentHash,currentProof,"frc26 current-secret publication");
   if(!currentAccepted) throw new Error("FRC26_CURRENT_SECRET_CANNOT_PUBLISH");
 
   console.log("PASS FRC-26 previous secret cannot mint new publication authority");
