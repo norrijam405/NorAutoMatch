@@ -27,6 +27,7 @@ const migrations = [
   "infrastructure/norautomatch-crm-v16-current-only-customer-binding-issuance.sql",
   "infrastructure/norautomatch-conversation-ownership-r0.sql",
   "infrastructure/norautomatch-conversation-ownership-authenticity-r1.sql",
+  "infrastructure/norautomatch-conversation-ownership-upstream-existence-r2.sql",
   "infrastructure/norautomatch-conversation-assignment-events-immutable-r2.sql",
   "infrastructure/norautomatch-conversation-assignment-events-authenticity-r3.sql",
   "infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql",
