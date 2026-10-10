@@ -1,0 +1,69 @@
+name: NorAutoMatch R2 FRC-37 Builder CI
+on:
+  push:
+    branches: ["remediation/r2-frc37-assignment-event-state-binding"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  builder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Start PostgreSQL and bootstrap
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc37-secret-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc37-builder
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          sudo -u postgres dropdb --if-exists norauto_ci
+          sudo -u postgres createdb -O norauto norauto_ci
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          npm start
+      - name: FRC-37 orphan CLAIMED evidence must fail
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: |
+          if psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-frc37-secret-0123456789abcdef',true);
+          insert into public.crm_conversation_assignment_events
+            (workspace_id,provider,conversation_id,action,actor_subject_id,assignee_subject_id)
+          values ('frc37-orphan','NORAUTO_SITE_CHAT','nonexistent-conversation','CLAIMED','rep-orphan','rep-orphan');
+          commit;
+          SQL
+          then
+            echo "ERROR: orphan assignment evidence accepted"
+            exit 1
+          fi
+          echo "PASS FRC-37 orphan assignment evidence rejected"
+      - name: Legitimate claim and release remain functional
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc37-secret-0123456789abcdef
+        run: |
+          npx tsc -p tsconfig.conversation-ownership.json
+          node .tmp-conversation-ownership/scripts/conversation-ownership.integration.js
+      - run: npm run typecheck
+      - run: npm run build
