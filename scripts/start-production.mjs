@@ -29,6 +29,7 @@ const migrations = [
   "infrastructure/norautomatch-conversation-ownership-authenticity-r1.sql",
   "infrastructure/norautomatch-conversation-assignment-events-immutable-r2.sql",
   "infrastructure/norautomatch-conversation-assignment-events-authenticity-r3.sql",
+  "infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql",
   "infrastructure/norautomatch-conversation-communication-ledger-r0.sql",
   "infrastructure/norautomatch-conversation-communication-ledger-redacted-source-r1.sql",
   "infrastructure/norautomatch-site-chat-thread-r0.sql",
@@ -134,6 +135,79 @@ async function verifyMigrationInvariant(client, migrationName) {
       || !definition.includes("CONVERSATION_ASSIGNMENT_AUTHENTICITY_REQUIRED")
     ) {
       throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-ownership-authenticity-r1.sql");
+    }
+  }
+
+  if (migrationName === "infrastructure/norautomatch-conversation-assignment-events-immutable-r2.sql") {
+    const functions = await client.query(`
+      select p.proname, pg_get_functiondef(p.oid) as definition, p.proconfig
+        from pg_proc p
+        join pg_namespace n on n.oid=p.pronamespace
+       where n.nspname='public'
+         and p.proname in ('norautomatch_reject_assignment_event_mutation','norautomatch_reject_assignment_event_truncate')
+    `);
+    const triggers = await client.query(`
+      select t.tgname
+        from pg_trigger t
+        join pg_class c on c.oid=t.tgrelid
+        join pg_namespace n on n.oid=c.relnamespace
+       where n.nspname='public'
+         and c.relname='crm_conversation_assignment_events'
+         and t.tgname in ('crm_conversation_assignment_events_immutable','crm_conversation_assignment_events_no_truncate')
+         and not t.tgisinternal
+    `);
+    const byName = new Map(functions.rows.map((row) => [row.proname, row]));
+    const mutation = byName.get('norautomatch_reject_assignment_event_mutation');
+    const truncate = byName.get('norautomatch_reject_assignment_event_truncate');
+    const mutationConfig = mutation?.proconfig ?? [];
+    const truncateConfig = truncate?.proconfig ?? [];
+    if (
+      functions.rowCount !== 2
+      || triggers.rowCount !== 2
+      || !Array.isArray(mutationConfig)
+      || !mutationConfig.includes("search_path=pg_catalog, public")
+      || !Array.isArray(truncateConfig)
+      || !truncateConfig.includes("search_path=pg_catalog, public")
+      || !(mutation?.definition ?? "").includes("CONVERSATION_ASSIGNMENT_EVENT_IMMUTABLE")
+      || !(truncate?.definition ?? "").includes("CONVERSATION_ASSIGNMENT_EVENT_TRUNCATE_FORBIDDEN")
+    ) {
+      throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-immutable-r2.sql");
+    }
+  }
+
+  if (migrationName === "infrastructure/norautomatch-conversation-assignment-events-authenticity-r3.sql") {
+    const fn = await client.query(`
+      select pg_get_functiondef(p.oid) as definition, p.proconfig
+        from pg_proc p
+        join pg_namespace n on n.oid=p.pronamespace
+       where n.nspname='public'
+         and p.proname='norautomatch_enforce_assignment_event_insert_authenticity'
+    `);
+    const trigger = await client.query(`
+      select 1
+        from pg_trigger t
+        join pg_class c on c.oid=t.tgrelid
+        join pg_namespace n on n.oid=c.relnamespace
+       where n.nspname='public'
+         and c.relname='crm_conversation_assignment_events'
+         and t.tgname='crm_conversation_assignment_events_insert_authenticity'
+         and not t.tgisinternal
+    `);
+    const row = fn.rows[0];
+    const definition = row?.definition ?? "";
+    const config = row?.proconfig ?? [];
+    if (
+      fn.rowCount !== 1
+      || trigger.rowCount !== 1
+      || !Array.isArray(config)
+      || !config.includes("search_path=pg_catalog, public")
+      || !definition.includes("norautomatch.conversation_assignment_hmac_secret")
+      || !definition.includes("public.norautomatch_conversation_assignment_secret_trusted")
+      || !definition.includes("CONVERSATION_ASSIGNMENT_EVENT_AUTHENTICITY_REQUIRED")
+      || !definition.includes("CONVERSATION_ASSIGNMENT_EVENT_CLAIM_TRUTH_INVALID")
+      || !definition.includes("CONVERSATION_ASSIGNMENT_EVENT_RELEASE_TRUTH_INVALID")
+    ) {
+      throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-authenticity-r3.sql");
     }
   }
 
