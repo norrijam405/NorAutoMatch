@@ -233,6 +233,41 @@ async function verifyMigrationInvariant(client, migrationName) {
     ) {
       throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql");
     }
+
+    const probeSecret = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_SECRET?.trim() ?? "";
+    if (probeSecret.length < 32) {
+      throw new Error("MIGRATION_INVARIANT_PROBE_SECRET_NOT_CONFIGURED:infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql");
+    }
+
+    await client.query("BEGIN");
+    try {
+      await client.query(
+        "select set_config('norautomatch.conversation_assignment_hmac_secret', $1, true)",
+        [probeSecret],
+      );
+      let rejected = false;
+      try {
+        await client.query(`
+          insert into public.crm_conversation_assignment_events (
+            workspace_id,provider,conversation_id,action,actor_subject_id,assignee_subject_id
+          ) values (
+            '__migration_probe__','NORAUTO_SITE_CHAT','__missing_conversation__',
+            'CLAIMED','__probe_actor__','__probe_actor__'
+          )
+        `);
+      } catch (error) {
+        if (String(error).includes("CONVERSATION_ASSIGNMENT_EVENT_STATE_REQUIRED")) {
+          rejected = true;
+        } else {
+          throw error;
+        }
+      }
+      if (!rejected) {
+        throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql");
+      }
+    } finally {
+      await client.query("ROLLBACK");
+    }
   }
 
   if (migrationName === "infrastructure/norautomatch-conversation-communication-ledger-redacted-source-r1.sql") {
