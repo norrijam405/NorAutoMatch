@@ -77,6 +77,29 @@ async function verifyMigrationInvariant(client, migrationName) {
   }
 
 
+  if (migrationName === "infrastructure/norautomatch-crm-v16-current-only-customer-binding-issuance.sql") {
+    const result = await client.query(`
+      select pg_get_functiondef(p.oid) as definition, p.proconfig
+        from pg_proc p
+        join pg_namespace n on n.oid=p.pronamespace
+       where n.nspname='public'
+         and p.proname='norautomatch_customer_binding_secret_trusted'
+    `);
+    const row = result.rows[0];
+    const definition = row?.definition ?? "";
+    const config = row?.proconfig ?? [];
+    const fixedSearchPath = Array.isArray(config)
+      && config.includes("search_path=pg_catalog, public");
+    if (
+      result.rowCount !== 1
+      || !fixedSearchPath
+      || !definition.includes("= a.binding_secret_sha256")
+      || definition.includes("previous_secret_sha256")
+    ) {
+      throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-crm-v16-current-only-customer-binding-issuance.sql");
+    }
+  }
+
   if (migrationName === "infrastructure/norautomatch-conversation-communication-ledger-redacted-source-r1.sql") {
     const result = await client.query(`
       select pg_get_functiondef(p.oid) as definition, p.proconfig
