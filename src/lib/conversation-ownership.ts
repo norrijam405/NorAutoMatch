@@ -1,5 +1,11 @@
 import type { Pool } from "pg";
 
+function conversationAssignmentSecret() {
+  const secret = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_SECRET?.trim() ?? "";
+  if (secret.length < 32) throw new Error("CONVERSATION_ASSIGNMENT_HMAC_SECRET_NOT_CONFIGURED");
+  return secret;
+}
+
 export type ConversationOwnership = {
   state: "UNASSIGNED" | "ASSIGNED";
   assigneeSubjectId: string | null;
@@ -44,6 +50,10 @@ export async function claimConversation(input:{
   const client=await input.pool.connect();
   try {
     await client.query("begin");
+    await client.query(
+      "select set_config('norautomatch.conversation_assignment_hmac_secret', $1, true)",
+      [conversationAssignmentSecret()],
+    );
     const existing=await client.query<{
       assignment_state:"UNASSIGNED"|"ASSIGNED";
       assignee_subject_id:string|null;
@@ -99,6 +109,10 @@ export async function releaseConversation(input:{
   const client=await input.pool.connect();
   try{
     await client.query("begin");
+    await client.query(
+      "select set_config('norautomatch.conversation_assignment_hmac_secret', $1, true)",
+      [conversationAssignmentSecret()],
+    );
     const existing=await client.query<{assignment_state:string;assignee_subject_id:string|null}>(
       `select assignment_state,assignee_subject_id
          from crm_conversation_assignments
