@@ -24,7 +24,9 @@ const migrations = [
   "infrastructure/norautomatch-crm-v13-customer-opportunity-bindings.sql",
   "infrastructure/norautomatch-crm-v14-authenticated-customer-opportunity-bindings.sql",
   "infrastructure/norautomatch-crm-v15-customer-binding-secret-rotation.sql",
+  "infrastructure/norautomatch-crm-v16-current-only-customer-binding-issuance.sql",
   "infrastructure/norautomatch-conversation-ownership-r0.sql",
+  "infrastructure/norautomatch-conversation-ownership-authenticity-r1.sql",
   "infrastructure/norautomatch-conversation-communication-ledger-r0.sql",
   "infrastructure/norautomatch-conversation-communication-ledger-redacted-source-r1.sql",
   "infrastructure/norautomatch-site-chat-thread-r0.sql",
@@ -34,6 +36,7 @@ const migrations = [
   "infrastructure/norautomatch-site-chat-publication-secret-anchor-r4.sql",
   "infrastructure/norautomatch-site-chat-schema-qualified-trust-r5.sql",
   "infrastructure/norautomatch-site-chat-publication-secret-rotation-r6.sql",
+  "infrastructure/norautomatch-site-chat-current-only-publication-r7.sql",
 ];
 
 function sha256(text) {
@@ -72,6 +75,56 @@ async function verifyMigrationInvariant(client, migrationName) {
       throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-crm-v14-authenticated-customer-opportunity-bindings.sql");
     }
   }
+
+
+  if (migrationName === "infrastructure/norautomatch-conversation-communication-ledger-redacted-source-r1.sql") {
+    const result = await client.query(`
+      select pg_get_functiondef(p.oid) as definition, p.proconfig
+        from pg_proc p
+        join pg_namespace n on n.oid=p.pronamespace
+       where n.nspname='public'
+         and p.proname='norautomatch_enforce_communication_evidence_insert_truth'
+    `);
+    const row = result.rows[0];
+    const definition = row?.definition ?? "";
+    const config = row?.proconfig ?? [];
+    const fixedSearchPath = Array.isArray(config)
+      && config.includes("search_path=pg_catalog, public");
+    if (
+      result.rowCount !== 1
+      || !fixedSearchPath
+      || !definition.includes("REDACTED")
+      || !definition.includes("public.crm_conversation_events")
+      || !definition.includes("public.crm_conversation_assignments")
+    ) {
+      throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-communication-ledger-redacted-source-r1.sql");
+    }
+  }
+
+  if (migrationName === "infrastructure/norautomatch-site-chat-publication-secret-rotation-r6.sql") {
+    const result = await client.query(`
+      select pg_get_functiondef(p.oid) as definition, p.proconfig
+        from pg_proc p
+        join pg_namespace n on n.oid=p.pronamespace
+       where n.nspname='public'
+         and p.proname='norauto_reject_site_chat_publication_anchor_mutation'
+    `);
+    const row = result.rows[0];
+    const definition = row?.definition ?? "";
+    const config = row?.proconfig ?? [];
+    const fixedSearchPath = Array.isArray(config)
+      && config.includes("search_path=pg_catalog, public");
+    if (
+      result.rowCount !== 1
+      || !fixedSearchPath
+      || !definition.includes("site_chat_rotation_current_secret")
+      || !definition.includes("site_chat_rotation_previous_secret")
+      || !definition.includes("SITE_CHAT_PUBLICATION_ROTATION_PREVIOUS_SECRET_MISMATCH")
+    ) {
+      throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-site-chat-publication-secret-rotation-r6.sql");
+    }
+  }
+
 }
 
 async function applyMigrations(connectionString) {
