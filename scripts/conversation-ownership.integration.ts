@@ -10,6 +10,17 @@ async function main(){
   try{
     await pool.query("delete from crm_conversation_assignment_events where workspace_id='norautomatch'");
     await pool.query("delete from crm_conversation_assignments where workspace_id='norautomatch'");
+    await pool.query("delete from crm_conversation_events where workspace_id='norautomatch' and event_id='ownership-fixture-event'");
+    await pool.query(
+      `insert into crm_conversation_events (
+        workspace_id,provider,event_id,conversation_id,event_type,observed_at,
+        normalized_payload,routing_decision,routing_reasons,processing_state
+      ) values (
+        'norautomatch','NORAUTO_SITE_CHAT','ownership-fixture-event','site-synthetic-owner',
+        'CONVERSATION_ENDED_OR_HANDOFF_READY',current_timestamp,
+        '{}'::jsonb,'CONTACTABLE','[]'::jsonb,'RECEIVED'
+      )`,
+    );
 
     assert.equal((await readConversationOwnership(base)).state,"UNASSIGNED");
 
