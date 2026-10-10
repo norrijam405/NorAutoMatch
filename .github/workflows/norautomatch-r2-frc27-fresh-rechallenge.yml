@@ -1,0 +1,69 @@
+name: NorAutoMatch R2 FRC-27 Fresh Rechallenge
+on:
+  push:
+    branches: ["evidence/r2-frc27-fresh-rechallenge-20261010"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rechallenge:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: |
+          test "$(git rev-parse 4b22fc438c544c64205d61351f8e98ab27811073^{tree})" = "4eee5f5389dea3c3f6498199ada7f101942941db"
+      - run: npm ci
+      - name: Preseed recorded r6 migration
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          node scripts/frc27-preseed-r6.mjs
+      - name: Install fake-but-present r6 guard
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 <<'SQL'
+          create or replace function public.norauto_reject_site_chat_publication_anchor_mutation()
+          returns trigger
+          language plpgsql
+          set search_path = pg_catalog, public
+          as $$
+          begin
+            return new;
+          end;
+          $$;
+          SQL
+      - name: Startup must reject fake r6 invariant
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc27-fresh-rechallenge
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc27-secret-0123456789abcdef
+        run: |
+          set +e
+          output="$(npm start 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -ne 0
+          echo "$output" | grep "MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-site-chat-publication-secret-rotation-r6.sql"
+      - run: npm run typecheck
