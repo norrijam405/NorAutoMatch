@@ -33,6 +33,7 @@ const migrations = [
   "infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql",
   "infrastructure/norautomatch-conversation-assignment-events-sequencing-r5.sql",
   "infrastructure/norautomatch-conversation-assignment-events-concurrency-r6.sql",
+  "infrastructure/norautomatch-conversation-assignment-events-concurrency-anchor-r8.sql",
   "infrastructure/norautomatch-conversation-assignment-events-security-anchor-r7.sql",
   "infrastructure/norautomatch-conversation-communication-ledger-r0.sql",
   "infrastructure/norautomatch-conversation-communication-ledger-redacted-source-r1.sql",
@@ -271,6 +272,56 @@ async function verifyMigrationInvariant(client, migrationName) {
       }
     } finally {
       await client.query("ROLLBACK");
+    }
+  }
+
+  if (migrationName === "infrastructure/norautomatch-conversation-assignment-events-concurrency-anchor-r8.sql") {
+    const result = await client.query(`
+      select p.oid, p.prosrc, p.proconfig, p.prosecdef, l.lanname
+        from pg_proc p
+        join pg_namespace n on n.oid=p.pronamespace
+        join pg_language l on l.oid=p.prolang
+       where n.nspname='public'
+         and p.proname='norautomatch_assignment_event_concurrency_anchor'
+    `);
+    const trigger = await client.query(`
+      select t.tgfoid, t.tgenabled, t.tgtype, t.tgqual, t.tgnargs
+        from pg_trigger t
+        join pg_class c on c.oid=t.tgrelid
+        join pg_namespace n on n.oid=c.relnamespace
+       where n.nspname='public'
+         and c.relname='crm_conversation_assignment_events'
+         and t.tgname='crm_conversation_assignment_events_00_concurrency_anchor'
+         and not t.tgisinternal
+    `);
+    const expectedSource = `
+begin
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      new.workspace_id || chr(31) || new.provider || chr(31) || new.conversation_id,
+      0
+    )
+  );
+  return new;
+end;
+`;
+    const row = result.rows[0];
+    const config = row?.proconfig ?? [];
+    if (
+      result.rowCount !== 1
+      || trigger.rowCount !== 1
+      || trigger.rows[0]?.tgfoid !== row?.oid
+      || trigger.rows[0]?.tgenabled !== "O"
+      || Number(trigger.rows[0]?.tgtype) !== 7
+      || trigger.rows[0]?.tgqual !== null
+      || Number(trigger.rows[0]?.tgnargs) !== 0
+      || row?.prosecdef !== false
+      || row?.lanname !== "plpgsql"
+      || !Array.isArray(config)
+      || !config.includes("search_path=pg_catalog, public")
+      || sha256(row?.prosrc ?? "") !== sha256(expectedSource)
+    ) {
+      throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-concurrency-anchor-r8.sql");
     }
   }
 
