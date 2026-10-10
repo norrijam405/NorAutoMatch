@@ -1,0 +1,68 @@
+name: NorAutoMatch R2 FRC-41 Builder CI
+on:
+  push:
+    branches: ["remediation/r2-frc41-assignment-upstream-existence"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  builder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Start PostgreSQL and bootstrap
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc41-secret-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc41-builder
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          sudo -u postgres dropdb --if-exists norauto_ci
+          sudo -u postgres createdb -O norauto norauto_ci
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          npm start
+      - name: FRC-41 nonexistent conversation assignment must fail
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: |
+          if psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-frc41-secret-0123456789abcdef',true);
+          insert into public.crm_conversation_assignments
+            (workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at)
+          values ('frc41','NORAUTO_SITE_CHAT','nonexistent-conversation','rep-fake','ASSIGNED',clock_timestamp(),clock_timestamp());
+          commit;
+          SQL
+          then
+            echo "ERROR: nonexistent conversation assignment accepted"
+            exit 1
+          fi
+      - name: Legitimate claim and release remain functional
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc41-secret-0123456789abcdef
+        run: |
+          npx tsc -p tsconfig.conversation-ownership.json
+          node .tmp-conversation-ownership/scripts/conversation-ownership.integration.js
+      - run: npm run typecheck
+      - run: npm run build
