@@ -9,6 +9,31 @@ async function main() {
   if (!connectionString) throw new Error("NORAUTO_CRM_DATABASE_URL required");
 
   const pool = createPostgresCrmPool(connectionString);
+  const assignmentSecret = process.env.NORAUTO_PUBLIC_ABUSE_HMAC_SECRET?.trim() ?? "";
+  if (assignmentSecret.length < 32) throw new Error("NORAUTO_PUBLIC_ABUSE_HMAC_SECRET required");
+
+  async function seedAssignment(conversationId: string, assigneeSubjectId: string) {
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query(
+        "select set_config('norautomatch.conversation_assignment_hmac_secret', $1, true)",
+        [assignmentSecret],
+      );
+      await client.query(
+        `insert into crm_conversation_assignments (
+          workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at
+        ) values ($1,$2,$3,$4,'ASSIGNED',current_timestamp,current_timestamp)`,
+        [workspaceId, provider, conversationId, assigneeSubjectId],
+      );
+      await client.query("commit");
+    } catch (error) {
+      try { await client.query("rollback"); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
   const workspaceId = "norautomatch";
   const provider = "NORAUTO_SITE_CHAT";
   const conversationId = "site-00000000-0000-4000-8000-000000000001";
@@ -32,12 +57,7 @@ async function main() {
       [workspaceId, provider, eventId, conversationId, JSON.stringify({ synthetic: true })],
     );
 
-    await pool.query(
-      `insert into crm_conversation_assignments (
-        workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at
-      ) values ($1,$2,$3,$4,'ASSIGNED',current_timestamp,current_timestamp)`,
-      [workspaceId, provider, conversationId, repA],
-    );
+    await seedAssignment(conversationId, repA);
 
     const frc12ConversationId = "site-00000000-0000-4000-8000-000000000301";
     const frc12EventId = "site-00000000-0000-4000-8000-000000000302";
@@ -54,12 +74,7 @@ async function main() {
       [workspaceId, provider, frc12EventId, frc12ConversationId, JSON.stringify({ synthetic: true, frc12: true })],
     );
 
-    await pool.query(
-      `insert into crm_conversation_assignments (
-        workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at
-      ) values ($1,$2,$3,$4,'ASSIGNED',current_timestamp,current_timestamp)`,
-      [workspaceId, provider, frc12ConversationId, frc12Rep],
-    );
+    await seedAssignment(frc12ConversationId, frc12Rep);
 
     await pool.query(
       `insert into crm_site_chat_access (
@@ -128,12 +143,7 @@ async function main() {
       [workspaceId, provider, frc13EventId, frc13ConversationId, JSON.stringify({ synthetic: true, frc13: true })],
     );
 
-    await pool.query(
-      `insert into crm_conversation_assignments (
-        workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at
-      ) values ($1,$2,$3,$4,'ASSIGNED',current_timestamp,current_timestamp)`,
-      [workspaceId, provider, frc13ConversationId, frc13Rep],
-    );
+    await seedAssignment(frc13ConversationId, frc13Rep);
 
     await pool.query(
       `insert into crm_site_chat_access (
@@ -243,12 +253,7 @@ async function main() {
       [workspaceId, provider, frc14EventId, frc14ConversationId, JSON.stringify({ synthetic: true, frc14: true })],
     );
 
-    await pool.query(
-      `insert into crm_conversation_assignments (
-        workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at
-      ) values ($1,$2,$3,$4,'ASSIGNED',current_timestamp,current_timestamp)`,
-      [workspaceId, provider, frc14ConversationId, frc14Rep],
-    );
+    await seedAssignment(frc14ConversationId, frc14Rep);
 
     await assert.rejects(
       async () => {
@@ -325,12 +330,7 @@ async function main() {
       [workspaceId, provider, frc15EventId, frc15ConversationId, JSON.stringify({ synthetic: true, frc15: true })],
     );
 
-    await pool.query(
-      `insert into crm_conversation_assignments (
-        workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at
-      ) values ($1,$2,$3,$4,'ASSIGNED',current_timestamp,current_timestamp)`,
-      [workspaceId, provider, frc15ConversationId, frc15Rep],
-    );
+    await seedAssignment(frc15ConversationId, frc15Rep);
 
     await assert.rejects(
       async () => {
@@ -575,6 +575,10 @@ async function main() {
     const transfer = await pool.connect();
     try {
       await transfer.query("begin");
+      await transfer.query(
+        "select set_config('norautomatch.conversation_assignment_hmac_secret', $1, true)",
+        [assignmentSecret],
+      );
       const moved = await transfer.query(
         `update crm_conversation_assignments
             set assignee_subject_id=$4, assignment_state='ASSIGNED',
@@ -709,12 +713,7 @@ async function main() {
       [workspaceId, provider, expiryEventId, expiryConversationId, JSON.stringify({ synthetic: true, expiryFixture: true })],
     );
 
-    await pool.query(
-      `insert into crm_conversation_assignments (
-        workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at
-      ) values ($1,$2,$3,$4,'ASSIGNED',current_timestamp,current_timestamp)`,
-      [workspaceId, provider, expiryConversationId, repB],
-    );
+    await seedAssignment(expiryConversationId, repB);
 
     const expiryIssuedAt = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000) + 1000);
     const expiryRegistration = await registerSiteChatAccess({
