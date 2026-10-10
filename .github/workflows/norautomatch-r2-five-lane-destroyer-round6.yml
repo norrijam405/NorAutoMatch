@@ -1,0 +1,106 @@
+name: NorAutoMatch R2 Five-Lane Destroyer Round 6
+
+on:
+  push:
+    branches: ["evidence/r2-5lane-destroyer-round6-20261010"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  round6:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify frozen combined successor
+        run: |
+          test "$(git rev-parse 68183fad9b88d312d60f58b624ceb08a81910e05^{tree})" = "9031ee0400188eb949302b937a6ecaa7a6e12222"
+          git merge-base --is-ancestor 68183fad9b88d312d60f58b624ceb08a81910e05 HEAD
+
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+
+      - name: Start PostgreSQL and isolated databases
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          for db in norauto_r6d1 norauto_r6d2 norauto_r6d3 norauto_r6d4 norauto_r6d5; do
+            sudo -u postgres dropdb --if-exists "$db"
+            sudo -u postgres createdb -O norauto "$db"
+          done
+
+      - name: D1 preseed v16 current-only binding migration
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r6d1
+          NORAUTO_PRESEED_MIGRATION: infrastructure/norautomatch-crm-v16-current-only-customer-binding-issuance.sql
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_r6d1 -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          node scripts/round6-preseed-migration.mjs
+          NORAUTO_MIGRATION_ONLY=1 NORAUTO_RELEASE_SHA=r6-d1-old           NORAUTO_PUBLIC_ABUSE_HMAC_SECRET=ci-r6-d1-old-secret-0123456789abcdef npm start
+          NORAUTO_MIGRATION_ONLY=1 NORAUTO_RELEASE_SHA=r6-d1-new           NORAUTO_PUBLIC_ABUSE_HMAC_SECRET=ci-r6-d1-new-secret-abcdef0123456789           NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET=ci-r6-d1-old-secret-0123456789abcdef npm start
+          NORAUTO_PREVIOUS_SECRET=ci-r6-d1-old-secret-0123456789abcdef           node scripts/frc23-previous-binding-secret.integration.mjs
+
+      - name: D2 preseed FRC-25 assignment-auth migration
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r6d2
+          NORAUTO_PRESEED_MIGRATION: infrastructure/norautomatch-conversation-ownership-authenticity-r1.sql
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_r6d2 -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          node scripts/round6-preseed-migration.mjs
+          NORAUTO_MIGRATION_ONLY=1 NORAUTO_RELEASE_SHA=r6-d2           NORAUTO_PUBLIC_ABUSE_HMAC_SECRET=ci-r6-d2-secret-0123456789abcdef npm start
+          node scripts/round6-d2-assignment-preseed.mjs
+
+      - name: D3 preseed r7 current-only publication migration
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r6d3
+          NORAUTO_PRESEED_MIGRATION: infrastructure/norautomatch-site-chat-current-only-publication-r7.sql
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_r6d3 -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          node scripts/round6-preseed-migration.mjs
+          NORAUTO_MIGRATION_ONLY=1 NORAUTO_RELEASE_SHA=r6-d3-old           NORAUTO_PUBLIC_ABUSE_HMAC_SECRET=ci-r6-d3-old-secret-0123456789abcdef npm start
+          NORAUTO_MIGRATION_ONLY=1 NORAUTO_RELEASE_SHA=r6-d3-new           NORAUTO_PUBLIC_ABUSE_HMAC_SECRET=ci-r6-d3-new-secret-abcdef0123456789           NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET=ci-r6-d3-old-secret-0123456789abcdef npm start
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET=ci-r6-d3-new-secret-abcdef0123456789           NORAUTO_PREVIOUS_SECRET=ci-r6-d3-old-secret-0123456789abcdef           node scripts/frc26-previous-sitechat-secret.integration.mjs
+
+      - name: Bootstrap D4-D5 normal candidate
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: |
+          for lane in d4 d5; do
+            db="norauto_r6$lane"
+            psql -h 127.0.0.1 -U norauto -d "$db" -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+            NORAUTO_CRM_DATABASE_URL="postgres://norauto:norauto-ci-password@127.0.0.1:5432/$db"             NORAUTO_MIGRATION_ONLY=1             NORAUTO_RELEASE_SHA="r6-$lane"             NORAUTO_PUBLIC_ABUSE_HMAC_SECRET=ci-r6-evidence-secret-0123456789abcdef             npm start
+          done
+
+      - name: D4 assignment-event append-only challenge
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r6d4
+        run: node scripts/round6-d4-assignment-events-immutable.mjs
+
+      - name: D5 assignment-event authenticity challenge
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r6d5
+        run: node scripts/round6-d5-assignment-event-forgery.mjs
+
+      - run: npm run typecheck
