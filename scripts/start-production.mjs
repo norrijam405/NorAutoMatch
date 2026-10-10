@@ -273,14 +273,15 @@ async function verifyMigrationInvariant(client, migrationName) {
 
   if (migrationName === "infrastructure/norautomatch-conversation-assignment-events-security-anchor-r7.sql") {
     const result = await client.query(`
-      select p.oid, p.prosrc, p.proconfig
+      select p.oid, p.prosrc, p.proconfig, p.prosecdef, l.lanname
         from pg_proc p
         join pg_namespace n on n.oid=p.pronamespace
+        join pg_language l on l.oid=p.prolang
        where n.nspname='public'
          and p.proname='norautomatch_assignment_event_security_anchor'
     `);
     const trigger = await client.query(`
-      select t.tgfoid
+      select t.tgfoid, t.tgenabled, t.tgtype, t.tgqual, t.tgnargs
         from pg_trigger t
         join pg_class c on c.oid=t.tgrelid
         join pg_namespace n on n.oid=c.relnamespace
@@ -339,6 +340,12 @@ end;
       result.rowCount !== 1
       || trigger.rowCount !== 1
       || trigger.rows[0]?.tgfoid !== row?.oid
+      || trigger.rows[0]?.tgenabled !== "O"
+      || Number(trigger.rows[0]?.tgtype) !== 7
+      || trigger.rows[0]?.tgqual !== null
+      || Number(trigger.rows[0]?.tgnargs) !== 0
+      || row?.prosecdef !== false
+      || row?.lanname !== "plpgsql"
       || !Array.isArray(config)
       || !config.includes("search_path=pg_catalog, public")
       || sha256(row?.prosrc ?? "") !== sha256(expectedSource)
