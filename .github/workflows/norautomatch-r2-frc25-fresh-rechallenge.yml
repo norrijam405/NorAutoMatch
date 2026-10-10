@@ -1,0 +1,74 @@
+name: NorAutoMatch R2 FRC-25 Fresh Rechallenge
+on:
+  push:
+    branches: ["evidence/r2-frc25-fresh-rechallenge-20261010"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rechallenge:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: |
+          test "$(git rev-parse a2fc156b09bbbe3775e17af8797e1c5a04681545^{tree})" = "2ffca96ec5320bf02e885d74b0b68b51aecaee55"
+      - run: npm ci
+      - name: Prepare and bootstrap exact candidate
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc25-rechallenge
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc25-governed-secret-0123456789abcdef
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          npm start
+      - name: Historical FRC-25 witness
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc25-governed-secret-0123456789abcdef
+        run: node scripts/frc25-conversation-assignment-authority.integration.mjs
+      - name: Fresh function-shadow and raw-insert attack
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 <<'SQL'
+          create schema attacker_shadow;
+          create function attacker_shadow.norautomatch_conversation_assignment_secret_trusted(text)
+          returns boolean language sql immutable as 'select true';
+          set search_path=attacker_shadow,public;
+          SQL
+
+          if psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 <<'SQL'
+          set search_path=attacker_shadow,public;
+          select set_config('norautomatch.conversation_assignment_hmac_secret','attacker-selected-secret-0123456789abcdef',false);
+          insert into public.crm_conversation_assignments
+            (workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at)
+          values
+            ('frc25-shadow','NORAUTO_SITE_CHAT','frc25-shadow-conversation','attacker','ASSIGNED',clock_timestamp(),clock_timestamp());
+          SQL
+          then
+            echo "ERROR: function shadow/raw insert minted conversation ownership"
+            exit 1
+          fi
+          echo "PASS FRC-25 fresh function-shadow/raw-insert variant"
+      - run: npm run typecheck
