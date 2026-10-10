@@ -40,18 +40,19 @@ try {
       values ($1,$2,$3,'CLAIMED','rep-a','rep-a')`,
       [workspace,provider,conversation]);
 
-    let secondAccepted=false;
-    try {
-      await b.query(`insert into public.crm_conversation_assignment_events
-        (workspace_id,provider,conversation_id,action,actor_subject_id,assignee_subject_id)
-        values ($1,$2,$3,'CLAIMED','rep-a','rep-a')`,
-        [workspace,provider,conversation]);
-      secondAccepted=true;
-    } catch {}
+    const secondAttempt=b.query(`insert into public.crm_conversation_assignment_events
+      (workspace_id,provider,conversation_id,action,actor_subject_id,assignee_subject_id)
+      values ($1,$2,$3,'CLAIMED','rep-a','rep-a')`,
+      [workspace,provider,conversation])
+      .then(()=>true)
+      .catch(()=>false);
 
+    await new Promise((resolve)=>setTimeout(resolve,250));
+    await a.query("commit");
+
+    const secondAccepted=await secondAttempt;
     if(secondAccepted){
       await b.query("commit");
-      await a.query("commit");
       const count=await pool.query(
         `select count(*)::int as n from public.crm_conversation_assignment_events
           where workspace_id=$1 and provider=$2 and conversation_id=$3 and action='CLAIMED'`,
@@ -64,8 +65,7 @@ try {
     }
 
     await b.query("rollback");
-    await a.query("rollback");
-    console.log("PASS FRC-39/FRC-40 fresh concurrent duplicate CLAIMED attack rejected");
+    console.log("PASS FRC-43 concurrent duplicate CLAIMED attack rejected after serialized predecessor commit");
   } finally {
     a.release();
     b.release();
