@@ -30,10 +30,24 @@ async function seedConversation() {
     (workspace_id,provider,event_id,conversation_id,event_type,observed_at,normalized_payload,routing_decision,routing_reasons,processing_state)
     values ($1,$2,$3,$4,'CONVERSATION_ENDED_OR_HANDOFF_READY',clock_timestamp(),'{}'::jsonb,'CONTACTABLE','[]'::jsonb,'RECEIVED')`,
     [workspace,provider,event,conversation]);
-  await pool.query(`insert into public.crm_conversation_assignments
-    (workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at)
-    values ($1,$2,$3,$4,'ASSIGNED',clock_timestamp(),clock_timestamp())`,
-    [workspace,provider,conversation,rep]);
+  const assignmentClient=await pool.connect();
+  try {
+    await assignmentClient.query("begin");
+    await assignmentClient.query(
+      "select set_config('norautomatch.conversation_assignment_hmac_secret',$1,true)",
+      [current],
+    );
+    await assignmentClient.query(`insert into public.crm_conversation_assignments
+      (workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at)
+      values ($1,$2,$3,$4,'ASSIGNED',clock_timestamp(),clock_timestamp())`,
+      [workspace,provider,conversation,rep]);
+    await assignmentClient.query("commit");
+  } catch(e) {
+    try { await assignmentClient.query("rollback"); } catch {}
+    throw e;
+  } finally {
+    assignmentClient.release();
+  }
 }
 
 async function attemptPublication(secret, tokenHash, proof, body) {
