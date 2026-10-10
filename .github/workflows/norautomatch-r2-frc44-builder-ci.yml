@@ -1,0 +1,102 @@
+name: NorAutoMatch R2 FRC-44 Builder CI
+on:
+  push:
+    branches: ["remediation/r2-frc44-assignment-event-security-anchor"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  builder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          for db in norauto_spoof norauto_preseed; do
+            sudo -u postgres dropdb --if-exists "$db"
+            sudo -u postgres createdb -O norauto "$db"
+            PGPASSWORD=norauto-ci-password psql -h 127.0.0.1 -U norauto -d "$db" -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          done
+      - name: Bootstrap spoof database
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_spoof
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc44-secret-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc44-builder
+        run: npm start
+      - name: Probe-specific spoof must remain unable to mint orphan evidence
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_spoof
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc44-secret-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc44-builder
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_spoof -v ON_ERROR_STOP=1 <<'SQL'
+          create or replace function public.norautomatch_enforce_assignment_event_insert_authenticity()
+          returns trigger
+          language plpgsql
+          set search_path = pg_catalog, public
+          as $$
+          begin
+            perform 'norautomatch.conversation_assignment_hmac_secret public.norautomatch_conversation_assignment_secret_trusted CONVERSATION_ASSIGNMENT_EVENT_AUTHENTICITY_REQUIRED CONVERSATION_ASSIGNMENT_EVENT_CLAIM_TRUTH_INVALID CONVERSATION_ASSIGNMENT_EVENT_RELEASE_TRUTH_INVALID public.crm_conversation_assignments CONVERSATION_ASSIGNMENT_EVENT_STATE_REQUIRED current_state current_assignee';
+            if new.workspace_id='__migration_probe__'
+               and new.conversation_id='__missing_conversation__'
+               and new.actor_subject_id='__probe_actor__' then
+              raise exception 'CONVERSATION_ASSIGNMENT_EVENT_STATE_REQUIRED';
+            end if;
+            return new;
+          end;
+          $$;
+          SQL
+          npm start
+          if psql -h 127.0.0.1 -U norauto -d norauto_spoof -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-frc44-secret-0123456789abcdef',true);
+          insert into public.crm_conversation_assignment_events
+            (workspace_id,provider,conversation_id,action,actor_subject_id,assignee_subject_id)
+          values ('frc44-real-orphan','NORAUTO_SITE_CHAT','frc44-missing','CLAIMED','attacker','attacker');
+          commit;
+          SQL
+          then
+            echo "ERROR: FRC-44 security anchor failed to reject orphan evidence"
+            exit 1
+          fi
+          echo "PASS FRC-44 stable anchor rejected real orphan despite spoofed evolving guard"
+      - name: Exact r7 preseed must fail closed
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_preseed
+          NORAUTO_PRESEED_MIGRATION: infrastructure/norautomatch-conversation-assignment-events-security-anchor-r7.sql
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc44-preseed-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc44-preseed
+        run: |
+          node scripts/frc28-preseed-v16.mjs
+          set +e
+          output="$(npm start 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -ne 0
+          echo "$output" | grep "MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-security-anchor-r7.sql"
+      - run: npm run typecheck
+      - run: npm run build
