@@ -30,6 +30,7 @@ const migrations = [
   "infrastructure/norautomatch-conversation-assignment-events-immutable-r2.sql",
   "infrastructure/norautomatch-conversation-assignment-events-authenticity-r3.sql",
   "infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql",
+  "infrastructure/norautomatch-conversation-assignment-events-security-anchor-r7.sql",
   "infrastructure/norautomatch-conversation-communication-ledger-r0.sql",
   "infrastructure/norautomatch-conversation-communication-ledger-redacted-source-r1.sql",
   "infrastructure/norautomatch-site-chat-thread-r0.sql",
@@ -267,6 +268,82 @@ async function verifyMigrationInvariant(client, migrationName) {
       }
     } finally {
       await client.query("ROLLBACK");
+    }
+  }
+
+  if (migrationName === "infrastructure/norautomatch-conversation-assignment-events-security-anchor-r7.sql") {
+    const result = await client.query(`
+      select p.oid, p.prosrc, p.proconfig
+        from pg_proc p
+        join pg_namespace n on n.oid=p.pronamespace
+       where n.nspname='public'
+         and p.proname='norautomatch_assignment_event_security_anchor'
+    `);
+    const trigger = await client.query(`
+      select t.tgfoid
+        from pg_trigger t
+        join pg_class c on c.oid=t.tgrelid
+        join pg_namespace n on n.oid=c.relnamespace
+       where n.nspname='public'
+         and c.relname='crm_conversation_assignment_events'
+         and t.tgname='crm_conversation_assignment_events_security_anchor'
+         and not t.tgisinternal
+    `);
+    const expectedSource = `
+declare
+  candidate_secret text;
+  current_state text;
+  current_assignee text;
+begin
+  candidate_secret := current_setting(
+    'norautomatch.conversation_assignment_hmac_secret',
+    true
+  );
+
+  if not public.norautomatch_conversation_assignment_secret_trusted(candidate_secret) then
+    raise exception 'CONVERSATION_ASSIGNMENT_EVENT_AUTHENTICITY_REQUIRED';
+  end if;
+
+  select a.assignment_state, a.assignee_subject_id
+    into current_state, current_assignee
+    from public.crm_conversation_assignments a
+   where a.workspace_id = new.workspace_id
+     and a.provider = new.provider
+     and a.conversation_id = new.conversation_id;
+
+  if not found then
+    raise exception 'CONVERSATION_ASSIGNMENT_EVENT_STATE_REQUIRED';
+  end if;
+
+  if new.action='CLAIMED' then
+    if new.assignee_subject_id is null
+       or new.actor_subject_id is distinct from new.assignee_subject_id
+       or current_state is distinct from 'ASSIGNED'
+       or current_assignee is distinct from new.assignee_subject_id then
+      raise exception 'CONVERSATION_ASSIGNMENT_EVENT_CLAIM_TRUTH_INVALID';
+    end if;
+  elsif new.action='RELEASED' then
+    if new.assignee_subject_id is not null
+       or current_state is distinct from 'UNASSIGNED'
+       or current_assignee is not null then
+      raise exception 'CONVERSATION_ASSIGNMENT_EVENT_RELEASE_TRUTH_INVALID';
+    end if;
+  end if;
+
+  return new;
+end;
+`;
+    const row = result.rows[0];
+    const config = row?.proconfig ?? [];
+    if (
+      result.rowCount !== 1
+      || trigger.rowCount !== 1
+      || trigger.rows[0]?.tgfoid !== row?.oid
+      || !Array.isArray(config)
+      || !config.includes("search_path=pg_catalog, public")
+      || sha256(row?.prosrc ?? "") !== sha256(expectedSource)
+    ) {
+      throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-security-anchor-r7.sql");
     }
   }
 
