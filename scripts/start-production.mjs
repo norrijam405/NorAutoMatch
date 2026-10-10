@@ -25,6 +25,7 @@ const migrations = [
   "infrastructure/norautomatch-crm-v14-authenticated-customer-opportunity-bindings.sql",
   "infrastructure/norautomatch-crm-v15-customer-binding-secret-rotation.sql",
   "infrastructure/norautomatch-conversation-ownership-r0.sql",
+  "infrastructure/norautomatch-conversation-ownership-authenticity-r1.sql",
   "infrastructure/norautomatch-conversation-communication-ledger-r0.sql",
   "infrastructure/norautomatch-conversation-communication-ledger-redacted-source-r1.sql",
   "infrastructure/norautomatch-site-chat-thread-r0.sql",
