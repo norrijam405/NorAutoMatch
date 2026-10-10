@@ -1,0 +1,221 @@
+name: NorAutoMatch R2 Five-Lane Destroyer Round 8
+
+on:
+  push:
+    branches: ["evidence/r2-5lane-destroyer-round8-20261010"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  destroyer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify frozen FRC-33 through FRC-37 product candidate
+        run: |
+          test "$(git rev-parse ee9b702f7621ef5940cf68e18fc80f097331c0c2^{tree})" = "f3bc1a092f7445fef2e6c8664b1fec247b4ae03c"
+          git merge-base --is-ancestor ee9b702f7621ef5940cf68e18fc80f097331c0c2 HEAD
+
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+
+      - name: Start PostgreSQL and isolated lane databases
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          for db in norauto_r8d1 norauto_r8d2 norauto_r8d3 norauto_r8d4 norauto_r8d5; do
+            sudo -u postgres dropdb --if-exists "$db"
+            sudo -u postgres createdb -O norauto "$db"
+            PGPASSWORD=norauto-ci-password psql -h 127.0.0.1 -U norauto -d "$db" -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          done
+
+      - name: D1 preseed r4 must not suppress state binding
+        continue-on-error: true
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r8d1
+          NORAUTO_PRESEED_MIGRATION: infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-round8-d1-secret-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: round8-d1
+          PGPASSWORD: norauto-ci-password
+        run: |
+          node scripts/frc28-preseed-v16.mjs
+          npm start
+          if psql -h 127.0.0.1 -U norauto -d norauto_r8d1 -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-round8-d1-secret-0123456789abcdef',true);
+          insert into public.crm_conversation_assignment_events
+            (workspace_id,provider,conversation_id,action,actor_subject_id,assignee_subject_id)
+          values ('round8-d1','NORAUTO_SITE_CHAT','nonexistent-conversation','CLAIMED','orphan','orphan');
+          commit;
+          SQL
+          then
+            echo "NEW_FINDING_D1_PRESEEDED_R4_SUPPRESSES_ASSIGNMENT_EVENT_STATE_BINDING"
+            exit 1
+          fi
+          echo "PASS D1 Round8: preseeded r4 could not suppress state binding"
+
+      - name: D2 post-migration r4 function tamper must fail closed
+        continue-on-error: true
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r8d2
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-round8-d2-secret-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: round8-d2
+          PGPASSWORD: norauto-ci-password
+        run: |
+          npm start
+          psql -h 127.0.0.1 -U norauto -d norauto_r8d2 -v ON_ERROR_STOP=1 <<'SQL'
+          create or replace function public.norautomatch_enforce_assignment_event_insert_authenticity()
+          returns trigger
+          language plpgsql
+          set search_path = pg_catalog, public
+          as $$
+          begin
+            return new;
+          end;
+          $$;
+          SQL
+          if npm start; then
+            if psql -h 127.0.0.1 -U norauto -d norauto_r8d2 -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-round8-d2-secret-0123456789abcdef',true);
+          insert into public.crm_conversation_assignment_events
+            (workspace_id,provider,conversation_id,action,actor_subject_id,assignee_subject_id)
+          values ('round8-d2','NORAUTO_SITE_CHAT','nonexistent-conversation','CLAIMED','orphan','orphan');
+          commit;
+          SQL
+            then
+              echo "NEW_FINDING_D2_RECORDED_R4_DOES_NOT_DETECT_STATE_BINDING_FUNCTION_TAMPER"
+              exit 1
+            fi
+          fi
+          echo "PASS D2 Round8: r4 function tamper detected"
+
+      - name: D3 duplicate CLAIMED evidence must be rejected
+        continue-on-error: true
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r8d3
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-round8-d3-secret-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: round8-d3
+          PGPASSWORD: norauto-ci-password
+        run: |
+          npm start
+          psql -h 127.0.0.1 -U norauto -d norauto_r8d3 -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-round8-d3-secret-0123456789abcdef',true);
+          insert into public.crm_conversation_assignments
+            (workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at)
+          values ('round8-d3','NORAUTO_SITE_CHAT','round8-d3-conversation','rep-a','ASSIGNED',clock_timestamp(),clock_timestamp());
+          insert into public.crm_conversation_assignment_events
+            (workspace_id,provider,conversation_id,action,actor_subject_id,assignee_subject_id)
+          values ('round8-d3','NORAUTO_SITE_CHAT','round8-d3-conversation','CLAIMED','rep-a','rep-a');
+          commit;
+          SQL
+          if psql -h 127.0.0.1 -U norauto -d norauto_r8d3 -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-round8-d3-secret-0123456789abcdef',true);
+          insert into public.crm_conversation_assignment_events
+            (workspace_id,provider,conversation_id,action,actor_subject_id,assignee_subject_id)
+          values ('round8-d3','NORAUTO_SITE_CHAT','round8-d3-conversation','CLAIMED','rep-a','rep-a');
+          commit;
+          SQL
+          then
+            echo "NEW_FINDING_D3_DUPLICATE_CLAIMED_EVIDENCE_ACCEPTED_WITHOUT_STATE_TRANSITION"
+            exit 1
+          fi
+          echo "PASS D3 Round8: duplicate CLAIMED evidence rejected"
+
+      - name: D4 wrong actor duplicate RELEASED evidence must be rejected
+        continue-on-error: true
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r8d4
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-round8-d4-secret-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: round8-d4
+          PGPASSWORD: norauto-ci-password
+        run: |
+          npm start
+          psql -h 127.0.0.1 -U norauto -d norauto_r8d4 -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-round8-d4-secret-0123456789abcdef',true);
+          insert into public.crm_conversation_assignments
+            (workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at)
+          values ('round8-d4','NORAUTO_SITE_CHAT','round8-d4-conversation','rep-a','ASSIGNED',clock_timestamp(),clock_timestamp());
+          insert into public.crm_conversation_assignment_events
+            (workspace_id,provider,conversation_id,action,actor_subject_id,assignee_subject_id)
+          values ('round8-d4','NORAUTO_SITE_CHAT','round8-d4-conversation','CLAIMED','rep-a','rep-a');
+          update public.crm_conversation_assignments
+             set assignee_subject_id=null,assignment_state='UNASSIGNED',assigned_at=null,updated_at=clock_timestamp()
+           where workspace_id='round8-d4' and provider='NORAUTO_SITE_CHAT' and conversation_id='round8-d4-conversation';
+          insert into public.crm_conversation_assignment_events
+            (workspace_id,provider,conversation_id,action,actor_subject_id,assignee_subject_id)
+          values ('round8-d4','NORAUTO_SITE_CHAT','round8-d4-conversation','RELEASED','rep-a',null);
+          commit;
+          SQL
+          if psql -h 127.0.0.1 -U norauto -d norauto_r8d4 -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-round8-d4-secret-0123456789abcdef',true);
+          insert into public.crm_conversation_assignment_events
+            (workspace_id,provider,conversation_id,action,actor_subject_id,assignee_subject_id)
+          values ('round8-d4','NORAUTO_SITE_CHAT','round8-d4-conversation','RELEASED','rep-b',null);
+          commit;
+          SQL
+          then
+            echo "NEW_FINDING_D4_WRONG_ACTOR_DUPLICATE_RELEASED_EVIDENCE_ACCEPTED"
+            exit 1
+          fi
+          echo "PASS D4 Round8: wrong-actor duplicate RELEASED evidence rejected"
+
+      - name: D5 nonexistent conversation assignment plus evidence must be rejected
+        continue-on-error: true
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_r8d5
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-round8-d5-secret-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: round8-d5
+          PGPASSWORD: norauto-ci-password
+        run: |
+          npm start
+          if psql -h 127.0.0.1 -U norauto -d norauto_r8d5 -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-round8-d5-secret-0123456789abcdef',true);
+          insert into public.crm_conversation_assignments
+            (workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at)
+          values ('round8-d5','NORAUTO_SITE_CHAT','nonexistent-conversation','rep-fake','ASSIGNED',clock_timestamp(),clock_timestamp());
+          insert into public.crm_conversation_assignment_events
+            (workspace_id,provider,conversation_id,action,actor_subject_id,assignee_subject_id)
+          values ('round8-d5','NORAUTO_SITE_CHAT','nonexistent-conversation','CLAIMED','rep-fake','rep-fake');
+          commit;
+          SQL
+          then
+            echo "NEW_FINDING_D5_GOVERNED_SECRET_CAN_CREATE_NONEXISTENT_CONVERSATION_ASSIGNMENT_EVIDENCE"
+            exit 1
+          fi
+          echo "PASS D5 Round8: nonexistent conversation assignment/evidence rejected"
+
+      - name: Typecheck
+        if: always()
+        run: npm run typecheck
