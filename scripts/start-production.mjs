@@ -33,6 +33,7 @@ const migrations = [
   "infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql",
   "infrastructure/norautomatch-conversation-assignment-events-sequencing-r5.sql",
   "infrastructure/norautomatch-conversation-assignment-events-concurrency-r6.sql",
+  "infrastructure/norautomatch-conversation-assignment-events-sequencing-anchor-r9.sql",
   "infrastructure/norautomatch-conversation-assignment-events-security-anchor-r7.sql",
   "infrastructure/norautomatch-conversation-communication-ledger-r0.sql",
   "infrastructure/norautomatch-conversation-communication-ledger-redacted-source-r1.sql",
@@ -271,6 +272,75 @@ async function verifyMigrationInvariant(client, migrationName) {
       }
     } finally {
       await client.query("ROLLBACK");
+    }
+  }
+
+  if (migrationName === "infrastructure/norautomatch-conversation-assignment-events-sequencing-anchor-r9.sql") {
+    const result = await client.query(`
+      select p.oid, p.prosrc, p.proconfig, p.prosecdef, l.lanname
+        from pg_proc p
+        join pg_namespace n on n.oid=p.pronamespace
+        join pg_language l on l.oid=p.prolang
+       where n.nspname='public'
+         and p.proname='norautomatch_assignment_event_sequencing_anchor'
+    `);
+    const trigger = await client.query(`
+      select t.tgfoid, t.tgenabled, t.tgtype, t.tgqual, t.tgnargs
+        from pg_trigger t
+        join pg_class c on c.oid=t.tgrelid
+        join pg_namespace n on n.oid=c.relnamespace
+       where n.nspname='public'
+         and c.relname='crm_conversation_assignment_events'
+         and t.tgname='crm_conversation_assignment_events_10_sequencing_anchor'
+         and not t.tgisinternal
+    `);
+    const expectedSource = `
+declare
+  previous_action text;
+  previous_actor text;
+  previous_assignee text;
+begin
+  select e.action, e.actor_subject_id, e.assignee_subject_id
+    into previous_action, previous_actor, previous_assignee
+    from public.crm_conversation_assignment_events e
+   where e.workspace_id = new.workspace_id
+     and e.provider = new.provider
+     and e.conversation_id = new.conversation_id
+   order by e.id desc
+   limit 1;
+
+  if new.action='CLAIMED' then
+    if previous_action is not null and previous_action is distinct from 'RELEASED' then
+      raise exception 'CONVERSATION_ASSIGNMENT_EVENT_CLAIM_SEQUENCE_INVALID';
+    end if;
+  elsif new.action='RELEASED' then
+    if previous_action is distinct from 'CLAIMED'
+       or previous_actor is distinct from new.actor_subject_id
+       or previous_assignee is distinct from new.actor_subject_id then
+      raise exception 'CONVERSATION_ASSIGNMENT_EVENT_RELEASE_SEQUENCE_INVALID';
+    end if;
+  end if;
+
+  return new;
+end;
+`;
+    const row = result.rows[0];
+    const config = row?.proconfig ?? [];
+    if (
+      result.rowCount !== 1
+      || trigger.rowCount !== 1
+      || trigger.rows[0]?.tgfoid !== row?.oid
+      || trigger.rows[0]?.tgenabled !== "O"
+      || Number(trigger.rows[0]?.tgtype) !== 7
+      || trigger.rows[0]?.tgqual !== null
+      || Number(trigger.rows[0]?.tgnargs) !== 0
+      || row?.prosecdef !== false
+      || row?.lanname !== "plpgsql"
+      || !Array.isArray(config)
+      || !config.includes("search_path=pg_catalog, public")
+      || sha256(row?.prosrc ?? "") !== sha256(expectedSource)
+    ) {
+      throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-sequencing-anchor-r9.sql");
     }
   }
 
