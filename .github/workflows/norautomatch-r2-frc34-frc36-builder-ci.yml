@@ -1,0 +1,73 @@
+name: NorAutoMatch R2 FRC-34 FRC-36 Builder CI
+on:
+  push:
+    branches: ["remediation/r2-frc34-frc36-r3-invariant"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  builder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          for db in norauto_preseed norauto_tamper; do
+            sudo -u postgres dropdb --if-exists "$db"
+            sudo -u postgres createdb -O norauto "$db"
+            PGPASSWORD=norauto-ci-password psql -h 127.0.0.1 -U norauto -d "$db" -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          done
+      - name: FRC-34 exact preseed must fail closed
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_preseed
+          NORAUTO_PRESEED_MIGRATION: infrastructure/norautomatch-conversation-assignment-events-authenticity-r3.sql
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc34-secret-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc34-builder
+        run: |
+          node scripts/frc28-preseed-v16.mjs
+          set +e
+          output="$(npm start 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -ne 0
+          echo "$output" | grep "MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-authenticity-r3.sql"
+      - name: FRC-36 trigger deletion must fail closed
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_tamper
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc36-secret-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc36-builder
+          PGPASSWORD: norauto-ci-password
+        run: |
+          npm start
+          psql -h 127.0.0.1 -U norauto -d norauto_tamper -v ON_ERROR_STOP=1 -c "drop trigger crm_conversation_assignment_events_insert_authenticity on public.crm_conversation_assignment_events"
+          set +e
+          output="$(npm start 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -ne 0
+          echo "$output" | grep "MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-authenticity-r3.sql"
+      - run: npm run typecheck
+      - run: npm run build
