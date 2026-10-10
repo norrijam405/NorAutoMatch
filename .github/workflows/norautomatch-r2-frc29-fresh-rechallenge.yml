@@ -1,0 +1,67 @@
+name: NorAutoMatch R2 FRC-29 Fresh Rechallenge
+on:
+  push:
+    branches: ["evidence/r2-frc29-fresh-rechallenge-20261010"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rechallenge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: |
+          test "$(git rev-parse 2d5a123fd43bad388490c5e7ad3d618ebafdbdf1^{tree})" = "86222a7672391d2f66052436ef1e8deec9a5b00a"
+      - run: npm ci
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          sudo -u postgres dropdb --if-exists norauto_ci
+          sudo -u postgres createdb -O norauto norauto_ci
+      - name: Preseed migration and install fake function plus trigger
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_PRESEED_MIGRATION: infrastructure/norautomatch-conversation-ownership-authenticity-r1.sql
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          node scripts/frc29-preseed-assignment-auth.mjs
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 <<'SQL'
+          create or replace function public.norautomatch_enforce_conversation_assignment_mutation_authenticity()
+          returns trigger language plpgsql
+          set search_path = pg_catalog, public
+          as $$ begin return new; end; $$;
+          create trigger crm_conversation_assignments_mutation_authenticity
+          before insert or update or delete on public.crm_conversation_assignments
+          for each row execute function public.norautomatch_enforce_conversation_assignment_mutation_authenticity();
+          SQL
+      - name: Startup must reject fake FRC-25 invariant
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc29-rechallenge
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc29-secret-0123456789abcdef
+        run: |
+          set +e
+          output="$(npm start 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -ne 0
+          echo "$output" | grep "MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-ownership-authenticity-r1.sql"
+      - run: npm run typecheck
