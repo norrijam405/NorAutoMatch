@@ -34,6 +34,7 @@ const migrations = [
   "infrastructure/norautomatch-site-chat-publication-secret-anchor-r4.sql",
   "infrastructure/norautomatch-site-chat-schema-qualified-trust-r5.sql",
   "infrastructure/norautomatch-site-chat-publication-secret-rotation-r6.sql",
+  "infrastructure/norautomatch-site-chat-current-only-publication-r7.sql",
 ];
 
 function sha256(text) {
