@@ -1,0 +1,88 @@
+name: NorAutoMatch R2 FRC-23 Fresh Rechallenge
+on:
+  push:
+    branches: ["evidence/r2-frc23-fresh-rechallenge-20261010"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rechallenge:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: |
+          test "$(git rev-parse HEAD^)" = "45808a36eae87614a11631a9a66a70642697502d" || true
+          test "$(git rev-parse 45808a36eae87614a11631a9a66a70642697502d^{tree})" = "19c235b97707941869d073e1d717b81e4ba7a360"
+      - run: npm ci
+      - name: Prepare
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+      - name: Bootstrap old secret
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc23-rechallenge-old
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc23-old-secret-0123456789abcdef
+        run: npm start
+      - name: Rotate
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc23-rechallenge-new
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc23-new-secret-abcdef0123456789
+          NORAUTO_PUBLIC_ABUSE_HMAC_PREVIOUS_SECRET: ci-frc23-old-secret-0123456789abcdef
+        run: npm start
+      - name: Historical witness
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_PREVIOUS_SECRET: ci-frc23-old-secret-0123456789abcdef
+        run: node scripts/frc23-previous-binding-secret.integration.mjs
+      - name: Fresh previous-secret dealership-system variant
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: |
+          if psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          select set_config('norautomatch.customer_binding_hmac_secret','ci-frc23-old-secret-0123456789abcdef',true);
+          insert into public.crm_opportunities (
+            opportunity_id,workspace_id,intake_idempotency_key,pipeline,stage,desk_state,
+            customer,buying_intent,inventory_evidence,attribution,latest_handoff_id,created_at,updated_at
+          ) values (
+            'namo_777777777777777777777777','norautomatch',repeat('7',64),
+            'Standard Retail','NEW','MANAGER_REVIEW_PENDING',
+            '{}'::jsonb,'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,
+            'namh_777777777777777777777777',clock_timestamp(),clock_timestamp()
+          );
+          insert into public.crm_opportunity_customer_bindings (
+            workspace_id,opportunity_id,customer_user_id,evidence_ref,authority
+          ) values (
+            'norautomatch','namo_777777777777777777777777',
+            '00000000-0000-4000-8000-000000007777'::uuid,
+            'fresh:previous-secret-dealership-system','DEALERSHIP_SYSTEM'
+          );
+          commit;
+          SQL
+          then
+            echo "ERROR: previous secret minted DEALERSHIP_SYSTEM authority"
+            exit 1
+          fi
+          echo "PASS FRC-23 fresh variant"
+      - run: npm run typecheck
