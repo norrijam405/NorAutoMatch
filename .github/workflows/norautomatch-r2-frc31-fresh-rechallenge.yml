@@ -1,0 +1,57 @@
+name: NorAutoMatch R2 FRC-31 Fresh Rechallenge
+on:
+  push:
+    branches: ["evidence/r2-frc31-fresh-rechallenge-20261010"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rechallenge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: |
+          test "$(git rev-parse 3c332df3118920b6fc2a81fdfe1c1539316d53b3^{tree})" = "95147e624bdc4d5c9fba7f89c98825f78a679c04"
+      - run: npm ci
+      - name: Start PostgreSQL and bootstrap
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc31-rechallenge
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc31-secret-0123456789abcdef
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          sudo -u postgres dropdb --if-exists norauto_ci
+          sudo -u postgres createdb -O norauto norauto_ci
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          npm start
+      - name: Historical FRC-31 witness
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+        run: node scripts/frc31-assignment-event-immutability.integration.mjs
+      - name: Fresh TRUNCATE attack
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: |
+          if psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -c "truncate table public.crm_conversation_assignment_events"; then
+            echo "ERROR: TRUNCATE removed assignment evidence"
+            exit 1
+          fi
+          echo "PASS FRC-31 fresh TRUNCATE attack rejected"
+      - run: npm run typecheck
