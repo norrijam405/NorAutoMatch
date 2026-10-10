@@ -1,5 +1,30 @@
 -- NorAutoMatch R2 FRC-45/FRC-47 stable upstream-existence anchor.
--- Current ownership rows must correspond to a durable upstream conversation event.
+-- Authentication remains in the assignment mutation guard. Upstream
+-- conversation existence is owned by a separate exact-fingerprint anchor.
+
+create or replace function public.norautomatch_enforce_conversation_assignment_mutation_authenticity()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public
+as $$
+declare
+  candidate_secret text;
+begin
+  candidate_secret := current_setting(
+    'norautomatch.conversation_assignment_hmac_secret',
+    true
+  );
+
+  if not public.norautomatch_conversation_assignment_secret_trusted(candidate_secret) then
+    raise exception 'CONVERSATION_ASSIGNMENT_AUTHENTICITY_REQUIRED';
+  end if;
+
+  if tg_op='DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$$;
 
 create or replace function public.norautomatch_assignment_upstream_security_anchor()
 returns trigger
