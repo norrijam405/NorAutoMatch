@@ -101,6 +101,29 @@ async function verifyMigrationInvariant(client, migrationName) {
     }
   }
 
+  if (migrationName === "infrastructure/norautomatch-site-chat-current-only-publication-r7.sql") {
+    const result = await client.query(`
+      select pg_get_functiondef(p.oid) as definition, p.proconfig
+        from pg_proc p
+        join pg_namespace n on n.oid=p.pronamespace
+       where n.nspname='public'
+         and p.proname='norauto_site_chat_publication_secret_trusted'
+    `);
+    const row = result.rows[0];
+    const definition = row?.definition ?? "";
+    const config = row?.proconfig ?? [];
+    const fixedSearchPath = Array.isArray(config)
+      && config.includes("search_path=pg_catalog, public");
+    if (
+      result.rowCount !== 1
+      || !fixedSearchPath
+      || !definition.includes("= a.current_secret_sha256")
+      || definition.includes("previous_secret_sha256")
+    ) {
+      throw new Error("MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-site-chat-current-only-publication-r7.sql");
+    }
+  }
+
   if (migrationName === "infrastructure/norautomatch-site-chat-publication-secret-rotation-r6.sql") {
     const result = await client.query(`
       select pg_get_functiondef(p.oid) as definition, p.proconfig
