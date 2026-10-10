@@ -31,6 +31,7 @@ const migrations = [
   "infrastructure/norautomatch-conversation-assignment-events-authenticity-r3.sql",
   "infrastructure/norautomatch-conversation-assignment-events-state-binding-r4.sql",
   "infrastructure/norautomatch-conversation-assignment-events-sequencing-r5.sql",
+  "infrastructure/norautomatch-conversation-assignment-events-concurrency-r6.sql",
   "infrastructure/norautomatch-conversation-communication-ledger-r0.sql",
   "infrastructure/norautomatch-conversation-communication-ledger-redacted-source-r1.sql",
   "infrastructure/norautomatch-site-chat-thread-r0.sql",
