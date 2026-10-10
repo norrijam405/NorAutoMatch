@@ -1,0 +1,72 @@
+name: NorAutoMatch R2 FRC-29 Builder CI
+on:
+  push:
+    branches: ["remediation/r2-frc29-frc25-migration-invariant"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  builder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          sudo -u postgres dropdb --if-exists norauto_preseed
+          sudo -u postgres createdb -O norauto norauto_preseed
+          sudo -u postgres dropdb --if-exists norauto_normal
+          sudo -u postgres createdb -O norauto norauto_normal
+      - name: Prepare preseed database
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_preseed
+          NORAUTO_PRESEED_MIGRATION: infrastructure/norautomatch-conversation-ownership-authenticity-r1.sql
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_preseed -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          node scripts/frc29-preseed-assignment-auth.mjs
+      - name: Recorded-but-missing invariant must fail closed
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_preseed
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: invariant-preseed
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-invariant-secret-0123456789abcdef
+        run: |
+          set +e
+          output="$(npm start 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -ne 0
+          echo "$output" | grep "MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-ownership-authenticity-r1.sql"
+      - name: Normal bootstrap remains functional
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_normal
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: invariant-normal
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-normal-secret-0123456789abcdef
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_normal -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          npm start
+          npm start
+      - run: npm run typecheck
+      - run: npm run build
