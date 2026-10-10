@@ -1,0 +1,77 @@
+name: NorAutoMatch R2 FRC-33 FRC-35 Fresh Rechallenge
+on:
+  push:
+    branches: ["evidence/r2-frc33-frc35-fresh-rechallenge-20261010"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rechallenge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: |
+          test "$(git rev-parse 02d4d7352d47bbbb20aafd02711a20ef194b1559^{tree})" = "06e70bd242bcdb38bf6fed508ca8cbcb6b39d7c7"
+      - run: npm ci
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          for db in norauto_preseed norauto_semantic; do
+            sudo -u postgres dropdb --if-exists "$db"
+            sudo -u postgres createdb -O norauto "$db"
+            PGPASSWORD=norauto-ci-password psql -h 127.0.0.1 -U norauto -d "$db" -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          done
+      - name: Historical FRC-33 preseed witness
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_preseed
+          NORAUTO_PRESEED_MIGRATION: infrastructure/norautomatch-conversation-assignment-events-immutable-r2.sql
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc33-rechallenge-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc33-rechallenge
+        run: |
+          node scripts/frc28-preseed-v16.mjs
+          set +e
+          output="$(npm start 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -ne 0
+          echo "$output" | grep "MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-immutable-r2.sql"
+      - name: Fresh semantic-function tamper
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_semantic
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc35-rechallenge-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc35-rechallenge
+          PGPASSWORD: norauto-ci-password
+        run: |
+          npm start
+          psql -h 127.0.0.1 -U norauto -d norauto_semantic -v ON_ERROR_STOP=1 <<'SQL'
+          create or replace function public.norautomatch_reject_assignment_event_mutation()
+          returns trigger language plpgsql
+          set search_path = pg_catalog, public
+          as $$ begin return new; end; $$;
+          SQL
+          set +e
+          output="$(npm start 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -ne 0
+          echo "$output" | grep "MIGRATION_INVARIANT_MISSING:infrastructure/norautomatch-conversation-assignment-events-immutable-r2.sql"
+      - run: npm run typecheck
