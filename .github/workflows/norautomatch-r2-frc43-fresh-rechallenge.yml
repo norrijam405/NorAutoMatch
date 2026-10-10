@@ -1,0 +1,76 @@
+name: NorAutoMatch R2 FRC-43 Fresh Rechallenge
+on:
+  push:
+    branches: ["evidence/r2-frc43-fresh-rechallenge-20261010"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rechallenge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Verify frozen Builder successor
+        run: |
+          test "$(git rev-parse 58c55d65ed068d901c37b1ebd0c351badae4cb3e^{tree})" = "708d47dfd0d82752afca019dfe3cc718fb4e41d8"
+      - run: npm ci
+      - name: Start PostgreSQL and bootstrap
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc43-rechallenge-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc43-rechallenge
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='norauto') THEN
+              CREATE ROLE norauto LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            ELSE
+              ALTER ROLE norauto WITH LOGIN SUPERUSER PASSWORD 'norauto-ci-password';
+            END IF;
+          END
+          $$;
+          SQL
+          sudo -u postgres dropdb --if-exists norauto_ci
+          sudo -u postgres createdb -O norauto norauto_ci
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          npm start
+      - name: Fresh single-statement duplicate CLAIMED attack
+        env:
+          PGPASSWORD: norauto-ci-password
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-frc43-rechallenge-0123456789abcdef',true);
+          insert into public.crm_conversation_assignments
+            (workspace_id,provider,conversation_id,assignee_subject_id,assignment_state,assigned_at,updated_at)
+          values ('frc43-multi','NORAUTO_SITE_CHAT','frc43-multi-conversation','rep-a','ASSIGNED',clock_timestamp(),clock_timestamp());
+          commit;
+          SQL
+
+          if psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          select set_config('norautomatch.conversation_assignment_hmac_secret','ci-frc43-rechallenge-0123456789abcdef',true);
+          insert into public.crm_conversation_assignment_events
+            (workspace_id,provider,conversation_id,action,actor_subject_id,assignee_subject_id)
+          values
+            ('frc43-multi','NORAUTO_SITE_CHAT','frc43-multi-conversation','CLAIMED','rep-a','rep-a'),
+            ('frc43-multi','NORAUTO_SITE_CHAT','frc43-multi-conversation','CLAIMED','rep-a','rep-a');
+          commit;
+          SQL
+          then
+            echo "NEW_FINDING_FRC43_MULTIROW_DUPLICATE_CLAIMED_EVIDENCE_ACCEPTED"
+            exit 1
+          fi
+          echo "PASS FRC-43 fresh multi-row duplicate CLAIMED attack rejected"
+      - run: npm run typecheck
