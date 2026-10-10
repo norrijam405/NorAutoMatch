@@ -11,6 +11,11 @@ const provider="NORAUTO_SITE_CHAT";
 const conversation="frc3940-race-conversation";
 
 try {
+  await pool.query(`insert into public.crm_conversation_events
+    (workspace_id,provider,event_id,conversation_id,event_type,observed_at,normalized_payload,routing_decision,routing_reasons,processing_state)
+    values ($1,$2,'frc46-race-event',$3,'CONVERSATION_ENDED_OR_HANDOFF_READY',clock_timestamp(),'{}'::jsonb,'CONTACTABLE','[]'::jsonb,'RECEIVED')`,
+    [workspace,provider,conversation]);
+
   const setup=await pool.connect();
   try {
     await setup.query("begin");
