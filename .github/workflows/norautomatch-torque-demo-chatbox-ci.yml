@@ -35,6 +35,8 @@ jobs:
           rm -rf .tmp-torque-independent-assurance
           npx tsc -p tsconfig.torque-independent-assurance.json
           node .tmp-torque-independent-assurance/scripts/torque-independent-assurance.behavior.js
+      - name: Clean generated Torque verification output
+        run: rm -rf .tmp-torque-green-room-tests .tmp-torque-independent-assurance
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
