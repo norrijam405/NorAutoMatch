@@ -3,6 +3,7 @@ import "./globals.css";
 import { brand } from "@/lib/brand";
 import { Header } from "@/components/site/header";
 import { Footer } from "@/components/site/footer";
+import { TorqueChatbox } from "@/components/torque/torque-chatbox";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -54,6 +55,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <Header isAuthenticated={isAuthenticated} />
         <main>{children}</main>
         <Footer />
+        <TorqueChatbox />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       </body>
     </html>
