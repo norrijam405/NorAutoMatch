@@ -1,0 +1,38 @@
+name: NorAutoMatch Torque Demo Chatbox CI
+
+on:
+  push:
+    branches:
+      - "feature/torque-demo-chatbox-20261011"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  torque-demo-chatbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --audit-level=high
+      - name: Torque Green Room
+        run: |
+          rm -rf .tmp-torque-green-room-tests
+          npx tsc -p tsconfig.torque-green-room-tests.json
+          node .tmp-torque-green-room-tests/scripts/torque-green-room.behavior.js
+          node .tmp-torque-green-room-tests/scripts/torque-green-room-policy.behavior.js
+          node .tmp-torque-green-room-tests/scripts/torque-green-room-final.behavior.js
+      - name: Torque independent assurance
+        run: |
+          rm -rf .tmp-torque-independent-assurance
+          npx tsc -p tsconfig.torque-independent-assurance.json
+          node .tmp-torque-independent-assurance/scripts/torque-independent-assurance.behavior.js
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
