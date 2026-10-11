@@ -1,0 +1,53 @@
+name: NorAutoMatch R2 FRC-43 Fresh Rechallenge
+on:
+  push:
+    branches:
+      - evidence/r2-frc43-fresh-rechallenge-20261011
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rechallenge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: norauto
+          POSTGRES_PASSWORD: norauto-ci-password
+          POSTGRES_DB: norauto_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U norauto -d norauto_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Verify frozen Builder successor
+        run: test "$(git rev-parse 58c55d65ed068d901c37b1ebd0c351badae4cb3e^{tree})" = "708d47dfd0d82752afca019dfe3cc718fb4e41d8"
+      - run: npm ci
+      - name: Prepare and migrate
+        env:
+          PGPASSWORD: norauto-ci-password
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc43-rechallenge-0123456789abcdef
+          NORAUTO_MIGRATION_ONLY: "1"
+          NORAUTO_RELEASE_SHA: frc43-rechallenge
+        run: |
+          psql -h 127.0.0.1 -U norauto -d norauto_ci -v ON_ERROR_STOP=1 -f scripts/secure-document-binding-ci-prereqs.sql
+          npm start
+      - name: Concurrent release re-challenge
+        env:
+          NORAUTO_CRM_DATABASE_URL: postgres://norauto:norauto-ci-password@127.0.0.1:5432/norauto_ci
+          NORAUTO_PUBLIC_ABUSE_HMAC_SECRET: ci-frc43-rechallenge-0123456789abcdef
+        run: node scripts/frc43-concurrent-release-rechallenge.mjs
+      - run: npm run typecheck
