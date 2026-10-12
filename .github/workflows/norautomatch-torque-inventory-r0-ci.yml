@@ -1,0 +1,44 @@
+name: NorAutoMatch Torque Inventory R0 CI
+
+on:
+  push:
+    branches:
+      - "feature/2026-10-12-torque-inventory-matchdna-r0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  torque-inventory-r0:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Dependency security gate
+        run: npm audit --audit-level=high
+
+      - name: Compile Torque R0 behavior checks
+        run: |
+          rm -rf .tmp-torque-inventory-r0
+          npx tsc -p tsconfig.torque-inventory-r0.json
+
+      - name: Execute Torque R0 behavior checks
+        run: node .tmp-torque-inventory-r0/scripts/torque-inventory-r0.behavior.js
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Production build
+        run: npm run build
