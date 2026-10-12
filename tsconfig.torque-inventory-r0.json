@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".tmp-torque-inventory-r0",
+    "module": "commonjs",
+    "moduleResolution": "node"
+  },
+  "include": [
+    "scripts/torque-inventory-r0.behavior.ts",
+    "src/lib/torque-sales-inventory-spec.ts",
+    "src/lib/torque-sourcing-language.ts",
+    "src/lib/torque-follow-up-plan.ts"
+  ]
+}
