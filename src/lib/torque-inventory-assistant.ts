@@ -21,6 +21,13 @@ export type TorqueInventoryAnswer = {
   exactCount: number;
   nearCount: number;
   matches: TorqueVehicleMatch[];
+  handoff: {
+    required: boolean;
+    reason?: "NO_EXACT_LOCAL_MATCH";
+    pipeline?: "Vehicle Sourcing";
+    humanScope?: "ORR_AUTO_GROUP";
+    summary?: string;
+  };
   interpreted: {
     maxPrice?: number;
     bodyType?: string;
@@ -110,12 +117,30 @@ export function answerTorqueInventory(input: {
     answer += " Your MatchDNA currently says: " + input.dna.label.replace(/^Learning:\s*/i, "") + ".";
   }
 
+  const handoffRequired = exact.length === 0;
+  const handoffSummary = handoffRequired
+    ? buildHandoffSummary(request, input.dna, near)
+    : undefined;
+
+  if (handoffRequired && input.mode !== "representative-demo") {
+    answer += " I only verified the Orr Nissan West inventory here. The broader Orr Auto Group may have more vehicles, so this should go to a human to check the wider network.";
+  }
+
   return {
     answer,
     mode: input.mode,
     exactCount: exact.length,
     nearCount: near.length,
     matches,
+    handoff: handoffRequired
+      ? {
+          required: true,
+          reason: "NO_EXACT_LOCAL_MATCH",
+          pipeline: "Vehicle Sourcing",
+          humanScope: "ORR_AUTO_GROUP",
+          summary: handoffSummary,
+        }
+      : { required: false },
     interpreted: request,
   };
 }
@@ -229,4 +254,33 @@ function featureMatches(haystack: string, feature: string) {
     "heated seats": ["heated seat"],
   };
   return (synonyms[feature] ?? [feature]).some((needle) => haystack.includes(needle));
+}
+
+
+function buildHandoffSummary(
+  request: ReturnType<typeof interpret>,
+  dna: MatchDnaSummary | undefined,
+  near: TorqueVehicleMatch[],
+) {
+  const requirements = [
+    request.maxPrice !== undefined ? "max $" + request.maxPrice.toLocaleString() : undefined,
+    request.bodyType,
+    request.drivetrain,
+    request.makes.length > 0 ? "makes: " + request.makes.join(", ") : undefined,
+    request.features.length > 0 ? "features: " + request.features.join(", ") : undefined,
+  ].filter((value): value is string => Boolean(value));
+
+  const nearSummary = near.slice(0, 3).map((match) =>
+    match.label + " [" + match.compromises.join("; ") + "]",
+  );
+
+  const parts = [
+    "Torque network sourcing request.",
+    requirements.length > 0 ? "Customer requirements: " + requirements.join(" · ") + "." : "Customer described a vehicle need without structured hard limits.",
+    dna && dna.signalCount > 0 ? "MatchDNA: " + dna.label + "." : undefined,
+    nearSummary.length > 0 ? "Closest Orr Nissan West options: " + nearSummary.join(" | ") + "." : "No close Orr Nissan West option was identified.",
+    "Check broader Orr Auto Group inventory. Do not treat local no-match as group-wide no-match.",
+  ].filter((value): value is string => Boolean(value));
+
+  return parts.join(" ");
 }
