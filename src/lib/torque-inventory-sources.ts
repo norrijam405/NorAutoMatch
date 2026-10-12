@@ -1,7 +1,8 @@
 export type TorqueInventoryScope =
   | "LOCAL_STORE"
   | "ORR_GROUP"
-  | "ORR_NISSAN_SIBLING";
+  | "ORR_NISSAN_SIBLING"
+  | "NISSAN_NATIONAL";
 
 export type TorqueInventorySource = {
   id: string;
@@ -15,6 +16,26 @@ export type TorqueInventorySource = {
 };
 
 export const torqueInventorySources: TorqueInventorySource[] = [
+  {
+    id: "nissan-usa-national-inventory",
+    label: "Nissan USA Nationwide New Inventory",
+    scope: "NISSAN_NATIONAL",
+    makePolicy: "NISSAN_ONLY",
+    conditionPolicy: "NEW_ONLY",
+    customerAuthority: "VERIFY_WITH_HUMAN",
+    sourceUrl: "https://www.nissanusa.com/shopping-tools/search-inventory",
+    enabled: true,
+  },
+  {
+    id: "nissan-usa-dealer-locator",
+    label: "Nissan USA Dealer Locator",
+    scope: "NISSAN_NATIONAL",
+    makePolicy: "NISSAN_ONLY",
+    conditionPolicy: "NEW_ONLY",
+    customerAuthority: "VERIFY_WITH_HUMAN",
+    sourceUrl: "https://www.nissanusa.com/dealer-locator.html",
+    enabled: true,
+  },
   {
     id: "orr-nissan-west",
     label: "Orr Nissan West OKC",
@@ -137,6 +158,41 @@ export function isSiblingNewNissanSource(source: TorqueInventorySource) {
   return (
     source.enabled &&
     source.scope === "ORR_NISSAN_SIBLING" &&
+    source.makePolicy === "NISSAN_ONLY" &&
+    source.conditionPolicy === "NEW_ONLY"
+  );
+}
+
+
+export type TorqueNationalDealerObservation = {
+  dealerName: string;
+  dealerRef?: string;
+  city?: string;
+  state?: string;
+  sourceUrl?: string;
+  observedAt: string;
+};
+
+export type TorqueNationalInventoryObservation = {
+  vin: string;
+  dealerName: string;
+  dealerRef?: string;
+  year?: number;
+  model?: string;
+  trim?: string;
+  drivetrain?: string;
+  exteriorColor?: string;
+  msrp?: number;
+  advertisedPrice?: number;
+  observedAt: string;
+  sourceUrl: string;
+  state: "DISCOVERED" | "DEALER_VERIFIED" | "HUMAN_REVIEW_REQUIRED";
+};
+
+export function isNationalNewNissanSource(source: TorqueInventorySource) {
+  return (
+    source.enabled &&
+    source.scope === "NISSAN_NATIONAL" &&
     source.makePolicy === "NISSAN_ONLY" &&
     source.conditionPolicy === "NEW_ONLY"
   );
