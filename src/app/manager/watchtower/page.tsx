@@ -12,6 +12,7 @@ import { prepareTorqueHuntFollowUp } from "@/lib/torque-follow-up-draft";
 import { chooseTorqueNextBestAction } from "@/lib/torque-next-best-action";
 import { buildNissanNationalSearchPlan } from "@/lib/nissan-national-search";
 import { industryScoutSources } from "@/lib/industry-scout";
+import { resolveDealershipCrmRuntime } from "@/lib/dealership-crm-runtime";
 
 export const metadata: Metadata = {
   title: "Torque Watchtower",
@@ -40,6 +41,14 @@ export default async function TorqueWatchtowerPage() {
   }
 
   const dailyBrief = buildSalespersonDailyBrief({ items: opportunityQueue, limit: 8 });
+  const crmRuntime = resolveDealershipCrmRuntime({
+    providerId: process.env.NORAUTO_DEALERSHIP_CRM_PROVIDER_ID,
+    adapterVersion: process.env.NORAUTO_DEALERSHIP_CRM_ADAPTER_VERSION,
+    authorizationRef: process.env.NORAUTO_DEALERSHIP_CRM_AUTHORIZATION_REF,
+    sourceContractRef: process.env.NORAUTO_DEALERSHIP_CRM_SOURCE_CONTRACT_REF,
+    capabilitiesCsv: process.env.NORAUTO_DEALERSHIP_CRM_CAPABILITIES,
+    implementedProviderIds: [],
+  });
 
   const local = torqueInventorySources.filter((source) => source.scope === "LOCAL_STORE");
   const network = torqueInventorySources.filter((source) => source.scope === "ORR_GROUP" || source.scope === "ORR_NISSAN_SIBLING");
@@ -66,6 +75,36 @@ export default async function TorqueWatchtowerPage() {
           <SummaryCard icon={<CarFront size={20} />} title="Our inventory" value={String(local.length)} detail="Primary verified customer-facing scope." />
           <SummaryCard icon={<Radar size={20} />} title="Orr sourcing layers" value={String(network.length)} detail="Group and sibling Nissan discovery sources." />
           <SummaryCard icon={<Binoculars size={20} />} title="National Nissan layers" value={String(national.length)} detail="New-Nissan discovery and dealer resolution." />
+        </section>
+
+        <section className="mt-10 rounded-[28px] border border-white/10 bg-white/[.025] p-6 sm:p-8">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[.18em] text-blue-300">CRM Bridge</p>
+              <h2 className="mt-2 text-3xl font-black text-white">Provider activation status</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                Torque stays provider-neutral. CRM writes remain blocked until a specific provider adapter, authorization evidence, source contract, and bounded capabilities are configured.
+              </p>
+            </div>
+            <span className={crmRuntime.state === "READY_FOR_ADAPTER_BINDING"
+              ? "rounded-full border border-emerald-300/20 bg-emerald-300/[.06] px-4 py-2 text-[10px] font-black uppercase tracking-[.14em] text-emerald-300"
+              : "rounded-full border border-amber-300/20 bg-amber-300/[.06] px-4 py-2 text-[10px] font-black uppercase tracking-[.14em] text-amber-200"}>
+              {crmRuntime.state.replaceAll("_", " ")}
+            </span>
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <p className="text-[9px] font-black uppercase tracking-[.14em] text-slate-600">Provider</p>
+              <p className="mt-2 text-sm font-black text-white">{crmRuntime.providerId ?? "Not configured"}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <p className="text-[9px] font-black uppercase tracking-[.14em] text-slate-600">Write authority</p>
+              <p className="mt-2 text-sm font-black text-white">Blocked until adapter binding</p>
+            </div>
+          </div>
+          {crmRuntime.reasons.length > 0 && (
+            <p className="mt-4 text-[11px] leading-5 text-slate-500">{crmRuntime.reasons.join(" · ")}</p>
+          )}
         </section>
 
         <section className="mt-10">
