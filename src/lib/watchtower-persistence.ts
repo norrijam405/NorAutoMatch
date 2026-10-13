@@ -299,3 +299,69 @@ export async function readVehicleHunt(input: {
     truth: row.truth,
   };
 }
+
+
+export type VehicleHuntCustomerContext = {
+  huntId: string;
+  opportunityId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  consent: true;
+  stage: string;
+};
+
+export async function readVehicleHuntCustomerContext(input: {
+  pool: Pool;
+  workspaceId: string;
+  huntId: string;
+}): Promise<VehicleHuntCustomerContext | null> {
+  const workspaceId = input.workspaceId.trim();
+  const huntId = input.huntId.trim();
+  if (!workspaceId) throw new Error("Vehicle Hunt customer context requires explicit workspace identity.");
+  if (!/^namvh_[0-9a-f]{24}$/.test(huntId)) throw new Error("Vehicle Hunt customer context requires a valid hunt identifier.");
+
+  const result = await input.pool.query(
+    `SELECT
+      h.hunt_id,
+      o.opportunity_id,
+      o.customer,
+      o.stage
+    FROM torque_vehicle_hunts h
+    JOIN crm_opportunities o
+      ON o.workspace_id = h.workspace_id
+     AND o.opportunity_id = h.opportunity_id
+    WHERE h.workspace_id = $1
+      AND h.hunt_id = $2
+      AND h.opportunity_id IS NOT NULL
+      AND o.stage NOT IN ('SOLD','LOST')
+    LIMIT 1`,
+    [workspaceId, huntId],
+  );
+
+  const row = result.rows[0];
+  if (!row) return null;
+  const customer = row.customer;
+  if (
+    !customer ||
+    typeof customer.firstName !== "string" ||
+    typeof customer.lastName !== "string" ||
+    typeof customer.email !== "string" ||
+    typeof customer.phone !== "string" ||
+    customer.consent !== true
+  ) {
+    throw new Error("Vehicle Hunt CRM customer context is malformed.");
+  }
+
+  return {
+    huntId: row.hunt_id,
+    opportunityId: row.opportunity_id,
+    firstName: customer.firstName,
+    lastName: customer.lastName,
+    email: customer.email,
+    phone: customer.phone,
+    consent: true,
+    stage: row.stage,
+  };
+}
