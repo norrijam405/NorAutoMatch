@@ -16,7 +16,9 @@ import {
 } from "@/lib/public-abuse-control";
 import { PostgresPublicAbuseCounterStore } from "@/lib/public-abuse-postgres";
 import { readJsonBodyWithByteLimit } from "@/lib/request-body-limit";
-import { attachVehicleHuntToOpportunity } from "@/lib/watchtower-persistence";
+import { attachVehicleHuntToOpportunity, persistVehicleHunt } from "@/lib/watchtower-persistence";
+import { createVehicleHunt } from "@/lib/vehicle-hunt";
+import { parseTorqueSalesInventorySpec } from "@/lib/torque-sales-inventory-spec";
 
 export const runtime = "nodejs";
 
@@ -179,28 +181,49 @@ export async function POST(request: Request) {
       adapter: persistenceAdapter,
     });
 
-    let vehicleHuntLink: "NOT_REQUESTED" | "LINKED" | "LINK_FAILED_SAFE" = "NOT_REQUESTED";
-    if (parsed.data.vehicleHuntId) {
-      const pool = getCrmPool();
-      if (pool) {
-        try {
-          await attachVehicleHuntToOpportunity({
-            pool,
-            workspaceId: "norautomatch",
-            huntId: parsed.data.vehicleHuntId,
-            opportunityId: crmIntake.opportunityId,
-          });
-          vehicleHuntLink = "LINKED";
-        } catch (error) {
-          console.error(
-            "NORAUTO_VEHICLE_HUNT_LINK_FAILED",
-            error instanceof Error ? error.message : String(error),
-          );
-          vehicleHuntLink = "LINK_FAILED_SAFE";
-        }
-      } else {
+    let vehicleHuntLink: "NOT_REQUESTED" | "LINKED" | "CREATED_AND_LINKED" | "LINK_FAILED_SAFE" = "NOT_REQUESTED";
+    let vehicleHuntId = parsed.data.vehicleHuntId;
+    const pool = getCrmPool();
+
+    if (pool && parsed.data.vehicleHuntId) {
+      try {
+        await attachVehicleHuntToOpportunity({
+          pool,
+          workspaceId: "norautomatch",
+          huntId: parsed.data.vehicleHuntId,
+          opportunityId: crmIntake.opportunityId,
+        });
+        vehicleHuntLink = "LINKED";
+      } catch (error) {
+        console.error(
+          "NORAUTO_VEHICLE_HUNT_LINK_FAILED",
+          error instanceof Error ? error.message : String(error),
+        );
         vehicleHuntLink = "LINK_FAILED_SAFE";
       }
+    } else if (pool && parsed.data.vehicleHuntRequest && parsed.data.pipeline === "Vehicle Sourcing") {
+      try {
+        const hunt = createVehicleHunt({
+          workspaceId: "norautomatch",
+          origin: "TORQUE_CHAT",
+          requirements: parseTorqueSalesInventorySpec(parsed.data.vehicleHuntRequest),
+          explicitCustomerText: parsed.data.vehicleHuntRequest,
+          opportunityId: crmIntake.opportunityId,
+          consentToContact: true,
+          createdAt: submittedAt,
+        });
+        await persistVehicleHunt({ pool, hunt });
+        vehicleHuntId = hunt.huntId;
+        vehicleHuntLink = "CREATED_AND_LINKED";
+      } catch (error) {
+        console.error(
+          "NORAUTO_VEHICLE_HUNT_CREATE_FAILED",
+          error instanceof Error ? error.message : String(error),
+        );
+        vehicleHuntLink = "LINK_FAILED_SAFE";
+      }
+    } else if ((parsed.data.vehicleHuntId || parsed.data.vehicleHuntRequest) && !pool) {
+      vehicleHuntLink = "LINK_FAILED_SAFE";
     }
 
     return NextResponse.json({
@@ -211,6 +234,7 @@ export async function POST(request: Request) {
       handoffId: managerHandoff.handoffId,
       opportunityId: crmIntake.opportunityId,
       persistence: crmIntake.persistenceStatus,
+      vehicleHuntId,
       vehicleHuntLink,
       delivery: "QUEUED",
     }, { status: 202 });
