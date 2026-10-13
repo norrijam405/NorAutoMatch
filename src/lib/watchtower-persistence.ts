@@ -365,3 +365,45 @@ export async function readVehicleHuntCustomerContext(input: {
     stage: row.stage,
   };
 }
+
+
+export async function attachVehicleHuntToOpportunity(input: {
+  pool: Pool;
+  workspaceId: string;
+  huntId: string;
+  opportunityId: string;
+}) {
+  const workspaceId = input.workspaceId.trim();
+  const huntId = input.huntId.trim();
+  const opportunityId = input.opportunityId.trim();
+
+  if (!workspaceId) throw new Error("Vehicle Hunt attach requires explicit workspace identity.");
+  if (!/^namvh_[0-9a-f]{24}$/.test(huntId)) throw new Error("Vehicle Hunt attach requires a valid hunt identifier.");
+  if (!/^namo_[0-9a-f]{24}$/.test(opportunityId)) throw new Error("Vehicle Hunt attach requires a valid opportunity identifier.");
+
+  const result = await input.pool.query(
+    `UPDATE torque_vehicle_hunts h
+        SET opportunity_id = $3,
+            updated_at = GREATEST(h.updated_at, NOW())
+      WHERE h.workspace_id = $1
+        AND h.hunt_id = $2
+        AND (h.opportunity_id IS NULL OR h.opportunity_id = $3)
+        AND EXISTS (
+          SELECT 1
+            FROM crm_opportunities o
+           WHERE o.workspace_id = $1
+             AND o.opportunity_id = $3
+        )
+      RETURNING h.hunt_id, h.opportunity_id`,
+    [workspaceId, huntId, opportunityId],
+  );
+
+  if (result.rowCount !== 1) {
+    throw new Error("Vehicle Hunt could not be linked to the requested CRM opportunity.");
+  }
+
+  return {
+    huntId: result.rows[0].hunt_id as string,
+    opportunityId: result.rows[0].opportunity_id as string,
+  };
+}
