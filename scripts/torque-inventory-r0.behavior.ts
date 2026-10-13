@@ -499,3 +499,47 @@ const crmReadyForBinding = resolveDealershipCrmRuntime({
 });
 assert.equal(crmReadyForBinding.state, "READY_FOR_ADAPTER_BINDING");
 assert.equal(crmReadyForBinding.writeAuthority, false);
+
+
+const preferredTrimSpec = parseTorqueSalesInventorySpec(
+  "2026 Pathfinder 4WD, Platinum preferred",
+);
+assert.equal(preferredTrimSpec.trim?.value, "Platinum");
+assert.equal(preferredTrimSpec.trim?.priority, "PREFERRED");
+
+const identityGateAnswer = answerTorqueInventory({
+  message: "2026 Pathfinder 4WD",
+  mode: "verified-live",
+  spec: parseTorqueSalesInventorySpec("2026 Pathfinder 4WD"),
+  vehicles: [
+    {
+      id: "5N1DR3DJ0TC200003",
+      year: 2026,
+      make: "Nissan",
+      model: "Pathfinder",
+      trim: "SL",
+      price: 48_000,
+      type: "SUV",
+      mileage: 6,
+      drivetrain: "4WD",
+      image: "/synthetic-pathfinder.jpg",
+      accent: "White",
+      condition: "New",
+    },
+    {
+      id: "5N1AZ3CS0TC100001",
+      year: 2026,
+      make: "Nissan",
+      model: "Murano",
+      trim: "Platinum",
+      price: 47_000,
+      type: "SUV",
+      mileage: 5,
+      drivetrain: "AWD",
+      image: "/synthetic-murano.jpg",
+      accent: "White",
+      condition: "New",
+    },
+  ],
+});
+assert.equal(identityGateAnswer.matches.some((match) => /Murano/i.test(match.label)), false);
