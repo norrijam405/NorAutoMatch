@@ -595,3 +595,14 @@ assert.equal(strongLocalHunt.state, "LOCAL_MATCH_FOUND");
 assert.equal(strongLocalHunt.truth.exactLocalMatchVerified, false);
 assert.equal(strongLocalHunt.truth.sourcingRequired, false);
 assert.equal(strongLocalHunt.truth.humanVerificationRequired, false);
+
+
+const strongLocalDraft = prepareTorqueHuntFollowUp({
+  hunt: strongLocalHunt,
+  channel: "TEXT",
+  customerFirstName: "Synthetic",
+  createdAt: "2026-10-13T21:42:00.000Z",
+});
+assert.match(strongLocalDraft.body, /covers the must-haves/i);
+assert.match(strongLocalDraft.body, /preference difference/i);
+assert.equal(strongLocalDraft.status, "PREPARED_NOT_SENT");
