@@ -568,3 +568,30 @@ assert.equal(preferredTrimAnswer.exactCount, 0);
 assert.equal(preferredTrimAnswer.matches[0]?.fit, "strong");
 assert.equal(preferredTrimAnswer.handoff.required, false);
 assert.match(preferredTrimAnswer.answer, /must-haves are covered/i);
+
+
+const strongLocalHunt = applyVehicleHuntCandidates({
+  hunt: createVehicleHunt({
+    workspaceId: "norautomatch",
+    origin: "FRESH_UP",
+    requirements: preferredTrimSpec,
+    explicitCustomerText: "2026 Pathfinder 4WD, Platinum preferred",
+    consentToContact: true,
+    createdAt: "2026-10-13T21:40:00.000Z",
+  }),
+  observedAt: "2026-10-13T21:41:00.000Z",
+  candidates: [{
+    vin: "5N1DR3DJ0TC200004",
+    sourceScope: "LOCAL_STORE",
+    sourceLabel: "Synthetic verified local",
+    observedAt: "2026-10-13T21:41:00.000Z",
+    fit: "STRONG",
+    verified: true,
+    reasons: ["Pathfinder", "4WD"],
+    compromises: ["trim mismatch"],
+  }],
+});
+assert.equal(strongLocalHunt.state, "LOCAL_MATCH_FOUND");
+assert.equal(strongLocalHunt.truth.exactLocalMatchVerified, false);
+assert.equal(strongLocalHunt.truth.sourcingRequired, false);
+assert.equal(strongLocalHunt.truth.humanVerificationRequired, false);
