@@ -13,6 +13,7 @@ import { chooseTorqueNextBestAction } from "../src/lib/torque-next-best-action";
 import { leadSchema } from "../src/lib/lead-schema";
 import { answerTorqueInventory } from "../src/lib/torque-inventory-assistant";
 import { buildNissanNationalSearchPlan } from "../src/lib/nissan-national-search";
+import { resolveDealershipCrmRuntime } from "../src/lib/dealership-crm-runtime";
 
 const pathfinder = parseTorqueSalesInventorySpec(
   "I need a new 2026 Baltic green Pathfinder with brown seats and 4WD under $55k",
@@ -471,3 +472,30 @@ assert.match(nationalPlan.url, /models=pathfinder/);
 assert.match(nationalPlan.url, /modelYear=2026/);
 assert.ok(nationalPlan.residualRequirements.some((item) => /exterior color/i.test(item)));
 assert.ok(nationalPlan.residualRequirements.some((item) => /interior color/i.test(item)));
+
+
+const crmUnconfigured = resolveDealershipCrmRuntime({});
+assert.equal(crmUnconfigured.state, "UNCONFIGURED");
+assert.equal(crmUnconfigured.writeAuthority, false);
+
+const crmEvidenceOnly = resolveDealershipCrmRuntime({
+  providerId: "synthetic-crm",
+  adapterVersion: "1.0.0",
+  authorizationRef: "evidence:synthetic",
+  sourceContractRef: "contract:synthetic",
+  capabilitiesCsv: "CREATE_NOTE,CREATE_TASK,WRITE_HUNT_REFERENCE",
+  implementedProviderIds: [],
+});
+assert.equal(crmEvidenceOnly.state, "ADAPTER_NOT_IMPLEMENTED");
+assert.equal(crmEvidenceOnly.writeAuthority, false);
+
+const crmReadyForBinding = resolveDealershipCrmRuntime({
+  providerId: "synthetic-crm",
+  adapterVersion: "1.0.0",
+  authorizationRef: "evidence:synthetic",
+  sourceContractRef: "contract:synthetic",
+  capabilitiesCsv: "CREATE_NOTE,CREATE_TASK,WRITE_HUNT_REFERENCE",
+  implementedProviderIds: ["synthetic-crm"],
+});
+assert.equal(crmReadyForBinding.state, "READY_FOR_ADAPTER_BINDING");
+assert.equal(crmReadyForBinding.writeAuthority, false);
