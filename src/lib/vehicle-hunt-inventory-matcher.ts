@@ -2,12 +2,47 @@ import type { Vehicle } from "./inventory";
 import type { TorqueRequirementPriority, TorqueSalesInventorySpec } from "./torque-sales-inventory-spec";
 import type { VehicleHuntCandidate } from "./vehicle-hunt";
 
-type Evaluation = {
+export type SalesSpecVehicleEvaluation = {
+  vehicle: Vehicle;
+  fit: "EXACT" | "STRONG" | "NEAR";
   reasons: string[];
   compromises: string[];
   hardMisses: number;
   softMisses: number;
 };
+
+export function rankVehiclesForSalesSpec(input: {
+  requirements: TorqueSalesInventorySpec;
+  vehicles: Vehicle[];
+  limit?: number;
+}): SalesSpecVehicleEvaluation[] {
+  const limit = Math.max(1, Math.min(input.limit ?? 12, 50));
+  const fitRank = { EXACT: 0, STRONG: 1, NEAR: 2 };
+
+  return input.vehicles
+    .map((vehicle) => {
+      const evaluation = evaluateVehicle(input.requirements, vehicle);
+      return {
+        vehicle,
+        fit: classifyFit(evaluation),
+        reasons: evaluation.reasons,
+        compromises: evaluation.compromises,
+        hardMisses: evaluation.hardMisses,
+        softMisses: evaluation.softMisses,
+      };
+    })
+    .filter((entry) => entry.hardMisses <= 2)
+    .sort((a, b) => {
+      const fitDelta = fitRank[a.fit] - fitRank[b.fit];
+      if (fitDelta !== 0) return fitDelta;
+      const hardDelta = a.hardMisses - b.hardMisses;
+      if (hardDelta !== 0) return hardDelta;
+      const softDelta = a.softMisses - b.softMisses;
+      if (softDelta !== 0) return softDelta;
+      return a.vehicle.price - b.vehicle.price;
+    })
+    .slice(0, limit);
+}
 
 export function matchVehicleHuntToLocalInventory(input: {
   requirements: TorqueSalesInventorySpec;
@@ -19,48 +54,33 @@ export function matchVehicleHuntToLocalInventory(input: {
   const sourceLabel = input.sourceLabel ?? "Orr Nissan West";
   if (Number.isNaN(Date.parse(observedAt))) throw new Error("Hunt inventory match requires a valid observation time.");
 
-  return input.vehicles
-    .filter((vehicle) => /^[A-HJ-NPR-Z0-9]{17}$/i.test(vehicle.id))
-    .map((vehicle) => {
-      const evaluation = evaluateVehicle(input.requirements, vehicle);
-      return {
-        vehicle,
-        evaluation,
-        candidate: {
-          vin: vehicle.id.toUpperCase(),
-          sourceScope: "LOCAL_STORE" as const,
-          sourceLabel,
-          observedAt,
-          fit: classifyFit(evaluation),
-          verified: true,
-          reasons: evaluation.reasons,
-          compromises: evaluation.compromises,
-        },
-      };
-    })
-    .filter(({ evaluation }) => evaluation.hardMisses <= 2)
-    .sort((a, b) => {
-      const fitRank = { EXACT: 0, STRONG: 1, NEAR: 2 };
-      const fitDelta = fitRank[a.candidate.fit] - fitRank[b.candidate.fit];
-      if (fitDelta !== 0) return fitDelta;
-      const hardDelta = a.evaluation.hardMisses - b.evaluation.hardMisses;
-      if (hardDelta !== 0) return hardDelta;
-      const softDelta = a.evaluation.softMisses - b.evaluation.softMisses;
-      if (softDelta !== 0) return softDelta;
-      return a.vehicle.price - b.vehicle.price;
-    })
-    .slice(0, 12)
-    .map(({ candidate }) => candidate);
+  return rankVehiclesForSalesSpec({
+    requirements: input.requirements,
+    vehicles: input.vehicles.filter((vehicle) => /^[A-HJ-NPR-Z0-9]{17}$/i.test(vehicle.id)),
+    limit: 12,
+  }).map((entry) => ({
+    vin: entry.vehicle.id.toUpperCase(),
+    sourceScope: "LOCAL_STORE",
+    sourceLabel,
+    observedAt,
+    fit: entry.fit,
+    verified: true,
+    reasons: entry.reasons,
+    compromises: entry.compromises,
+  }));
 }
 
-function classifyFit(evaluation: Evaluation): VehicleHuntCandidate["fit"] {
+function classifyFit(evaluation: Omit<SalesSpecVehicleEvaluation, "vehicle" | "fit">): VehicleHuntCandidate["fit"] {
   if (evaluation.hardMisses === 0 && evaluation.softMisses === 0) return "EXACT";
   if (evaluation.hardMisses === 0 && evaluation.softMisses <= 2) return "STRONG";
   return "NEAR";
 }
 
-function evaluateVehicle(spec: TorqueSalesInventorySpec, vehicle: Vehicle): Evaluation {
-  const result: Evaluation = { reasons: [], compromises: [], hardMisses: 0, softMisses: 0 };
+function evaluateVehicle(
+  spec: TorqueSalesInventorySpec,
+  vehicle: Vehicle,
+): Omit<SalesSpecVehicleEvaluation, "vehicle" | "fit"> {
+  const result = { reasons: [], compromises: [], hardMisses: 0, softMisses: 0 };
 
   compareText(result, spec.make, vehicle.make, "make");
   compareText(result, spec.model, vehicle.model, "model");
@@ -99,14 +119,14 @@ function evaluateVehicle(spec: TorqueSalesInventorySpec, vehicle: Vehicle): Eval
   return result;
 }
 
-function priorityMiss(result: Evaluation, priority: TorqueRequirementPriority, label: string) {
+function priorityMiss(result: Omit<SalesSpecVehicleEvaluation, "vehicle" | "fit">, priority: TorqueRequirementPriority, label: string) {
   result.compromises.push(label);
   if (priority === "MUST_HAVE") result.hardMisses += 1;
   else result.softMisses += 1;
 }
 
 function compareText(
-  result: Evaluation,
+  result: Omit<SalesSpecVehicleEvaluation, "vehicle" | "fit">,
   requirement: { value: unknown; priority: TorqueRequirementPriority } | undefined,
   actual: string,
   label: string,
@@ -123,7 +143,7 @@ function compareText(
 }
 
 function compareYear(
-  result: Evaluation,
+  result: Omit<SalesSpecVehicleEvaluation, "vehicle" | "fit">,
   requirement: { value: number | { min?: number; max?: number }; priority: TorqueRequirementPriority } | undefined,
   actual: number,
 ) {
@@ -137,7 +157,7 @@ function compareYear(
 }
 
 function compareMax(
-  result: Evaluation,
+  result: Omit<SalesSpecVehicleEvaluation, "vehicle" | "fit">,
   requirement: { value: number; priority: TorqueRequirementPriority } | undefined,
   actual: number,
   label: string,
@@ -148,7 +168,7 @@ function compareMax(
 }
 
 function compareSearchable(
-  result: Evaluation,
+  result: Omit<SalesSpecVehicleEvaluation, "vehicle" | "fit">,
   requirement: { value: unknown; priority: TorqueRequirementPriority } | undefined,
   searchable: string,
   label: string,
@@ -169,7 +189,7 @@ function compareSearchable(
 }
 
 function compareExclusion(
-  result: Evaluation,
+  result: Omit<SalesSpecVehicleEvaluation, "vehicle" | "fit">,
   priority: TorqueRequirementPriority,
   value: unknown,
   searchable: string,
