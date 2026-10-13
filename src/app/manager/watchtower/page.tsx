@@ -10,6 +10,7 @@ import { readActiveVehicleHunts, readWatchtowerOpportunityQueue } from "@/lib/wa
 import { buildSalespersonDailyBrief } from "@/lib/salesperson-daily-brief";
 import { prepareTorqueHuntFollowUp } from "@/lib/torque-follow-up-draft";
 import { chooseTorqueNextBestAction } from "@/lib/torque-next-best-action";
+import { buildNissanNationalSearchPlan } from "@/lib/nissan-national-search";
 import { industryScoutSources } from "@/lib/industry-scout";
 
 export const metadata: Metadata = {
@@ -91,6 +92,7 @@ export default async function TorqueWatchtowerPage() {
           ) : (
             <div className="mt-5 grid gap-3">
               {activeHunts.map((hunt) => {
+                const nationalPlan = buildNissanNationalSearchPlan(hunt.requirements);
                 const nextAction = chooseTorqueNextBestAction({
                   hunt: {
                     huntId: hunt.huntId,
@@ -143,8 +145,22 @@ export default async function TorqueWatchtowerPage() {
                           Refresh verified inventory
                         </button>
                       </form>
+                      <a
+                        href={nationalPlan.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-full border border-blue-300/20 bg-blue-300/[.06] px-3 py-1.5 text-[10px] font-black uppercase tracking-[.12em] text-blue-200 hover:bg-blue-300/[.1]"
+                      >
+                        Search Nissan nationwide
+                      </a>
                     </div>
                   </div>
+                  {nationalPlan.residualRequirements.length > 0 && (
+                    <div className="mt-4 rounded-2xl border border-white/10 bg-white/[.02] p-3">
+                      <p className="text-[9px] font-black uppercase tracking-[.14em] text-slate-600">Still verify in Nissan search</p>
+                      <p className="mt-1 text-[11px] leading-5 text-slate-500">{nationalPlan.residualRequirements.slice(0, 6).join(" · ")}</p>
+                    </div>
+                  )}
                   {draft && (
                     <div className="mt-4 rounded-2xl border border-blue-300/15 bg-blue-300/[.035] p-4">
                       <div className="flex flex-wrap items-center gap-2">
