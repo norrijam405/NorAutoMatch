@@ -76,6 +76,11 @@ jobs:
       - name: Execute Torque R0 behavior checks
         run: node .tmp-torque-inventory-r0/scripts/torque-inventory-r0.behavior.js
 
+      - name: Execute Watchtower persistence integration proof
+        env:
+          NORAUTO_CI_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/norautomatch_ci
+        run: node .tmp-torque-inventory-r0/scripts/watchtower-persistence.integration.js
+
       - name: Typecheck
         run: npm run typecheck
 
