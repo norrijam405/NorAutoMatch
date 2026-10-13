@@ -15,6 +15,7 @@ export const leadSchema = z.object({
   pipeline: z.enum(["Standard Retail", "Vehicle Sourcing"]),
   shortlistedVehicleIds: z.array(z.string()).max(20).default([]),
   vehicleHuntId: z.string().regex(/^namvh_[0-9a-f]{24}$/).optional(),
+  vehicleHuntRequest: z.string().trim().min(4).max(1200).optional(),
   monthlyTarget: z.number().min(0).max(5000).optional(),
   downPayment: z.number().min(0).max(100000).optional(),
   termMonths: z.number().min(12).max(120).optional(),
