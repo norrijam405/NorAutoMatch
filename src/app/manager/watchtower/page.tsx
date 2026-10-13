@@ -8,6 +8,7 @@ import { refreshVehicleHunt } from "@/app/manager/watchtower/actions";
 import { createPostgresCrmPool } from "@/lib/crm-postgres-adapter";
 import { readActiveVehicleHunts, readWatchtowerOpportunityQueue } from "@/lib/watchtower-persistence";
 import { buildSalespersonDailyBrief } from "@/lib/salesperson-daily-brief";
+import { prepareTorqueHuntFollowUp } from "@/lib/torque-follow-up-draft";
 import { industryScoutSources } from "@/lib/industry-scout";
 
 export const metadata: Metadata = {
@@ -88,7 +89,20 @@ export default async function TorqueWatchtowerPage() {
             </div>
           ) : (
             <div className="mt-5 grid gap-3">
-              {activeHunts.map((hunt) => (
+              {activeHunts.map((hunt) => {
+                const draft = hunt.consentToContact
+                  ? prepareTorqueHuntFollowUp({
+                      hunt: {
+                        huntId: hunt.huntId,
+                        state: hunt.state,
+                        requirements: hunt.requirements,
+                        candidateVins: hunt.candidateVins,
+                        consentToContact: hunt.consentToContact,
+                      },
+                      channel: "TEXT",
+                    })
+                  : null;
+                return (
                 <article key={hunt.huntId} className="rounded-2xl border border-white/10 bg-black/20 p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
@@ -109,8 +123,18 @@ export default async function TorqueWatchtowerPage() {
                       </form>
                     </div>
                   </div>
+                  {draft && (
+                    <div className="mt-4 rounded-2xl border border-blue-300/15 bg-blue-300/[.035] p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[9px] font-black uppercase tracking-[.14em] text-blue-200">Prepared text</span>
+                        <span className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] font-black text-slate-500">{draft.status.replaceAll("_", " ")}</span>
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-slate-300">{draft.body}</p>
+                    </div>
+                  )}
                 </article>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
