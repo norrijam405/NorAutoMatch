@@ -543,3 +543,28 @@ const identityGateAnswer = answerTorqueInventory({
   ],
 });
 assert.equal(identityGateAnswer.matches.some((match) => /Murano/i.test(match.label)), false);
+
+
+const preferredTrimAnswer = answerTorqueInventory({
+  message: "2026 Pathfinder 4WD, Platinum preferred",
+  mode: "verified-live",
+  spec: preferredTrimSpec,
+  vehicles: [{
+    id: "5N1DR3DJ0TC200004",
+    year: 2026,
+    make: "Nissan",
+    model: "Pathfinder",
+    trim: "SL",
+    price: 49_000,
+    type: "SUV",
+    mileage: 5,
+    drivetrain: "4WD",
+    image: "/synthetic-sl.jpg",
+    accent: "White",
+    condition: "New",
+  }],
+});
+assert.equal(preferredTrimAnswer.exactCount, 0);
+assert.equal(preferredTrimAnswer.matches[0]?.fit, "strong");
+assert.equal(preferredTrimAnswer.handoff.required, false);
+assert.match(preferredTrimAnswer.answer, /must-haves are covered/i);
