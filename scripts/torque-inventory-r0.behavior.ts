@@ -10,6 +10,7 @@ import { matchVehicleHuntToLocalInventory } from "../src/lib/vehicle-hunt-invent
 import { prepareTorqueHuntFollowUp } from "../src/lib/torque-follow-up-draft";
 import { buildTorqueCrmSyncPlan } from "../src/lib/torque-crm-sync-plan";
 import { chooseTorqueNextBestAction } from "../src/lib/torque-next-best-action";
+import { leadSchema } from "../src/lib/lead-schema";
 
 const pathfinder = parseTorqueSalesInventorySpec(
   "I need a new 2026 Baltic green Pathfinder with brown seats and 4WD under $55k",
@@ -364,3 +365,47 @@ const localTextAction = chooseTorqueNextBestAction({
 });
 assert.equal(localTextAction.action, "PREPARE_TEXT");
 assert.equal(localTextAction.maySendAutomatically, false);
+
+
+const sourcingLeadBase = {
+  firstName: "Synthetic",
+  lastName: "Customer",
+  email: "synthetic@example.com",
+  phone: "4055550101",
+  budgetRange: "Open / discuss with me",
+  paymentMethod: "Financing" as const,
+  tradeIn: "",
+  notes: "Synthetic sourcing test only",
+  source: "Torque behavior test",
+  trigger: "trapdoor" as const,
+  pipeline: "Vehicle Sourcing" as const,
+  shortlistedVehicleIds: [],
+  monthlyTarget: 0,
+  downPayment: 0,
+  termMonths: 60,
+  consent: true as const,
+};
+
+const validSourcingLead = leadSchema.safeParse({
+  ...sourcingLeadBase,
+  vehicleHuntRequest: "New 2026 Pathfinder Baltic Teal Chestnut 4WD",
+});
+assert.equal(validSourcingLead.success, true);
+
+const validLinkedLead = leadSchema.safeParse({
+  ...sourcingLeadBase,
+  vehicleHuntId: hunt.huntId,
+});
+assert.equal(validLinkedLead.success, true);
+
+const invalidLinkedLead = leadSchema.safeParse({
+  ...sourcingLeadBase,
+  vehicleHuntId: "namvh_not-valid",
+});
+assert.equal(invalidLinkedLead.success, false);
+
+const oversizedSourcingLead = leadSchema.safeParse({
+  ...sourcingLeadBase,
+  vehicleHuntRequest: "x".repeat(1201),
+});
+assert.equal(oversizedSourcingLead.success, false);
