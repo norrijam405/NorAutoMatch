@@ -248,3 +248,50 @@ export async function readActiveVehicleHunts(input: {
     updatedAt: row.updated_at.toISOString(),
   }));
 }
+
+
+export async function readVehicleHunt(input: {
+  pool: Pool;
+  workspaceId: string;
+  huntId: string;
+}): Promise<VehicleHunt | null> {
+  const workspaceId = input.workspaceId.trim();
+  const huntId = input.huntId.trim();
+  if (!workspaceId) throw new Error("Vehicle Hunt read requires explicit workspace identity.");
+  if (!/^namvh_[0-9a-f]{24}$/.test(huntId)) throw new Error("Vehicle Hunt read requires a valid hunt identifier.");
+
+  const result = await input.pool.query(
+    `SELECT
+      hunt_id, workspace_id, opportunity_id, user_id, origin, state,
+      requirements, explicit_customer_text, match_dna_label, candidate_vins,
+      preferred_contact_order, consent_to_contact, salesperson_owner, truth,
+      created_at, updated_at
+    FROM torque_vehicle_hunts
+    WHERE workspace_id = $1 AND hunt_id = $2
+    LIMIT 1`,
+    [workspaceId, huntId],
+  );
+
+  const row = result.rows[0];
+  if (!row) return null;
+
+  return {
+    protocol: "NORAUTO_VEHICLE_HUNT_V1",
+    huntId: row.hunt_id,
+    workspaceId: row.workspace_id,
+    opportunityId: row.opportunity_id ?? undefined,
+    userId: row.user_id ?? undefined,
+    origin: row.origin,
+    state: row.state,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
+    requirements: row.requirements,
+    explicitCustomerText: row.explicit_customer_text,
+    matchDnaLabel: row.match_dna_label ?? undefined,
+    candidateVins: Array.isArray(row.candidate_vins) ? row.candidate_vins : [],
+    preferredContactOrder: Array.isArray(row.preferred_contact_order) ? row.preferred_contact_order : ["TEXT","EMAIL"],
+    consentToContact: row.consent_to_contact,
+    salespersonOwner: row.salesperson_owner ?? undefined,
+    truth: row.truth,
+  };
+}
