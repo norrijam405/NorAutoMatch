@@ -87,6 +87,13 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
     source: "CUSTOMER_EXPLICIT",
   });
 
+  const preferenceNear = (term: string) => {
+    const index = lower.indexOf(term.toLowerCase());
+    if (index < 0) return false;
+    const window = lower.slice(Math.max(0, index - 32), index + term.length + 32);
+    return /\b(?:prefer|preferred|preferably|would like|nice to have|if possible)\b/i.test(window);
+  };
+
   if (/\bpathfinder\b/i.test(text)) spec.model = must("Pathfinder");
   else if (/\bfrontier\b/i.test(text)) spec.model = must("Frontier");
   else if (/\brogue\b/i.test(text)) spec.model = must("Rogue");
@@ -140,12 +147,12 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
     spec.bedLength = must("SHORT");
   }
 
-  if (/\bplatinum\b/i.test(text)) spec.trim = must("Platinum");
-  else if (/\brock\s+creek\b/i.test(text)) spec.trim = must("Rock Creek");
-  else if (/\bpro-?4x\b/i.test(text)) spec.trim = must("PRO-4X");
-  else if (/\bpro-?x\b/i.test(text)) spec.trim = must("PRO-X");
-  else if (/\b\bsl\b/i.test(text)) spec.trim = must("SL");
-  else if (/\bsv\b/i.test(text)) spec.trim = must("SV");
+  if (/\bplatinum\b/i.test(text)) spec.trim = preferenceNear("platinum") ? preferred("Platinum") : must("Platinum");
+  else if (/\brock\s+creek\b/i.test(text)) spec.trim = preferenceNear("rock creek") ? preferred("Rock Creek") : must("Rock Creek");
+  else if (/\bpro-?4x\b/i.test(text)) spec.trim = preferenceNear("pro-4x") ? preferred("PRO-4X") : must("PRO-4X");
+  else if (/\bpro-?x\b/i.test(text)) spec.trim = preferenceNear("pro-x") ? preferred("PRO-X") : must("PRO-X");
+  else if (/\bsl\b/i.test(text)) spec.trim = preferenceNear("sl") ? preferred("SL") : must("SL");
+  else if (/\bsv\b/i.test(text)) spec.trim = preferenceNear("sv") ? preferred("SV") : must("SV");
 
   if (/\bnew\b/i.test(text)) spec.condition = must("NEW");
   else if (/\bcpo|certified\b/i.test(text)) spec.condition = must("CPO");
