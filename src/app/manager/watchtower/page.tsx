@@ -4,6 +4,7 @@ import { Binoculars, Bot, CarFront, Radar, ShieldCheck, Sparkles, TrendingUp } f
 import { requireNorAutoMembership } from "@/lib/supabase/authz";
 import { torqueInventorySources } from "@/lib/torque-inventory-sources";
 import { FreshUpHuntForm } from "@/components/manager/fresh-up-hunt-form";
+import { refreshVehicleHunt } from "@/app/manager/watchtower/actions";
 import { createPostgresCrmPool } from "@/lib/crm-postgres-adapter";
 import { readActiveVehicleHunts } from "@/lib/watchtower-persistence";
 import { industryScoutSources } from "@/lib/industry-scout";
@@ -93,7 +94,15 @@ export default async function TorqueWatchtowerPage() {
                       <p className="mt-3 text-sm font-black text-white">{hunt.explicitCustomerText}</p>
                       <p className="mt-2 text-[11px] text-slate-500">{hunt.candidateCount} candidate VIN{hunt.candidateCount === 1 ? "" : "s"} · {hunt.consentToContact ? "follow-up consent on file" : "no follow-up consent"}</p>
                     </div>
-                    <code className="shrink-0 text-[10px] text-slate-600">{hunt.huntId}</code>
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      <code className="text-[10px] text-slate-600">{hunt.huntId}</code>
+                      <form action={refreshVehicleHunt}>
+                        <input type="hidden" name="huntId" value={hunt.huntId} />
+                        <button type="submit" className="rounded-full border border-emerald-300/20 bg-emerald-300/[.06] px-3 py-1.5 text-[10px] font-black uppercase tracking-[.12em] text-emerald-300 hover:bg-emerald-300/[.1]">
+                          Refresh verified inventory
+                        </button>
+                      </form>
+                    </div>
                   </div>
                 </article>
               ))}
