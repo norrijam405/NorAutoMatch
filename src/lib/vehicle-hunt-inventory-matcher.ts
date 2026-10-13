@@ -20,6 +20,7 @@ export function rankVehiclesForSalesSpec(input: {
   const fitRank = { EXACT: 0, STRONG: 1, NEAR: 2 };
 
   return input.vehicles
+    .filter((vehicle) => identityRequirementsMatch(input.requirements, vehicle))
     .map((vehicle) => {
       const evaluation = evaluateVehicle(input.requirements, vehicle);
       return {
@@ -219,4 +220,11 @@ function aliases(value: string) {
 
 function normalize(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+
+function identityRequirementsMatch(spec: TorqueSalesInventorySpec, vehicle: Vehicle) {
+  if (spec.make?.priority === "MUST_HAVE" && normalize(String(spec.make.value)) !== normalize(vehicle.make)) return false;
+  if (spec.model?.priority === "MUST_HAVE" && normalize(String(spec.model.value)) !== normalize(vehicle.model)) return false;
+  return true;
 }
