@@ -177,3 +177,74 @@ export async function readWatchtowerOpportunityQueue(input: {
     updatedAt: row.updated_at.toISOString(),
   }));
 }
+
+
+export type ActiveVehicleHuntListItem = {
+  huntId: string;
+  origin: VehicleHunt["origin"];
+  state: VehicleHunt["state"];
+  explicitCustomerText: string;
+  requirements: VehicleHunt["requirements"];
+  matchDnaLabel?: string;
+  candidateCount: number;
+  consentToContact: boolean;
+  salespersonOwner?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function readActiveVehicleHunts(input: {
+  pool: Pool;
+  workspaceId: string;
+  limit?: number;
+}): Promise<ActiveVehicleHuntListItem[]> {
+  const workspaceId = input.workspaceId.trim();
+  if (!workspaceId) throw new Error("Vehicle Hunt queue requires explicit workspace identity.");
+  const limit = Math.max(1, Math.min(input.limit ?? 50, 200));
+
+  const result = await input.pool.query(
+    `SELECT
+      hunt_id,
+      origin,
+      state,
+      explicit_customer_text,
+      requirements,
+      match_dna_label,
+      candidate_vins,
+      consent_to_contact,
+      salesperson_owner,
+      created_at,
+      updated_at
+    FROM torque_vehicle_hunts
+    WHERE workspace_id = $1
+      AND state <> 'CLOSED'
+    ORDER BY
+      CASE state
+        WHEN 'LOCAL_MATCH_FOUND' THEN 1
+        WHEN 'NETWORK_MATCH_FOUND' THEN 2
+        WHEN 'OUT_OF_NETWORK_MATCH_FOUND' THEN 3
+        WHEN 'AWAITING_HUMAN_VERIFICATION' THEN 4
+        WHEN 'SEARCHING' THEN 5
+        WHEN 'CUSTOMER_REVIEW' THEN 6
+        WHEN 'PAUSED' THEN 7
+        ELSE 8
+      END,
+      updated_at DESC
+    LIMIT $2`,
+    [workspaceId, limit],
+  );
+
+  return result.rows.map((row) => ({
+    huntId: row.hunt_id,
+    origin: row.origin,
+    state: row.state,
+    explicitCustomerText: row.explicit_customer_text,
+    requirements: row.requirements,
+    matchDnaLabel: row.match_dna_label ?? undefined,
+    candidateCount: Array.isArray(row.candidate_vins) ? row.candidate_vins.length : 0,
+    consentToContact: row.consent_to_contact,
+    salespersonOwner: row.salesperson_owner ?? undefined,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
+  }));
+}
