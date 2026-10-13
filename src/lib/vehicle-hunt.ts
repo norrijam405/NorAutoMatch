@@ -84,7 +84,7 @@ export function createVehicleHunt(input: {
 
   return {
     protocol: "NORAUTO_VEHICLE_HUNT_V1",
-    huntId: "namh_" + identity.slice(0, 24),
+    huntId: "namvh_" + identity.slice(0, 24),
     workspaceId,
     opportunityId: input.opportunityId,
     userId: input.userId,
