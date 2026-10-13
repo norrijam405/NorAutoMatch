@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Binoculars, Bot, CarFront, Radar, ShieldCheck, Sparkles } from "lucide-react";
 import { requireNorAutoMembership } from "@/lib/supabase/authz";
 import { torqueInventorySources } from "@/lib/torque-inventory-sources";
+import { industryScoutSources } from "@/lib/industry-scout";
 
 export const metadata: Metadata = {
   title: "Torque Watchtower",
@@ -91,6 +92,36 @@ export default async function TorqueWatchtowerPage() {
                   <span className={source.enabled ? "rounded-full bg-emerald-400/10 px-2 py-1 text-[9px] font-black text-emerald-300" : "rounded-full bg-white/5 px-2 py-1 text-[9px] font-black text-slate-500"}>{source.enabled ? "REGISTERED" : "OFF"}</span>
                 </div>
                 <p className="mt-3 text-xs text-slate-500">{source.conditionPolicy.replaceAll("_", " ")} · {source.makePolicy.replaceAll("_", " ")} · {source.customerAuthority.replaceAll("_", " ")}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+
+        <section className="mt-10 rounded-[28px] border border-white/10 bg-white/[.025] p-6 sm:p-8">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[.2em] text-emerald-300">Industry Scout</p>
+              <h2 className="mt-2 text-3xl font-black text-white">What changed that matters to the floor?</h2>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
+                Incentives, launches, trim changes, competitive moves, supply, pricing, sales, demand, EV/hybrid shifts, and safety changes are tracked with source authority attached. Customer-safe Torque claims require primary or corroborated evidence.
+              </p>
+            </div>
+            <span className="rounded-full border border-emerald-300/20 bg-emerald-300/[.06] px-4 py-2 text-[10px] font-black uppercase tracking-[.14em] text-emerald-300">
+              {industryScoutSources.filter((source) => source.enabled).length} governed sources
+            </span>
+          </div>
+          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {industryScoutSources.map((source) => (
+              <article key={source.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-[.14em] text-slate-600">{source.sourceClass.replaceAll("_", " ")}</p>
+                    <h3 className="mt-1 text-sm font-black text-white">{source.label}</h3>
+                  </div>
+                  <span className="text-xs font-black text-emerald-300">{source.authorityWeight}</span>
+                </div>
+                <p className="mt-3 text-[11px] leading-5 text-slate-500">{source.topics.slice(0, 5).map((topic) => topic.replaceAll("_", " ")).join(" · ")}</p>
               </article>
             ))}
           </div>
