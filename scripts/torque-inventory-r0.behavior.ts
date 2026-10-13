@@ -9,6 +9,7 @@ import { buildSalespersonDailyBrief } from "../src/lib/salesperson-daily-brief";
 import { matchVehicleHuntToLocalInventory } from "../src/lib/vehicle-hunt-inventory-matcher";
 import { prepareTorqueHuntFollowUp } from "../src/lib/torque-follow-up-draft";
 import { buildTorqueCrmSyncPlan } from "../src/lib/torque-crm-sync-plan";
+import { chooseTorqueNextBestAction } from "../src/lib/torque-next-best-action";
 
 const pathfinder = parseTorqueSalesInventorySpec(
   "I need a new 2026 Baltic green Pathfinder with brown seats and 4WD under $55k",
@@ -329,3 +330,37 @@ assert.equal(readyCrmPlan.state, "READY_FOR_AUTHORIZED_ADAPTER");
 assert.equal(readyCrmPlan.crmWriteState, "NOT_WRITTEN");
 assert.match(readyCrmPlan.noteBody, /Transfer promised: false/);
 assert.equal(readyCrmPlan.task?.channel, "TEXT");
+
+
+const nextActionNetwork = chooseTorqueNextBestAction({ hunt: followUpHunt });
+assert.equal(nextActionNetwork.action, "VERIFY_WITH_MANAGER");
+assert.equal(nextActionNetwork.priority, "HIGH");
+assert.equal(nextActionNetwork.maySendAutomatically, false);
+
+const searchingAction = chooseTorqueNextBestAction({
+  hunt: {
+    huntId: hunt.huntId,
+    state: "SEARCHING",
+    consentToContact: true,
+    candidateVins: [],
+    truth: hunt.truth,
+  },
+});
+assert.equal(searchingAction.action, "REFRESH_VERIFIED_INVENTORY");
+
+const localTextAction = chooseTorqueNextBestAction({
+  hunt: {
+    huntId: hunt.huntId,
+    state: "LOCAL_MATCH_FOUND",
+    consentToContact: true,
+    candidateVins: exactPathfinderCandidates,
+    truth: {
+      ...hunt.truth,
+      exactLocalMatchVerified: true,
+      sourcingRequired: false,
+      humanVerificationRequired: false,
+    },
+  },
+});
+assert.equal(localTextAction.action, "PREPARE_TEXT");
+assert.equal(localTextAction.maySendAutomatically, false);
