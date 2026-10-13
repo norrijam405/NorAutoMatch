@@ -29,6 +29,31 @@ export function matchScoutObservationToHunt(input: {
   const { observation, hunt } = input;
   const reasons: string[] = [];
   let score = 0;
+  const createdAt = input.createdAt ?? new Date().toISOString();
+  const evaluationTime = Date.parse(createdAt);
+  const expiredAt = observation.expiresAt ? Date.parse(observation.expiresAt) : undefined;
+  const effectiveAt = observation.effectiveAt ? Date.parse(observation.effectiveAt) : undefined;
+  const inactiveHunt = hunt.state === "CLOSED" || hunt.state === "PAUSED";
+  const invalidTimeline = !Number.isFinite(evaluationTime) ||
+    (observation.expiresAt !== undefined && !Number.isFinite(expiredAt)) ||
+    (observation.effectiveAt !== undefined && !Number.isFinite(effectiveAt));
+  const outsideWindow = !invalidTimeline && (
+    (expiredAt !== undefined && evaluationTime >= expiredAt) ||
+    (effectiveAt !== undefined && evaluationTime < effectiveAt)
+  );
+  if (inactiveHunt || invalidTimeline || outsideWindow) {
+    return {
+      protocol: "NORAUTO_SCOUT_OPPORTUNITY_MATCH_V1",
+      observationId: observation.observationId,
+      huntId: hunt.huntId,
+      score: 0,
+      reasons: [inactiveHunt ? "HUNT_NOT_ACTIVE" : invalidTimeline ? "INVALID_SCOUT_TIMELINE" : "SCOUT_OBSERVATION_OUTSIDE_EFFECTIVE_WINDOW"],
+      action: "NO_ACTION",
+      customerSafe: false,
+      requiresHumanVerification: true,
+      createdAt,
+    };
+  }
 
   const requestedMake = scalar(hunt.requirements.make?.value);
   const requestedModel = scalar(hunt.requirements.model?.value);
