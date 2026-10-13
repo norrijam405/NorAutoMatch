@@ -16,6 +16,7 @@ import {
 } from "@/lib/public-abuse-control";
 import { PostgresPublicAbuseCounterStore } from "@/lib/public-abuse-postgres";
 import { readJsonBodyWithByteLimit } from "@/lib/request-body-limit";
+import { attachVehicleHuntToOpportunity } from "@/lib/watchtower-persistence";
 
 export const runtime = "nodejs";
 
@@ -178,6 +179,30 @@ export async function POST(request: Request) {
       adapter: persistenceAdapter,
     });
 
+    let vehicleHuntLink: "NOT_REQUESTED" | "LINKED" | "LINK_FAILED_SAFE" = "NOT_REQUESTED";
+    if (parsed.data.vehicleHuntId) {
+      const pool = getCrmPool();
+      if (pool) {
+        try {
+          await attachVehicleHuntToOpportunity({
+            pool,
+            workspaceId: "norautomatch",
+            huntId: parsed.data.vehicleHuntId,
+            opportunityId: crmIntake.opportunityId,
+          });
+          vehicleHuntLink = "LINKED";
+        } catch (error) {
+          console.error(
+            "NORAUTO_VEHICLE_HUNT_LINK_FAILED",
+            error instanceof Error ? error.message : String(error),
+          );
+          vehicleHuntLink = "LINK_FAILED_SAFE";
+        }
+      } else {
+        vehicleHuntLink = "LINK_FAILED_SAFE";
+      }
+    }
+
     return NextResponse.json({
       accepted: true,
       pipeline: parsed.data.pipeline,
@@ -186,6 +211,7 @@ export async function POST(request: Request) {
       handoffId: managerHandoff.handoffId,
       opportunityId: crmIntake.opportunityId,
       persistence: crmIntake.persistenceStatus,
+      vehicleHuntLink,
       delivery: "QUEUED",
     }, { status: 202 });
   } catch {
