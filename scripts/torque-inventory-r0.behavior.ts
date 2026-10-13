@@ -7,6 +7,7 @@ import { requireAuthorizedDealershipCrmAdapter } from "../src/lib/dealership-crm
 import { matchScoutObservationToHunt } from "../src/lib/scout-opportunity-matcher";
 import { buildSalespersonDailyBrief } from "../src/lib/salesperson-daily-brief";
 import { matchVehicleHuntToLocalInventory } from "../src/lib/vehicle-hunt-inventory-matcher";
+import { prepareTorqueHuntFollowUp } from "../src/lib/torque-follow-up-draft";
 
 const pathfinder = parseTorqueSalesInventorySpec(
   "I need a new 2026 Baltic green Pathfinder with brown seats and 4WD under $55k",
@@ -245,3 +246,37 @@ const frontierCandidates = matchVehicleHuntToLocalInventory({
 });
 assert.equal(frontierCandidates.length, 1);
 assert.equal(frontierCandidates[0]?.fit, "EXACT");
+
+
+const followUpHunt = applyVehicleHuntCandidates({
+  hunt,
+  observedAt: "2026-10-12T21:20:00.000Z",
+  candidates: [{
+    vin: "5N1DR3DJ0TC200001",
+    sourceScope: "ORR_NISSAN_SIBLING",
+    sourceLabel: "Synthetic network source",
+    observedAt: "2026-10-12T21:20:00.000Z",
+    fit: "EXACT",
+    verified: true,
+    reasons: ["Pathfinder", "4WD"],
+    compromises: [],
+  }],
+});
+const textDraft = prepareTorqueHuntFollowUp({
+  hunt: followUpHunt,
+  channel: "TEXT",
+  customerFirstName: "Marcus",
+  createdAt: "2026-10-12T21:21:00.000Z",
+});
+assert.equal(textDraft.status, "PREPARED_NOT_SENT");
+assert.equal(textDraft.truthState, "DRAFT_ONLY");
+assert.match(textDraft.body, /our network/i);
+assert.doesNotMatch(textDraft.body, /guarantee|reserved/i);
+
+assert.throws(
+  () => prepareTorqueHuntFollowUp({
+    hunt: { ...hunt, consentToContact: false },
+    channel: "TEXT",
+  }),
+  /CONSENT_NOT_ESTABLISHED/,
+);
