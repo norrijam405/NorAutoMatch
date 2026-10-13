@@ -124,7 +124,7 @@ export async function POST(request: Request) {
     dna = buildMatchDnaSummary(dnaEvents ?? []);
   }
 
-  const result = answerTorqueInventory({ message, vehicles, mode, dna });
+  const result = answerTorqueInventory({ message, vehicles, mode, dna, spec });
 
   return noStore({
     protocol: "NORAUTO_TORQUE_SEARCH_V1",
