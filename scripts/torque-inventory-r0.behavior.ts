@@ -5,6 +5,7 @@ import { planTorqueFollowUp } from "../src/lib/torque-follow-up-plan";
 import { createVehicleHunt, applyVehicleHuntCandidates } from "../src/lib/vehicle-hunt";
 import { requireAuthorizedDealershipCrmAdapter } from "../src/lib/dealership-crm-adapter";
 import { matchScoutObservationToHunt } from "../src/lib/scout-opportunity-matcher";
+import { buildSalespersonDailyBrief } from "../src/lib/salesperson-daily-brief";
 
 const pathfinder = parseTorqueSalesInventorySpec(
   "I need a new 2026 Baltic green Pathfinder with brown seats and 4WD under $55k",
@@ -170,3 +171,27 @@ const rumorMatch = matchScoutObservationToHunt({
 });
 assert.equal(rumorMatch.action, "NO_ACTION");
 assert.equal(rumorMatch.customerSafe, false);
+
+
+const brief = buildSalespersonDailyBrief({
+  generatedAt: "2026-10-12T21:00:00.000Z",
+  items: [{
+    observationId: "obs_pathfinder_incentive_1",
+    huntId: hunt.huntId,
+    score: scoutMatch.score,
+    action: scoutMatch.action,
+    reasons: scoutMatch.reasons,
+    headline: "Synthetic verified Pathfinder incentive",
+    topic: "INCENTIVE",
+    evidenceState: "PRIMARY_VERIFIED",
+    salesImpact: "HIGH_OPPORTUNITY",
+    huntState: hunt.state,
+    salespersonOwner: "operator",
+    explicitCustomerText: hunt.explicitCustomerText,
+    updatedAt: hunt.updatedAt,
+  }],
+});
+assert.equal(brief.totalActionable, 1);
+assert.equal(brief.textNow, 1);
+assert.equal(brief.noActionClaim, "NO_COMMUNICATION_WAS_SENT_BY_THIS_BRIEF");
+assert.equal(brief.topActions[0]?.huntId, hunt.huntId);
