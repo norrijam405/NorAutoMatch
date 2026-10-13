@@ -8,6 +8,7 @@ import { matchScoutObservationToHunt } from "../src/lib/scout-opportunity-matche
 import { buildSalespersonDailyBrief } from "../src/lib/salesperson-daily-brief";
 import { matchVehicleHuntToLocalInventory } from "../src/lib/vehicle-hunt-inventory-matcher";
 import { prepareTorqueHuntFollowUp } from "../src/lib/torque-follow-up-draft";
+import { buildTorqueCrmSyncPlan } from "../src/lib/torque-crm-sync-plan";
 
 const pathfinder = parseTorqueSalesInventorySpec(
   "I need a new 2026 Baltic green Pathfinder with brown seats and 4WD under $55k",
@@ -280,3 +281,51 @@ assert.throws(
   }),
   /CONSENT_NOT_ESTABLISHED/,
 );
+
+
+const blockedCrmPlan = buildTorqueCrmSyncPlan({
+  hunt: {
+    huntId: followUpHunt.huntId,
+    state: followUpHunt.state,
+    explicitCustomerText: followUpHunt.explicitCustomerText,
+    candidateVins: followUpHunt.candidateVins,
+    truth: followUpHunt.truth,
+  },
+  adapterEvidence: {
+    providerId: "synthetic-crm",
+    adapterVersion: "0.0.0",
+    contractState: "UNVERIFIED",
+    authorizationRef: null,
+    sourceContractRef: null,
+    capabilities: [],
+  },
+  preparedFollowUp: textDraft,
+  dueAt: "2026-10-12T21:30:00.000Z",
+});
+assert.equal(blockedCrmPlan.state, "BLOCKED_UNVERIFIED_ADAPTER");
+assert.equal(blockedCrmPlan.crmWriteState, "NOT_WRITTEN");
+assert.equal(blockedCrmPlan.outboundExecution, "NOT_PERFORMED");
+
+const readyCrmPlan = buildTorqueCrmSyncPlan({
+  hunt: {
+    huntId: followUpHunt.huntId,
+    state: followUpHunt.state,
+    explicitCustomerText: followUpHunt.explicitCustomerText,
+    candidateVins: followUpHunt.candidateVins,
+    truth: followUpHunt.truth,
+  },
+  adapterEvidence: {
+    providerId: "synthetic-crm",
+    adapterVersion: "1.0.0",
+    contractState: "VERIFIED_AUTHORIZED_CONTRACT",
+    authorizationRef: "evidence:synthetic-authorization",
+    sourceContractRef: "contract:synthetic-v1",
+    capabilities: ["WRITE_HUNT_REFERENCE", "CREATE_NOTE", "CREATE_TASK"],
+  },
+  preparedFollowUp: textDraft,
+  dueAt: "2026-10-12T21:30:00.000Z",
+});
+assert.equal(readyCrmPlan.state, "READY_FOR_AUTHORIZED_ADAPTER");
+assert.equal(readyCrmPlan.crmWriteState, "NOT_WRITTEN");
+assert.match(readyCrmPlan.noteBody, /Transfer promised: false/);
+assert.equal(readyCrmPlan.task?.channel, "TEXT");
