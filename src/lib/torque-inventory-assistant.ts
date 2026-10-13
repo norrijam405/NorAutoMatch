@@ -12,7 +12,7 @@ export type TorqueVehicleMatch = {
   mileage: number;
   type: string;
   drivetrain: string;
-  fit: "exact" | "near";
+  fit: "exact" | "strong" | "near";
   reasons: string[];
   compromises: string[];
 };
@@ -81,17 +81,28 @@ export function answerTorqueInventory(input: {
         mileage: entry.vehicle.mileage,
         type: entry.vehicle.type,
         drivetrain: entry.vehicle.drivetrain,
-        fit: entry.fit === "EXACT" ? "exact" as const : "near" as const,
+        fit: entry.fit === "EXACT"
+          ? "exact" as const
+          : entry.fit === "STRONG"
+            ? "strong" as const
+            : "near" as const,
         reasons: entry.reasons,
         compromises: entry.compromises,
       }))
     : input.vehicles.map((vehicle) => evaluateVehicle(vehicle, request));
   const exact = evaluated.filter((item) => item.fit === "exact");
+  const strong = evaluated
+    .filter((item) => item.fit === "strong")
+    .sort((a, b) => a.compromises.length - b.compromises.length || a.price - b.price);
   const near = evaluated
     .filter((item) => item.fit === "near")
     .sort((a, b) => a.compromises.length - b.compromises.length || a.price - b.price)
     .slice(0, 5);
-  const matches = exact.length > 0 ? exact.sort((a, b) => a.price - b.price).slice(0, 5) : near;
+  const matches = exact.length > 0
+    ? exact.sort((a, b) => a.price - b.price).slice(0, 5)
+    : strong.length > 0
+      ? strong.slice(0, 5)
+      : near;
 
   const sourcePhrase =
     input.mode === "representative-demo"
@@ -112,15 +123,24 @@ export function answerTorqueInventory(input: {
       " that " +
       (exact.length === 1 ? "matches" : "match") +
       " what you asked for without me quietly changing your requirements.";
+  } else if (strong.length > 0) {
+    answer =
+      "I found " +
+      strong.length +
+      " strong " +
+      (strong.length === 1 ? "match" : "matches") +
+      " in " +
+      sourcePhrase +
+      ". Your must-haves are covered; I’m calling out the preferred items that differ instead of pretending they’re exact.";
   } else if (near.length > 0) {
     answer =
-      "I don't have an exact match in " +
+      "I don't have an exact or strong match in " +
       sourcePhrase +
       ". I found " +
       near.length +
       " close " +
       (near.length === 1 ? "option" : "options") +
-      ", but I'm calling out the compromises instead of pretending they're exact.";
+      ", but I'm calling out the must-have compromises instead of pretending they're exact.";
   } else {
     answer =
       "No — I don't have what you described in " +
@@ -132,7 +152,7 @@ export function answerTorqueInventory(input: {
     answer += " Your MatchDNA currently says: " + input.dna.label.replace(/^Learning:\s*/i, "") + ".";
   }
 
-  const handoffRequired = exact.length === 0;
+  const handoffRequired = exact.length === 0 && strong.length === 0;
   const handoffSummary = handoffRequired
     ? buildHandoffSummary(request, input.dna, near)
     : undefined;
@@ -145,7 +165,7 @@ export function answerTorqueInventory(input: {
     answer,
     mode: input.mode,
     exactCount: exact.length,
-    nearCount: near.length,
+    nearCount: strong.length + near.length,
     matches,
     handoff: handoffRequired
       ? {
