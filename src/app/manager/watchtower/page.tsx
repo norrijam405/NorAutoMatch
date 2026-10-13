@@ -9,6 +9,7 @@ import { createPostgresCrmPool } from "@/lib/crm-postgres-adapter";
 import { readActiveVehicleHunts, readWatchtowerOpportunityQueue } from "@/lib/watchtower-persistence";
 import { buildSalespersonDailyBrief } from "@/lib/salesperson-daily-brief";
 import { prepareTorqueHuntFollowUp } from "@/lib/torque-follow-up-draft";
+import { chooseTorqueNextBestAction } from "@/lib/torque-next-best-action";
 import { industryScoutSources } from "@/lib/industry-scout";
 
 export const metadata: Metadata = {
@@ -90,6 +91,15 @@ export default async function TorqueWatchtowerPage() {
           ) : (
             <div className="mt-5 grid gap-3">
               {activeHunts.map((hunt) => {
+                const nextAction = chooseTorqueNextBestAction({
+                  hunt: {
+                    huntId: hunt.huntId,
+                    state: hunt.state,
+                    consentToContact: hunt.consentToContact,
+                    candidateVins: hunt.candidateVins,
+                    truth: hunt.truth,
+                  },
+                });
                 const draft = hunt.consentToContact
                   ? prepareTorqueHuntFollowUp({
                       hunt: {
@@ -112,6 +122,18 @@ export default async function TorqueWatchtowerPage() {
                       </div>
                       <p className="mt-3 text-sm font-black text-white">{hunt.explicitCustomerText}</p>
                       <p className="mt-2 text-[11px] text-slate-500">{hunt.candidateCount} candidate VIN{hunt.candidateCount === 1 ? "" : "s"} · {hunt.consentToContact ? "follow-up consent on file" : "no follow-up consent"}</p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <span className={nextAction.priority === "HIGH"
+                          ? "rounded-full border border-red-300/20 bg-red-300/[.06] px-2.5 py-1 text-[9px] font-black uppercase tracking-[.12em] text-red-200"
+                          : nextAction.priority === "MEDIUM"
+                            ? "rounded-full border border-amber-300/20 bg-amber-300/[.06] px-2.5 py-1 text-[9px] font-black uppercase tracking-[.12em] text-amber-200"
+                            : "rounded-full border border-white/10 bg-white/[.03] px-2.5 py-1 text-[9px] font-black uppercase tracking-[.12em] text-slate-400"}>
+                          {nextAction.priority} priority
+                        </span>
+                        <span className="text-[10px] font-black uppercase tracking-[.12em] text-emerald-300">
+                          Next: {nextAction.action.replaceAll("_", " ")}
+                        </span>
+                      </div>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-2">
                       <code className="text-[10px] text-slate-600">{hunt.huntId}</code>
