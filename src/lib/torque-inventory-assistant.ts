@@ -1,5 +1,7 @@
 import type { Vehicle } from "./inventory";
 import type { MatchDnaSummary } from "./match-dna";
+import type { TorqueSalesInventorySpec } from "./torque-sales-inventory-spec";
+import { rankVehiclesForSalesSpec } from "./vehicle-hunt-inventory-matcher";
 
 export type TorqueInventoryMode = "verified-live" | "verified-cache" | "representative-demo";
 
@@ -68,9 +70,22 @@ export function answerTorqueInventory(input: {
   vehicles: Vehicle[];
   mode: TorqueInventoryMode;
   dna?: MatchDnaSummary;
+  spec?: TorqueSalesInventorySpec;
 }): TorqueInventoryAnswer {
   const request = interpret(input.message, input.vehicles);
-  const evaluated = input.vehicles.map((vehicle) => evaluateVehicle(vehicle, request));
+  const evaluated = input.spec
+    ? rankVehiclesForSalesSpec({ requirements: input.spec, vehicles: input.vehicles, limit: 50 }).map((entry) => ({
+        id: entry.vehicle.id,
+        label: [entry.vehicle.year, entry.vehicle.make, entry.vehicle.model, entry.vehicle.trim].filter(Boolean).join(" "),
+        price: entry.vehicle.price,
+        mileage: entry.vehicle.mileage,
+        type: entry.vehicle.type,
+        drivetrain: entry.vehicle.drivetrain,
+        fit: entry.fit === "EXACT" ? "exact" as const : "near" as const,
+        reasons: entry.reasons,
+        compromises: entry.compromises,
+      }))
+    : input.vehicles.map((vehicle) => evaluateVehicle(vehicle, request));
   const exact = evaluated.filter((item) => item.fit === "exact");
   const near = evaluated
     .filter((item) => item.fit === "near")
