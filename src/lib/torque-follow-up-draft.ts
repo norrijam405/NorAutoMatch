@@ -114,7 +114,7 @@ export function prepareTorqueHuntFollowUp(input: {
   };
 }
 
-function summarizeNeed(hunt: VehicleHunt) {
+function summarizeNeed(hunt: FollowUpHuntView) {
   const parts: string[] = [];
   const modelYear = hunt.requirements.modelYear?.value;
   if (typeof modelYear === "number") parts.push(String(modelYear));
