@@ -82,8 +82,10 @@ export function prepareTorqueHuntFollowUp(input: {
         ". I want to verify the details before I tell you anything that could be misleading.";
   }
 
-  if (candidate?.fit === "NEAR" && candidate.compromises.length > 0) {
-    message += " The closest option I found has a tradeoff: " + candidate.compromises[0] + ".";
+  if (candidate?.fit === "STRONG" && candidate.compromises.length > 0) {
+    message += " It covers the must-haves, with one preference difference: " + candidate.compromises[0] + ".";
+  } else if (candidate?.fit === "NEAR" && candidate.compromises.length > 0) {
+    message += " The closest option I found has a must-have tradeoff: " + candidate.compromises[0] + ".";
   }
 
   if (input.channel === "TEXT") {
