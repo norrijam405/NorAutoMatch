@@ -11,6 +11,7 @@ import { prepareTorqueHuntFollowUp } from "../src/lib/torque-follow-up-draft";
 import { buildTorqueCrmSyncPlan } from "../src/lib/torque-crm-sync-plan";
 import { chooseTorqueNextBestAction } from "../src/lib/torque-next-best-action";
 import { leadSchema } from "../src/lib/lead-schema";
+import { answerTorqueInventory } from "../src/lib/torque-inventory-assistant";
 
 const pathfinder = parseTorqueSalesInventorySpec(
   "I need a new 2026 Baltic green Pathfinder with brown seats and 4WD under $55k",
@@ -409,3 +410,52 @@ const oversizedSourcingLead = leadSchema.safeParse({
   vehicleHuntRequest: "x".repeat(1201),
 });
 assert.equal(oversizedSourcingLead.success, false);
+
+
+const publicTorqueSpec = parseTorqueSalesInventorySpec(
+  "New 2026 Pathfinder Baltic green brown seats 4WD under $55k",
+);
+const publicTorqueAnswer = answerTorqueInventory({
+  message: "New 2026 Pathfinder Baltic green brown seats 4WD under $55k",
+  mode: "verified-live",
+  spec: publicTorqueSpec,
+  vehicles: [
+    {
+      id: "5N1DR3DJ0TC200001",
+      year: 2026,
+      make: "Nissan",
+      model: "Pathfinder",
+      trim: "Platinum",
+      price: 54_200,
+      type: "SUV",
+      mileage: 4,
+      drivetrain: "4WD",
+      image: "/synthetic.jpg",
+      accent: "Baltic Teal Pearl",
+      condition: "New",
+      exteriorColor: "Baltic Teal Pearl",
+      interiorColor: "Chestnut",
+      features: ["Chestnut Semi-aniline Leather"],
+    },
+    {
+      id: "5N1DR3DJ0TC200002",
+      year: 2026,
+      make: "Nissan",
+      model: "Pathfinder",
+      trim: "Platinum",
+      price: 53_900,
+      type: "SUV",
+      mileage: 5,
+      drivetrain: "4WD",
+      image: "/synthetic-2.jpg",
+      accent: "Super Black",
+      condition: "New",
+      exteriorColor: "Super Black",
+      interiorColor: "Charcoal",
+      features: ["Charcoal Leather"],
+    },
+  ],
+});
+assert.equal(publicTorqueAnswer.exactCount, 1);
+assert.equal(publicTorqueAnswer.matches[0]?.id, "5N1DR3DJ0TC200001");
+assert.equal(publicTorqueAnswer.matches[0]?.fit, "exact");
