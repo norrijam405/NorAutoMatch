@@ -12,8 +12,13 @@ export type TorquePreparedFollowUp = {
   createdAt: string;
 };
 
+type FollowUpHuntView = Pick<
+  VehicleHunt,
+  "huntId" | "state" | "requirements" | "candidateVins" | "consentToContact"
+>;
+
 export function prepareTorqueHuntFollowUp(input: {
-  hunt: VehicleHunt;
+  hunt: FollowUpHuntView;
   channel: "TEXT" | "EMAIL";
   customerFirstName?: string;
   createdAt?: string;
