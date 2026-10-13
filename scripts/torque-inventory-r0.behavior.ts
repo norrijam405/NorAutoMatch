@@ -6,6 +6,7 @@ import { createVehicleHunt, applyVehicleHuntCandidates } from "../src/lib/vehicl
 import { requireAuthorizedDealershipCrmAdapter } from "../src/lib/dealership-crm-adapter";
 import { matchScoutObservationToHunt } from "../src/lib/scout-opportunity-matcher";
 import { buildSalespersonDailyBrief } from "../src/lib/salesperson-daily-brief";
+import { matchVehicleHuntToLocalInventory } from "../src/lib/vehicle-hunt-inventory-matcher";
 
 const pathfinder = parseTorqueSalesInventorySpec(
   "I need a new 2026 Baltic green Pathfinder with brown seats and 4WD under $55k",
@@ -195,3 +196,52 @@ assert.equal(brief.totalActionable, 1);
 assert.equal(brief.textNow, 1);
 assert.equal(brief.noActionClaim, "NO_COMMUNICATION_WAS_SENT_BY_THIS_BRIEF");
 assert.equal(brief.topActions[0]?.huntId, hunt.huntId);
+
+
+const exactPathfinderCandidates = matchVehicleHuntToLocalInventory({
+  requirements: parseTorqueSalesInventorySpec(
+    "New 2026 Pathfinder Baltic green brown seats 4WD under $55k",
+  ),
+  observedAt: "2026-10-12T21:10:00.000Z",
+  vehicles: [{
+    id: "5N1DR3DJ0TC200001",
+    year: 2026,
+    make: "Nissan",
+    model: "Pathfinder",
+    trim: "Platinum",
+    price: 54_200,
+    type: "SUV",
+    mileage: 4,
+    drivetrain: "4WD",
+    image: "/synthetic.jpg",
+    accent: "Baltic Teal Pearl",
+    condition: "New",
+    exteriorColor: "Baltic Teal Pearl",
+    interiorColor: "Chestnut",
+    features: ["Chestnut Semi-aniline Leather"],
+  }],
+});
+assert.equal(exactPathfinderCandidates.length, 1);
+assert.equal(exactPathfinderCandidates[0]?.fit, "EXACT");
+
+const frontierCandidates = matchVehicleHuntToLocalInventory({
+  requirements: parseTorqueSalesInventorySpec("New Frontier King Cab with extended bed"),
+  observedAt: "2026-10-12T21:11:00.000Z",
+  vehicles: [{
+    id: "1N6ED1CL0TN600001",
+    year: 2026,
+    make: "Nissan",
+    model: "Frontier",
+    trim: "King Cab SV 6-foot Bed",
+    price: 38_500,
+    type: "Truck",
+    mileage: 3,
+    drivetrain: "4x4",
+    image: "/synthetic.jpg",
+    accent: "Gun Metallic",
+    condition: "New",
+    features: ["King Cab", "6-foot bed"],
+  }],
+});
+assert.equal(frontierCandidates.length, 1);
+assert.equal(frontierCandidates[0]?.fit, "EXACT");
