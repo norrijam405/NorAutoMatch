@@ -128,6 +128,10 @@ export function applyVehicleHuntCandidates(input: {
   const exactLocal = candidates.some(
     (candidate) => candidate.sourceScope === "LOCAL_STORE" && candidate.fit === "EXACT" && candidate.verified,
   );
+  const strongLocal = candidates.some(
+    (candidate) => candidate.sourceScope === "LOCAL_STORE" && candidate.fit === "STRONG" && candidate.verified,
+  );
+  const localMatch = exactLocal || strongLocal;
   const network = candidates.some((candidate) =>
     candidate.sourceScope === "ORR_GROUP" || candidate.sourceScope === "ORR_NISSAN_SIBLING",
   );
@@ -135,7 +139,7 @@ export function applyVehicleHuntCandidates(input: {
     candidate.sourceScope === "NISSAN_NATIONAL" || candidate.sourceScope === "OUT_OF_NETWORK",
   );
 
-  const state: VehicleHuntState = exactLocal
+  const state: VehicleHuntState = localMatch
     ? "LOCAL_MATCH_FOUND"
     : network
       ? "NETWORK_MATCH_FOUND"
@@ -151,8 +155,8 @@ export function applyVehicleHuntCandidates(input: {
     truth: {
       ...input.hunt.truth,
       exactLocalMatchVerified: exactLocal,
-      sourcingRequired: !exactLocal,
-      humanVerificationRequired: !exactLocal,
+      sourcingRequired: !localMatch,
+      humanVerificationRequired: !localMatch,
       transferPromised: false,
       financingPromised: false,
     },
