@@ -4,6 +4,7 @@ import { torqueSourcingTruth } from "../src/lib/torque-sourcing-language";
 import { planTorqueFollowUp } from "../src/lib/torque-follow-up-plan";
 import { createVehicleHunt, applyVehicleHuntCandidates } from "../src/lib/vehicle-hunt";
 import { requireAuthorizedDealershipCrmAdapter } from "../src/lib/dealership-crm-adapter";
+import { matchScoutObservationToHunt } from "../src/lib/scout-opportunity-matcher";
 
 const pathfinder = parseTorqueSalesInventorySpec(
   "I need a new 2026 Baltic green Pathfinder with brown seats and 4WD under $55k",
@@ -123,3 +124,49 @@ requireAuthorizedDealershipCrmAdapter({
   sourceContractRef: "contract:synthetic-v1",
   capabilities: ["WRITE_HUNT_REFERENCE"],
 }, "WRITE_HUNT_REFERENCE");
+
+
+const scoutMatch = matchScoutObservationToHunt({
+  hunt,
+  createdAt: "2026-10-12T20:05:00.000Z",
+  observation: {
+    observationId: "obs_pathfinder_incentive_1",
+    topic: "INCENTIVE",
+    headline: "Synthetic verified Pathfinder incentive",
+    summary: "Synthetic primary-source incentive used only for behavior testing.",
+    affectedMakes: ["Nissan"],
+    affectedModels: ["Pathfinder"],
+    observedAt: "2026-10-12T20:04:00.000Z",
+    sourceId: "nissan-usa",
+    sourceUrl: "https://www.nissanusa.com/",
+    sourceClass: "OEM_OFFICIAL",
+    evidenceState: "PRIMARY_VERIFIED",
+    salesImpact: "HIGH_OPPORTUNITY",
+    torqueUse: "CUSTOMER_SAFE",
+  },
+});
+assert.ok(scoutMatch.score >= 70);
+assert.equal(scoutMatch.action, "TEXT_CUSTOMER");
+assert.equal(scoutMatch.customerSafe, true);
+
+const rumorMatch = matchScoutObservationToHunt({
+  hunt,
+  createdAt: "2026-10-12T20:06:00.000Z",
+  observation: {
+    observationId: "obs_unverified_1",
+    topic: "MODEL_REFRESH",
+    headline: "Synthetic rumor",
+    summary: "Synthetic unverified report used only for behavior testing.",
+    affectedMakes: ["Nissan"],
+    affectedModels: ["Pathfinder"],
+    observedAt: "2026-10-12T20:05:00.000Z",
+    sourceId: "secondary",
+    sourceUrl: "https://example.com/",
+    sourceClass: "SECONDARY_MEDIA",
+    evidenceState: "UNVERIFIED",
+    salesImpact: "MEDIUM",
+    torqueUse: "DO_NOT_USE",
+  },
+});
+assert.equal(rumorMatch.action, "NO_ACTION");
+assert.equal(rumorMatch.customerSafe, false);
