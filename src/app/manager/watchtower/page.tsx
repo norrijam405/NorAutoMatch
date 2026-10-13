@@ -205,16 +205,48 @@ export default async function TorqueWatchtowerPage() {
           <div className="flex items-start gap-3">
             <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-emerald-300 text-black"><TrendingUp size={20} /></span>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-300">Scout Opportunity Queue</p>
-              <h2 className="mt-2 text-3xl font-black text-white">Market changes tied to real customers.</h2>
+              <p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-300">Salesperson Daily Brief</p>
+              <h2 className="mt-2 text-3xl font-black text-white">Who deserves attention today?</h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-                Verified incentives, product changes, inventory shifts, pricing events, and safety updates can be matched against active Vehicle Hunts. High-value matches become salesperson or customer follow-up opportunities; unverified reporting stays informational and cannot trigger customer action.
+                Watchtower turns verified Scout changes and active Vehicle Hunts into a prioritized action queue. This brief recommends work; it does not claim any message was sent.
               </p>
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><p className="text-[9px] font-black uppercase tracking-[.14em] text-slate-600">High score + verified</p><p className="mt-2 text-sm font-black text-white">Text / email opportunity</p></div>
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><p className="text-[9px] font-black uppercase tracking-[.14em] text-slate-600">Medium relevance</p><p className="mt-2 text-sm font-black text-white">Salesperson review</p></div>
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><p className="text-[9px] font-black uppercase tracking-[.14em] text-slate-600">Unverified / rumor</p><p className="mt-2 text-sm font-black text-white">No customer action</p></div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <BriefMetric label="Text now" value={dailyBrief.textNow} />
+                <BriefMetric label="Email today" value={dailyBrief.emailToday} />
+                <BriefMetric label="Manager review" value={dailyBrief.managerReview} />
+                <BriefMetric label="Sales review" value={dailyBrief.salespersonReview} />
+                <BriefMetric label="Watch only" value={dailyBrief.watchOnly} />
               </div>
+
+              {huntReadState !== "READY" ? (
+                <div className="mt-5 rounded-2xl border border-amber-300/15 bg-amber-300/[.035] p-4 text-sm leading-6 text-amber-100/70">
+                  The Watchtower action queue is not active in this runtime yet. No fake opportunities are being shown.
+                </div>
+              ) : dailyBrief.topActions.length === 0 ? (
+                <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-5 text-sm text-slate-500">
+                  No evidence-backed Scout opportunities currently require action.
+                </div>
+              ) : (
+                <div className="mt-5 grid gap-3">
+                  {dailyBrief.topActions.map((item) => (
+                    <article key={item.huntId + item.headline} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full border border-emerald-300/20 bg-emerald-300/[.06] px-2.5 py-1 text-[9px] font-black uppercase tracking-[.12em] text-emerald-300">{item.action.replaceAll("_", " ")}</span>
+                            <span className="text-[10px] font-black text-amber-300">Score {item.score}</span>
+                          </div>
+                          <p className="mt-3 text-sm font-black text-white">{item.headline}</p>
+                          <p className="mt-1 text-xs leading-5 text-slate-400">{item.customerNeed}</p>
+                          {item.why.length > 0 && <p className="mt-2 text-[11px] leading-5 text-slate-600">{item.why.join(" · ")}</p>}
+                        </div>
+                        <code className="shrink-0 text-[10px] text-slate-600">{item.huntId}</code>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -225,6 +257,10 @@ export default async function TorqueWatchtowerPage() {
       </div>
     </main>
   );
+}
+
+function BriefMetric({ label, value }: { label: string; value: number }) {
+  return <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><p className="text-[9px] font-black uppercase tracking-[.14em] text-slate-600">{label}</p><p className="mt-2 text-2xl font-black text-white">{value}</p></div>;
 }
 
 function SummaryCard({ icon, title, value, detail }: { icon: React.ReactNode; title: string; value: string; detail: string }) {
