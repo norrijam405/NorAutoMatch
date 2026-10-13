@@ -6,7 +6,8 @@ import { torqueInventorySources } from "@/lib/torque-inventory-sources";
 import { FreshUpHuntForm } from "@/components/manager/fresh-up-hunt-form";
 import { refreshVehicleHunt } from "@/app/manager/watchtower/actions";
 import { createPostgresCrmPool } from "@/lib/crm-postgres-adapter";
-import { readActiveVehicleHunts } from "@/lib/watchtower-persistence";
+import { readActiveVehicleHunts, readWatchtowerOpportunityQueue } from "@/lib/watchtower-persistence";
+import { buildSalespersonDailyBrief } from "@/lib/salesperson-daily-brief";
 import { industryScoutSources } from "@/lib/industry-scout";
 
 export const metadata: Metadata = {
@@ -19,6 +20,7 @@ export default async function TorqueWatchtowerPage() {
   await requireNorAutoMembership(["operator", "admin", "founder"], "/manager/watchtower");
 
   let activeHunts: Awaited<ReturnType<typeof readActiveVehicleHunts>> = [];
+  let opportunityQueue: Awaited<ReturnType<typeof readWatchtowerOpportunityQueue>> = [];
   let huntReadState: "READY" | "NOT_CONFIGURED" | "MIGRATION_PENDING" = "READY";
   const connectionString = process.env.NORAUTO_CRM_DATABASE_URL?.trim();
   if (!connectionString) {
@@ -27,11 +29,14 @@ export default async function TorqueWatchtowerPage() {
     try {
       const pool = createPostgresCrmPool(connectionString);
       activeHunts = await readActiveVehicleHunts({ pool, workspaceId: "norautomatch", limit: 30 });
+      opportunityQueue = await readWatchtowerOpportunityQueue({ pool, workspaceId: "norautomatch", limit: 30 });
       await pool.end();
     } catch {
       huntReadState = "MIGRATION_PENDING";
     }
   }
+
+  const dailyBrief = buildSalespersonDailyBrief({ items: opportunityQueue, limit: 8 });
 
   const local = torqueInventorySources.filter((source) => source.scope === "LOCAL_STORE");
   const network = torqueInventorySources.filter((source) => source.scope === "ORR_GROUP" || source.scope === "ORR_NISSAN_SIBLING");
