@@ -16,6 +16,7 @@ interface LeadModalProps {
   termMonths: number;
   shortlistedVehicleIds: string[];
   context?: string;
+  vehicleHuntId?: string;
 }
 
 type LeadReceipt = {
@@ -24,6 +25,7 @@ type LeadReceipt = {
   persistence?: "COMMITTED" | "DEDUPLICATED" | string;
   delivery?: string;
   workflowState?: string;
+  vehicleHuntLink?: "NOT_REQUESTED" | "LINKED" | "LINK_FAILED_SAFE";
 };
 
 export function LeadModal(props: LeadModalProps) {
@@ -39,6 +41,7 @@ function LeadModalContent({
   termMonths,
   shortlistedVehicleIds,
   context,
+  vehicleHuntId,
 }: LeadModalProps) {
   const [submitted, setSubmitted] = useState(false);
   const [receipt, setReceipt] = useState<LeadReceipt | null>(null);
@@ -68,6 +71,7 @@ function LeadModalContent({
       downPayment,
       termMonths,
       consent: undefined,
+      vehicleHuntId,
     },
   });
 
@@ -103,6 +107,7 @@ function LeadModalContent({
       persistence: data?.persistence,
       delivery: data?.delivery,
       workflowState: data?.workflowState,
+      vehicleHuntLink: data?.vehicleHuntLink,
     });
     setSubmitted(true);
   }
@@ -147,6 +152,11 @@ function LeadModalContent({
               </div>
             </div>
 
+            {receipt?.vehicleHuntLink === "LINK_FAILED_SAFE" && (
+              <p className="mx-auto mt-4 max-w-md rounded-xl border border-amber-300/20 bg-amber-300/[.05] p-3 text-xs leading-5 text-amber-100/75">
+                Your request was saved, but the existing Vehicle Hunt could not be linked automatically. No duplicate lead was created by this notice.
+              </p>
+            )}
             <p className="mx-auto mt-5 max-w-md text-xs leading-5 text-slate-500">This confirmation means your request was saved. It does not mean a vehicle is reserved, financing is approved, or a dealership transaction is complete.</p>
             <button onClick={onClose} className="btn-primary mt-8">Back to the matcher</button>
           </div>
@@ -174,6 +184,7 @@ function LeadModalContent({
             <input type="hidden" {...register("source")} />
             <input type="hidden" {...register("trigger")} />
             <input type="hidden" {...register("pipeline")} />
+            <input type="hidden" {...register("vehicleHuntId")} />
             {serverError && <p className="sm:col-span-2 rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-200">{serverError}</p>}
             <div className="flex flex-col-reverse gap-3 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="flex items-center gap-2 text-xs text-slate-500"><ShieldCheck size={15} className="text-emerald-400" /> Your details are used only for this request.</p>
