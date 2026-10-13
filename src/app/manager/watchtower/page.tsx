@@ -4,6 +4,8 @@ import { Binoculars, Bot, CarFront, Radar, ShieldCheck, Sparkles, TrendingUp } f
 import { requireNorAutoMembership } from "@/lib/supabase/authz";
 import { torqueInventorySources } from "@/lib/torque-inventory-sources";
 import { FreshUpHuntForm } from "@/components/manager/fresh-up-hunt-form";
+import { createPostgresCrmPool } from "@/lib/crm-postgres-adapter";
+import { readActiveVehicleHunts } from "@/lib/watchtower-persistence";
 import { industryScoutSources } from "@/lib/industry-scout";
 
 export const metadata: Metadata = {
@@ -14,6 +16,21 @@ export const metadata: Metadata = {
 
 export default async function TorqueWatchtowerPage() {
   await requireNorAutoMembership(["operator", "admin", "founder"], "/manager/watchtower");
+
+  let activeHunts: Awaited<ReturnType<typeof readActiveVehicleHunts>> = [];
+  let huntReadState: "READY" | "NOT_CONFIGURED" | "MIGRATION_PENDING" = "READY";
+  const connectionString = process.env.NORAUTO_CRM_DATABASE_URL?.trim();
+  if (!connectionString) {
+    huntReadState = "NOT_CONFIGURED";
+  } else {
+    try {
+      const pool = createPostgresCrmPool(connectionString);
+      activeHunts = await readActiveVehicleHunts({ pool, workspaceId: "norautomatch", limit: 30 });
+      await pool.end();
+    } catch {
+      huntReadState = "MIGRATION_PENDING";
+    }
+  }
 
   const local = torqueInventorySources.filter((source) => source.scope === "LOCAL_STORE");
   const network = torqueInventorySources.filter((source) => source.scope === "ORR_GROUP" || source.scope === "ORR_NISSAN_SIBLING");
@@ -44,6 +61,44 @@ export default async function TorqueWatchtowerPage() {
 
         <section className="mt-10">
           <FreshUpHuntForm />
+        </section>
+
+        <section className="mt-10 rounded-[28px] border border-white/10 bg-white/[.025] p-6 sm:p-8">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[.18em] text-red-400">Active Vehicle Hunts</p>
+              <h2 className="mt-2 text-3xl font-black text-white">What Torque is hunting right now.</h2>
+            </div>
+            <p className="text-xs text-slate-500">{huntReadState === "READY" ? activeHunts.length + " active" : huntReadState === "NOT_CONFIGURED" ? "Database not configured" : "Migration not active yet"}</p>
+          </div>
+
+          {huntReadState !== "READY" ? (
+            <div className="mt-5 rounded-2xl border border-amber-300/15 bg-amber-300/[.035] p-4 text-sm leading-6 text-amber-100/70">
+              Watchtower Hunt persistence is coded but not active in this runtime yet. No fake Hunt data is being shown.
+            </div>
+          ) : activeHunts.length === 0 ? (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-5 text-sm text-slate-500">
+              No active Hunts yet. Use Fresh Up above to create the first one.
+            </div>
+          ) : (
+            <div className="mt-5 grid gap-3">
+              {activeHunts.map((hunt) => (
+                <article key={hunt.huntId} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-amber-300/20 bg-amber-300/[.06] px-2.5 py-1 text-[9px] font-black uppercase tracking-[.12em] text-amber-300">{hunt.state.replaceAll("_", " ")}</span>
+                        <span className="text-[9px] font-black uppercase tracking-[.12em] text-slate-600">{hunt.origin.replaceAll("_", " ")}</span>
+                      </div>
+                      <p className="mt-3 text-sm font-black text-white">{hunt.explicitCustomerText}</p>
+                      <p className="mt-2 text-[11px] text-slate-500">{hunt.candidateCount} candidate VIN{hunt.candidateCount === 1 ? "" : "s"} · {hunt.consentToContact ? "follow-up consent on file" : "no follow-up consent"}</p>
+                    </div>
+                    <code className="shrink-0 text-[10px] text-slate-600">{hunt.huntId}</code>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="mt-10 grid gap-6 xl:grid-cols-[1.05fr_.95fr]">
