@@ -12,6 +12,7 @@ import { buildTorqueCrmSyncPlan } from "../src/lib/torque-crm-sync-plan";
 import { chooseTorqueNextBestAction } from "../src/lib/torque-next-best-action";
 import { leadSchema } from "../src/lib/lead-schema";
 import { answerTorqueInventory } from "../src/lib/torque-inventory-assistant";
+import { buildNissanNationalSearchPlan } from "../src/lib/nissan-national-search";
 
 const pathfinder = parseTorqueSalesInventorySpec(
   "I need a new 2026 Baltic green Pathfinder with brown seats and 4WD under $55k",
@@ -459,3 +460,14 @@ const publicTorqueAnswer = answerTorqueInventory({
 assert.equal(publicTorqueAnswer.exactCount, 1);
 assert.equal(publicTorqueAnswer.matches[0]?.id, "5N1DR3DJ0TC200001");
 assert.equal(publicTorqueAnswer.matches[0]?.fit, "exact");
+
+
+const nationalPlan = buildNissanNationalSearchPlan(publicTorqueSpec);
+assert.equal(nationalPlan.authority, "OFFICIAL_NISSAN_DISCOVERY_ONLY");
+assert.equal(nationalPlan.availabilityClaim, "NOT_PROVEN");
+assert.equal(nationalPlan.transferClaim, "NOT_PROVEN");
+assert.match(nationalPlan.url, /nissanusa\.com\/shopping-tools\/search-inventory/);
+assert.match(nationalPlan.url, /models=pathfinder/);
+assert.match(nationalPlan.url, /modelYear=2026/);
+assert.ok(nationalPlan.residualRequirements.some((item) => /exterior color/i.test(item)));
+assert.ok(nationalPlan.residualRequirements.some((item) => /interior color/i.test(item)));
