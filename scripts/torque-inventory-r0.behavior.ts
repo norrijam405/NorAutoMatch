@@ -653,3 +653,51 @@ const wrongModelScout = matchScoutObservationToHunt({
 });
 assert.equal(wrongModelScout.action, "NO_ACTION");
 assert.equal(wrongModelScout.score, 0);
+
+
+const expiredScout = matchScoutObservationToHunt({
+  hunt,
+  createdAt: "2026-10-13T22:00:00.000Z",
+  observation: {
+    observationId: "obs_expired_pathfinder_incentive",
+    topic: "INCENTIVE",
+    headline: "Expired synthetic Pathfinder incentive",
+    summary: "Validly sourced but expired offer.",
+    affectedMakes: ["Nissan"],
+    affectedModels: ["Pathfinder"],
+    observedAt: "2026-10-12T20:00:00.000Z",
+    expiresAt: "2026-10-13T21:00:00.000Z",
+    sourceId: "nissan-usa",
+    sourceUrl: "https://www.nissanusa.com/",
+    sourceClass: "OEM_OFFICIAL",
+    evidenceState: "PRIMARY_VERIFIED",
+    salesImpact: "HIGH_OPPORTUNITY",
+    torqueUse: "CUSTOMER_SAFE",
+  },
+});
+assert.equal(expiredScout.action, "NO_ACTION");
+assert.equal(expiredScout.score, 0);
+assert.ok(expiredScout.reasons.includes("SCOUT_OBSERVATION_OUTSIDE_EFFECTIVE_WINDOW"));
+
+const pausedScout = matchScoutObservationToHunt({
+  hunt: { ...hunt, state: "PAUSED" },
+  createdAt: "2026-10-12T20:05:00.000Z",
+  observation: {
+    observationId: "obs_paused_pathfinder_incentive",
+    topic: "INCENTIVE",
+    headline: "Verified synthetic Pathfinder incentive",
+    summary: "Paused Hunt must not create an outreach action.",
+    affectedMakes: ["Nissan"],
+    affectedModels: ["Pathfinder"],
+    observedAt: "2026-10-12T20:04:00.000Z",
+    sourceId: "nissan-usa",
+    sourceUrl: "https://www.nissanusa.com/",
+    sourceClass: "OEM_OFFICIAL",
+    evidenceState: "PRIMARY_VERIFIED",
+    salesImpact: "HIGH_OPPORTUNITY",
+    torqueUse: "CUSTOMER_SAFE",
+  },
+});
+assert.equal(pausedScout.action, "NO_ACTION");
+assert.equal(pausedScout.score, 0);
+assert.ok(pausedScout.reasons.includes("HUNT_NOT_ACTIVE"));
