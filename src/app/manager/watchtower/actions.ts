@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { requireNorAutoMembership } from "@/lib/supabase/authz";
 import { createPostgresCrmPool } from "@/lib/crm-postgres-adapter";
 import { parseTorqueSalesInventorySpec } from "@/lib/torque-sales-inventory-spec";
-import { createVehicleHunt } from "@/lib/vehicle-hunt";
-import { persistVehicleHunt } from "@/lib/watchtower-persistence";
+import { applyVehicleHuntCandidates, createVehicleHunt } from "@/lib/vehicle-hunt";
+import { persistVehicleHunt, readVehicleHunt } from "@/lib/watchtower-persistence";
 
 let watchtowerPool: ReturnType<typeof createPostgresCrmPool> | undefined;
 
