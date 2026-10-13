@@ -6,6 +6,9 @@ import { createPostgresCrmPool } from "@/lib/crm-postgres-adapter";
 import { parseTorqueSalesInventorySpec } from "@/lib/torque-sales-inventory-spec";
 import { applyVehicleHuntCandidates, createVehicleHunt } from "@/lib/vehicle-hunt";
 import { persistVehicleHunt, readVehicleHunt } from "@/lib/watchtower-persistence";
+import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
+import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
+import { matchVehicleHuntToLocalInventory } from "@/lib/vehicle-hunt-inventory-matcher";
 
 let watchtowerPool: ReturnType<typeof createPostgresCrmPool> | undefined;
 
