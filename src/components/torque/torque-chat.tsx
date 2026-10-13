@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Bot, ChevronDown, ExternalLink, Loader2, Send, Sparkles, X } from "lucide-react";
 import { FormEvent, useState } from "react";
+import { LeadModal } from "@/components/matcher/lead-modal";
 
 type Match = {
   id: string;
@@ -38,12 +39,31 @@ export function TorqueChat() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [sourcingOpen, setSourcingOpen] = useState(false);
+  const [sourcingRequest, setSourcingRequest] = useState("");
+  const [sourcingContext, setSourcingContext] = useState("");
+  const [sourcingVehicleIds, setSourcingVehicleIds] = useState<string[]>([]);
   const [turns, setTurns] = useState<Turn[]>([
     {
       role: "torque",
       text: "Tell me what you're actually looking for. Give me the details that matter and I’ll tell you what fits, what doesn’t, and where the compromises are.",
     },
   ]);
+
+  function openSourcing(turn: Turn, index: number) {
+    const priorUserText = index > 0 && turns[index - 1]?.role === "user" ? turns[index - 1].text : "";
+    const request = priorUserText || turn.response?.handoff?.summary || "";
+    setSourcingRequest(request);
+    setSourcingContext(turn.response?.handoff?.summary || request);
+    setSourcingVehicleIds(
+      (turn.response?.matches ?? [])
+        .map((match) => match.id)
+        .filter((id) => /^[A-HJ-NPR-Z0-9]{17}$/i.test(id))
+        .slice(0, 20),
+    );
+    setOpen(false);
+    setSourcingOpen(true);
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -157,9 +177,13 @@ export function TorqueChat() {
                   <div className="mt-3 rounded-2xl border border-blue-300/15 bg-blue-300/[.04] p-3">
                     <p className="text-[9px] font-black uppercase tracking-[.14em] text-blue-200">Sourcing path</p>
                     <p className="mt-1 text-[11px] leading-5 text-slate-400">I don't have to stop at the visible local catalog. A salesperson can use the broader sourcing network to verify the exact spec.</p>
-                    <Link href="/#matcher" className="mt-2 inline-flex items-center gap-1 text-[11px] font-black text-blue-200">
+                    <button
+                      type="button"
+                      onClick={() => openSourcing(turn, index)}
+                      className="mt-2 inline-flex items-center gap-1 text-[11px] font-black text-blue-200"
+                    >
                       Start sourcing request <ChevronDown size={12} />
-                    </Link>
+                    </button>
                   </div>
                 )}
               </div>
@@ -195,6 +219,18 @@ export function TorqueChat() {
           </form>
         </section>
       )}
+
+      <LeadModal
+        open={sourcingOpen}
+        trigger="trapdoor"
+        onClose={() => setSourcingOpen(false)}
+        monthlyTarget={0}
+        downPayment={0}
+        termMonths={60}
+        shortlistedVehicleIds={sourcingVehicleIds}
+        context={sourcingContext}
+        vehicleHuntRequest={sourcingRequest}
+      />
     </>
   );
 }
