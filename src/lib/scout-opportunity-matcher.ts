@@ -35,6 +35,27 @@ export function matchScoutObservationToHunt(input: {
   const affectedMakes = new Set(observation.affectedMakes.map(normalize));
   const affectedModels = new Set(observation.affectedModels.map(normalize));
 
+  // A topic bonus is not evidence that an observation concerns this customer's vehicle.
+  // Explicit make/model mismatches fail closed, including for high-impact incentives.
+  const unrelatedMake = requestedMake && affectedMakes.size > 0 && !affectedMakes.has(normalize(requestedMake));
+  const unrelatedModel = requestedModel && affectedModels.size > 0 && !affectedModels.has(normalize(requestedModel));
+  const noVehicleIdentityMatch =
+    (!requestedMake || !affectedMakes.has(normalize(requestedMake))) &&
+    (!requestedModel || !affectedModels.has(normalize(requestedModel)));
+  if (unrelatedMake || unrelatedModel || noVehicleIdentityMatch) {
+    return {
+      protocol: "NORAUTO_SCOUT_OPPORTUNITY_MATCH_V1",
+      observationId: observation.observationId,
+      huntId: hunt.huntId,
+      score: 0,
+      reasons: ["NO_RELEVANT_VEHICLE_IDENTITY_EVIDENCE"],
+      action: "NO_ACTION",
+      customerSafe: false,
+      requiresHumanVerification: true,
+      createdAt: input.createdAt ?? new Date().toISOString(),
+    };
+  }
+
   if (requestedMake && affectedMakes.has(normalize(requestedMake))) {
     score += 30;
     reasons.push("AFFECTED_MAKE_MATCH");
