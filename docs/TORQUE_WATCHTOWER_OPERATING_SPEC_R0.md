@@ -122,3 +122,8 @@ Customer-facing language must remain cleaner than the operator surface.
 - CRM Bridge
 
 These modules should remain separable enough for future dealership licensing while sharing one canonical truth/evidence model.
+
+
+## Migration verification
+
+Watchtower schema changes must execute successfully against a fresh PostgreSQL test database in CI before any live-database activation decision. A green TypeScript build alone is not sufficient migration evidence.
