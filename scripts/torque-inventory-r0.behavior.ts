@@ -88,7 +88,7 @@ const networkHunt = applyVehicleHuntCandidates({
   hunt,
   observedAt: "2026-10-12T20:01:00.000Z",
   candidates: [{
-    vin: "1N8TESTVIN0000001",
+    vin: "1N8ABCDEF12345678",
     sourceScope: "ORR_NISSAN_SIBLING",
     sourceLabel: "Synthetic sibling source",
     observedAt: "2026-10-12T20:01:00.000Z",
