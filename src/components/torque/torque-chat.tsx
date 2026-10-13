@@ -12,7 +12,7 @@ type Match = {
   mileage: number;
   type: string;
   drivetrain: string;
-  fit: "exact" | "near";
+  fit: "exact" | "strong" | "near";
   reasons: string[];
   compromises: string[];
 };
@@ -154,8 +154,10 @@ export function TorqueChat() {
                             <div>
                               <span className={match.fit === "exact"
                                 ? "text-[9px] font-black uppercase tracking-[.14em] text-emerald-300"
-                                : "text-[9px] font-black uppercase tracking-[.14em] text-amber-300"}>
-                                {match.fit === "exact" ? "Exact fit" : "Near fit"}
+                                : match.fit === "strong"
+                                  ? "text-[9px] font-black uppercase tracking-[.14em] text-blue-200"
+                                  : "text-[9px] font-black uppercase tracking-[.14em] text-amber-300"}>
+                                {match.fit === "exact" ? "Exact fit" : match.fit === "strong" ? "Strong fit" : "Near fit"}
                               </span>
                               <h3 className="mt-1 text-sm font-black text-white">{match.label}</h3>
                             </div>
