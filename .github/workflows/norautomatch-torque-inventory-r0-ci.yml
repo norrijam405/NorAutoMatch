@@ -12,7 +12,8 @@ permissions:
 jobs:
   torque-inventory-r0:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
+
     services:
       postgres:
         image: postgres:16
@@ -27,8 +28,10 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+
     env:
       PGPASSWORD: postgres
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,7 +49,7 @@ jobs:
         continue-on-error: true
         run: npm audit --audit-level=high
 
-      - name: Validate Watchtower migration on fresh Postgres
+      - name: Bootstrap Supabase-compatible test roles
         run: |
           psql -h 127.0.0.1 -U postgres -d norautomatch_ci -v ON_ERROR_STOP=1 <<'SQL'
           CREATE ROLE anon NOLOGIN;
@@ -54,39 +57,16 @@ jobs:
           CREATE SCHEMA auth;
           CREATE TABLE auth.users (id uuid PRIMARY KEY);
           SQL
-          psql -h 127.0.0.1 -U postgres -d norautomatch_ci -v ON_ERROR_STOP=1 -f infrastructure/norautomatch-crm-v1.sql
-          psql -h 127.0.0.1 -U postgres -d norautomatch_ci -v ON_ERROR_STOP=1 -f infrastructure/norautomatch-crm-v13-torque-hunts-scout-opportunities.sql
-          psql -h 127.0.0.1 -U postgres -d norautomatch_ci -v ON_ERROR_STOP=1 -Atc "SELECT tablename || ':' || rowsecurity FROM pg_tables WHERE schemaname='public' AND tablename IN ('torque_vehicle_hunts','industry_scout_observations','scout_opportunity_matches') ORDER BY tablename;" | tee /tmp/watchtower-rls.txt
-          grep -q '^industry_scout_observations:true
-      - name: Execute Torque R0 behavior checks
-        run: node .tmp-torque-inventory-r0/scripts/torque-inventory-r0.behavior.js
 
-      - name: Typecheck
-        run: npm run typecheck
+      - name: Apply CRM base schema
+        run: psql -h 127.0.0.1 -U postgres -d norautomatch_ci -v ON_ERROR_STOP=1 -f infrastructure/norautomatch-crm-v1.sql
 
-      - name: Production build
-        run: npm run build
- /tmp/watchtower-rls.txt
-          grep -q '^scout_opportunity_matches:true
-      - name: Execute Torque R0 behavior checks
-        run: node .tmp-torque-inventory-r0/scripts/torque-inventory-r0.behavior.js
+      - name: Apply Watchtower v13 migration
+        run: psql -h 127.0.0.1 -U postgres -d norautomatch_ci -v ON_ERROR_STOP=1 -f infrastructure/norautomatch-crm-v13-torque-hunts-scout-opportunities.sql
 
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Production build
-        run: npm run build
- /tmp/watchtower-rls.txt
-          grep -q '^torque_vehicle_hunts:true
-      - name: Execute Torque R0 behavior checks
-        run: node .tmp-torque-inventory-r0/scripts/torque-inventory-r0.behavior.js
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Production build
-        run: npm run build
- /tmp/watchtower-rls.txt
+      - name: Verify Watchtower RLS
+        run: |
+          psql -h 127.0.0.1 -U postgres -d norautomatch_ci -v ON_ERROR_STOP=1 -c "SELECT 1 / CASE WHEN count(*) = 3 AND bool_and(rowsecurity) THEN 1 ELSE 0 END AS watchtower_rls_ok FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('torque_vehicle_hunts','industry_scout_observations','scout_opportunity_matches');"
 
       - name: Compile Torque R0 behavior checks
         run: |
