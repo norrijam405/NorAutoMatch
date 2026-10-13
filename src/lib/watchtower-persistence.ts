@@ -187,6 +187,8 @@ export type ActiveVehicleHuntListItem = {
   requirements: VehicleHunt["requirements"];
   matchDnaLabel?: string;
   candidateCount: number;
+  candidateVins: VehicleHunt["candidateVins"];
+  truth: VehicleHunt["truth"];
   consentToContact: boolean;
   salespersonOwner?: string;
   createdAt: string;
@@ -242,6 +244,8 @@ export async function readActiveVehicleHunts(input: {
     requirements: row.requirements,
     matchDnaLabel: row.match_dna_label ?? undefined,
     candidateCount: Array.isArray(row.candidate_vins) ? row.candidate_vins.length : 0,
+    candidateVins: Array.isArray(row.candidate_vins) ? row.candidate_vins : [],
+    truth: row.truth,
     consentToContact: row.consent_to_contact,
     salespersonOwner: row.salesperson_owner ?? undefined,
     createdAt: row.created_at.toISOString(),
