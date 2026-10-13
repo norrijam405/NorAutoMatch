@@ -68,3 +68,40 @@ export async function createFreshUpVehicleHunt(
     huntId: hunt.huntId,
   };
 }
+
+
+export async function refreshVehicleHunt(formData: FormData) {
+  await requireNorAutoMembership(["operator", "admin", "founder"], "/manager/watchtower");
+
+  const huntId = String(formData.get("huntId") ?? "").trim();
+  if (!/^namvh_[0-9a-f]{24}$/.test(huntId)) throw new Error("INVALID_VEHICLE_HUNT_ID");
+
+  const pool = getPool();
+  const hunt = await readVehicleHunt({ pool, workspaceId: "norautomatch", huntId });
+  if (!hunt) throw new Error("VEHICLE_HUNT_NOT_FOUND");
+
+  const runtime = resolveInventoryRuntime({
+    mode: process.env.NORAUTO_INVENTORY_MODE,
+    liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
+  });
+  if (runtime.effectiveMode !== "live-enabled") throw new Error("VERIFIED_INVENTORY_NOT_ENABLED");
+
+  const catalog = await loadOrrResilientCustomerCatalog({
+    mode: process.env.NORAUTO_INVENTORY_MODE,
+    liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
+  });
+
+  const observedAt = new Date().toISOString();
+  const candidates = matchVehicleHuntToLocalInventory({
+    requirements: hunt.requirements,
+    vehicles: catalog.vehicles,
+    observedAt,
+    sourceLabel: catalog.source === "provider-cache"
+      ? "Orr Nissan West verified cache"
+      : "Orr Nissan West verified live",
+  });
+
+  const updated = applyVehicleHuntCandidates({ hunt, candidates, observedAt });
+  await persistVehicleHunt({ pool, hunt: updated });
+  revalidatePath("/manager/watchtower");
+}
