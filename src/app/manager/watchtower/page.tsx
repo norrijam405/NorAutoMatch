@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Binoculars, Bot, CarFront, Radar, ShieldCheck, Sparkles } from "lucide-react";
+import { Binoculars, Bot, CarFront, Radar, ShieldCheck, Sparkles, TrendingUp } from "lucide-react";
 import { requireNorAutoMembership } from "@/lib/supabase/authz";
 import { torqueInventorySources } from "@/lib/torque-inventory-sources";
 import { industryScoutSources } from "@/lib/industry-scout";
@@ -124,6 +124,24 @@ export default async function TorqueWatchtowerPage() {
                 <p className="mt-3 text-[11px] leading-5 text-slate-500">{source.topics.slice(0, 5).map((topic) => topic.replaceAll("_", " ")).join(" · ")}</p>
               </article>
             ))}
+          </div>
+        </section>
+
+        <section className="mt-10 rounded-[28px] border border-white/10 bg-white/[.025] p-6 sm:p-8">
+          <div className="flex items-start gap-3">
+            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-emerald-300 text-black"><TrendingUp size={20} /></span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-300">Scout Opportunity Queue</p>
+              <h2 className="mt-2 text-3xl font-black text-white">Market changes tied to real customers.</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+                Verified incentives, product changes, inventory shifts, pricing events, and safety updates can be matched against active Vehicle Hunts. High-value matches become salesperson or customer follow-up opportunities; unverified reporting stays informational and cannot trigger customer action.
+              </p>
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><p className="text-[9px] font-black uppercase tracking-[.14em] text-slate-600">High score + verified</p><p className="mt-2 text-sm font-black text-white">Text / email opportunity</p></div>
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><p className="text-[9px] font-black uppercase tracking-[.14em] text-slate-600">Medium relevance</p><p className="mt-2 text-sm font-black text-white">Salesperson review</p></div>
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><p className="text-[9px] font-black uppercase tracking-[.14em] text-slate-600">Unverified / rumor</p><p className="mt-2 text-sm font-black text-white">No customer action</p></div>
+              </div>
+            </div>
           </div>
         </section>
 
