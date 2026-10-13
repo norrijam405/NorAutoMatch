@@ -606,3 +606,50 @@ const strongLocalDraft = prepareTorqueHuntFollowUp({
 assert.match(strongLocalDraft.body, /covers the must-haves/i);
 assert.match(strongLocalDraft.body, /preference difference/i);
 assert.equal(strongLocalDraft.status, "PREPARED_NOT_SENT");
+
+
+const unrelatedScout = matchScoutObservationToHunt({
+  hunt,
+  createdAt: "2026-10-13T22:00:00.000Z",
+  observation: {
+    observationId: "obs_unrelated_camry_incentive",
+    topic: "INCENTIVE",
+    headline: "Synthetic Toyota Camry incentive",
+    summary: "Unrelated verified primary-source observation for regression testing.",
+    affectedMakes: ["Toyota"],
+    affectedModels: ["Camry"],
+    observedAt: "2026-10-13T21:59:00.000Z",
+    sourceId: "synthetic-toyota",
+    sourceUrl: "https://example.com/toyota",
+    sourceClass: "OEM_OFFICIAL",
+    evidenceState: "PRIMARY_VERIFIED",
+    salesImpact: "HIGH_OPPORTUNITY",
+    torqueUse: "CUSTOMER_SAFE",
+  },
+});
+assert.equal(unrelatedScout.action, "NO_ACTION");
+assert.equal(unrelatedScout.customerSafe, false);
+assert.equal(unrelatedScout.score, 0);
+assert.ok(unrelatedScout.reasons.includes("NO_RELEVANT_VEHICLE_IDENTITY_EVIDENCE"));
+
+const wrongModelScout = matchScoutObservationToHunt({
+  hunt,
+  createdAt: "2026-10-13T22:01:00.000Z",
+  observation: {
+    observationId: "obs_unrelated_nissan_rogue",
+    topic: "INCENTIVE",
+    headline: "Synthetic Nissan Rogue incentive",
+    summary: "Same make but wrong model, must not trigger customer contact.",
+    affectedMakes: ["Nissan"],
+    affectedModels: ["Rogue"],
+    observedAt: "2026-10-13T22:00:00.000Z",
+    sourceId: "nissan-usa",
+    sourceUrl: "https://www.nissanusa.com/",
+    sourceClass: "OEM_OFFICIAL",
+    evidenceState: "PRIMARY_VERIFIED",
+    salesImpact: "HIGH_OPPORTUNITY",
+    torqueUse: "CUSTOMER_SAFE",
+  },
+});
+assert.equal(wrongModelScout.action, "NO_ACTION");
+assert.equal(wrongModelScout.score, 0);
