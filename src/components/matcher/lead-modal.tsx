@@ -17,6 +17,7 @@ interface LeadModalProps {
   shortlistedVehicleIds: string[];
   context?: string;
   vehicleHuntId?: string;
+  vehicleHuntRequest?: string;
 }
 
 type LeadReceipt = {
@@ -25,7 +26,8 @@ type LeadReceipt = {
   persistence?: "COMMITTED" | "DEDUPLICATED" | string;
   delivery?: string;
   workflowState?: string;
-  vehicleHuntLink?: "NOT_REQUESTED" | "LINKED" | "LINK_FAILED_SAFE";
+  vehicleHuntId?: string;
+  vehicleHuntLink?: "NOT_REQUESTED" | "LINKED" | "CREATED_AND_LINKED" | "LINK_FAILED_SAFE";
 };
 
 export function LeadModal(props: LeadModalProps) {
@@ -42,6 +44,7 @@ function LeadModalContent({
   shortlistedVehicleIds,
   context,
   vehicleHuntId,
+  vehicleHuntRequest,
 }: LeadModalProps) {
   const [submitted, setSubmitted] = useState(false);
   const [receipt, setReceipt] = useState<LeadReceipt | null>(null);
@@ -59,7 +62,9 @@ function LeadModalContent({
       lastName: "",
       email: "",
       phone: "",
-      budgetRange: `${formatMoney(Math.max(monthlyTarget - 100, 0))}–${formatMoney(monthlyTarget + 100)}/month`,
+      budgetRange: monthlyTarget > 0
+        ? `${formatMoney(Math.max(monthlyTarget - 100, 0))}–${formatMoney(monthlyTarget + 100)}/month`
+        : "Open / discuss with me",
       paymentMethod: "Financing",
       tradeIn: "",
       notes: context || "",
@@ -72,6 +77,7 @@ function LeadModalContent({
       termMonths,
       consent: undefined,
       vehicleHuntId,
+      vehicleHuntRequest,
     },
   });
 
@@ -104,6 +110,7 @@ function LeadModalContent({
     setReceipt({
       opportunityId: data?.opportunityId,
       handoffId: data?.handoffId,
+      vehicleHuntId: data?.vehicleHuntId,
       persistence: data?.persistence,
       delivery: data?.delivery,
       workflowState: data?.workflowState,
@@ -185,6 +192,7 @@ function LeadModalContent({
             <input type="hidden" {...register("trigger")} />
             <input type="hidden" {...register("pipeline")} />
             <input type="hidden" {...register("vehicleHuntId")} />
+            <input type="hidden" {...register("vehicleHuntRequest")} />
             {serverError && <p className="sm:col-span-2 rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-200">{serverError}</p>}
             <div className="flex flex-col-reverse gap-3 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="flex items-center gap-2 text-xs text-slate-500"><ShieldCheck size={15} className="text-emerald-400" /> Your details are used only for this request.</p>
