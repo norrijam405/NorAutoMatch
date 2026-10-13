@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Binoculars, Bot, CarFront, Radar, ShieldCheck, Sparkles, TrendingUp } from "lucide-react";
 import { requireNorAutoMembership } from "@/lib/supabase/authz";
 import { torqueInventorySources } from "@/lib/torque-inventory-sources";
+import { FreshUpHuntForm } from "@/components/manager/fresh-up-hunt-form";
 import { industryScoutSources } from "@/lib/industry-scout";
 
 export const metadata: Metadata = {
@@ -39,6 +40,10 @@ export default async function TorqueWatchtowerPage() {
           <SummaryCard icon={<CarFront size={20} />} title="Our inventory" value={String(local.length)} detail="Primary verified customer-facing scope." />
           <SummaryCard icon={<Radar size={20} />} title="Orr sourcing layers" value={String(network.length)} detail="Group and sibling Nissan discovery sources." />
           <SummaryCard icon={<Binoculars size={20} />} title="National Nissan layers" value={String(national.length)} detail="New-Nissan discovery and dealer resolution." />
+        </section>
+
+        <section className="mt-10">
+          <FreshUpHuntForm />
         </section>
 
         <section className="mt-10 grid gap-6 xl:grid-cols-[1.05fr_.95fr]">
