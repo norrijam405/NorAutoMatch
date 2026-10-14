@@ -216,6 +216,7 @@ export async function readActiveVehicleHunts(input: {
       requirements,
       match_dna_label,
       candidate_vins,
+      truth,
       consent_to_contact,
       salesperson_owner,
       created_at,
