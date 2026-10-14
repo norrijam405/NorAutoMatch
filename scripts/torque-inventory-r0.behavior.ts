@@ -747,3 +747,27 @@ const closedScout = matchScoutObservationToHunt({
 });
 assert.equal(closedScout.action, "NO_ACTION");
 assert.ok(closedScout.reasons.includes("HUNT_NOT_ACTIVE"));
+
+
+const futureObservedScout = matchScoutObservationToHunt({
+  hunt,
+  createdAt: "2026-10-13T22:00:00.000Z",
+  observation: {
+    observationId: "obs_future_observed_pathfinder",
+    topic: "INCENTIVE",
+    headline: "Synthetic future-dated Pathfinder report",
+    summary: "A report observed in the future must not justify present customer outreach.",
+    affectedMakes: ["Nissan"],
+    affectedModels: ["Pathfinder"],
+    observedAt: "2026-10-15T00:00:00.000Z",
+    sourceId: "nissan-usa",
+    sourceUrl: "https://www.nissanusa.com/",
+    sourceClass: "OEM_OFFICIAL",
+    evidenceState: "PRIMARY_VERIFIED",
+    salesImpact: "HIGH_OPPORTUNITY",
+    torqueUse: "CUSTOMER_SAFE",
+  },
+});
+assert.equal(futureObservedScout.action, "NO_ACTION");
+assert.equal(futureObservedScout.score, 0);
+assert.ok(futureObservedScout.reasons.includes("SCOUT_OBSERVATION_OUTSIDE_EFFECTIVE_WINDOW"));
