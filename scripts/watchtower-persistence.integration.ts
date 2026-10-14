@@ -75,6 +75,7 @@ async function main() {
       workspaceId: "norautomatch",
     });
     assert.equal(active.some((item) => item.huntId === hunt.huntId), true);
+    assert.deepEqual(active.find((item) => item.huntId === hunt.huntId)?.truth, hunt.truth);
 
     const observation: IndustryScoutObservation = {
       observationId: "ci_pathfinder_incentive",
