@@ -146,6 +146,7 @@ export async function readWatchtowerOpportunityQueue(input: {
     JOIN torque_vehicle_hunts h ON h.hunt_id = m.hunt_id
     WHERE h.workspace_id = $1
       AND m.action <> 'NO_ACTION'
+      AND (m.action NOT IN ('TEXT_CUSTOMER', 'EMAIL_CUSTOMER') OR h.consent_to_contact = TRUE)
       AND h.state NOT IN ('CLOSED', 'PAUSED')
       AND o.observed_at <= NOW()
       AND (o.effective_at IS NULL OR o.effective_at <= NOW())
