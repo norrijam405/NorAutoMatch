@@ -2,6 +2,12 @@
 -- Create-only migration. NO PRODUCTION AUTHORITY is implied by this file.
 -- Requires the existing NorAutoMatch CRM v1 schema and immutable-mutation helper.
 
+-- The CRM v1 key is globally unique on opportunity_id, but PostgreSQL requires a
+-- matching unique key for the composite workspace-scoped Hunt foreign key.
+-- Add a non-destructive supporting unique index before creating Hunt tables.
+CREATE UNIQUE INDEX IF NOT EXISTS crm_opportunities_workspace_opportunity_uq_idx
+  ON crm_opportunities (workspace_id, opportunity_id);
+
 CREATE TABLE IF NOT EXISTS torque_vehicle_hunts (
   hunt_id TEXT PRIMARY KEY CHECK (hunt_id ~ '^namvh_[0-9a-f]{24}$'),
   workspace_id TEXT NOT NULL,
