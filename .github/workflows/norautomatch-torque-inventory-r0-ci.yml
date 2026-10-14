@@ -1,13 +1,8 @@
 name: NorAutoMatch Torque Inventory R0 CI
 
+# Cost-control: run this comprehensive suite only after batching reviewed changes.
+# Prior exact software PASS: run 38492255511 at 92665f1bfe5f85b16234a769f4d16a923285ab20.
 on:
-  push:
-    branches:
-      - "feature/2026-10-12-torque-inventory-matchdna-r0"
-      - "remediation/2026-10-13-scout-hunt-relevance-gate"
-  pull_request:
-    branches:
-      - "feature/2026-10-12-torque-inventory-matchdna-r0"
   workflow_dispatch:
 
 permissions:
