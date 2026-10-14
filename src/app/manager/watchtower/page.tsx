@@ -30,13 +30,16 @@ export default async function TorqueWatchtowerPage() {
   if (!connectionString) {
     huntReadState = "NOT_CONFIGURED";
   } else {
+    const pool = createPostgresCrmPool(connectionString);
     try {
-      const pool = createPostgresCrmPool(connectionString);
       activeHunts = await readActiveVehicleHunts({ pool, workspaceId: "norautomatch", limit: 30 });
       opportunityQueue = await readWatchtowerOpportunityQueue({ pool, workspaceId: "norautomatch", limit: 30 });
-      await pool.end();
     } catch {
+      // Operationally indistinguishable without an authorized database inspection:
+      // schema, permissions, network, or connection failure. Do not claim migration is missing.
       huntReadState = "MIGRATION_PENDING";
+    } finally {
+      await pool.end();
     }
   }
 
