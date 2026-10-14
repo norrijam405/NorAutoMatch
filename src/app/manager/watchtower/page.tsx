@@ -71,6 +71,42 @@ export default async function TorqueWatchtowerPage() {
           </div>
         </div>
 
+        <section aria-label="Watchtower operational readiness" className="mt-8 rounded-[28px] border border-amber-300/20 bg-amber-300/[.035] p-5 sm:p-7">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[.18em] text-amber-300">Operational readiness</p>
+              <h2 className="mt-2 text-xl font-black text-white">What is actually connected?</h2>
+            </div>
+            <span className="rounded-full border border-amber-300/20 px-3 py-1 text-[10px] font-black uppercase tracking-[.14em] text-amber-200">
+              {huntReadState === "READY" ? "Database readable" : "Setup incomplete"}
+            </span>
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-3">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Vehicle Hunt database</p>
+              <p className="mt-2 text-sm font-black text-white">{huntReadState.replaceAll("_", " ")}</p>
+              <p className="mt-2 text-xs leading-5 text-slate-400">
+                {huntReadState === "READY"
+                  ? "Hunt and Scout queues were read successfully during this request."
+                  : huntReadState === "NOT_CONFIGURED"
+                    ? "CRM database connection is not configured in this runtime."
+                    : "Hunt and Scout queries failed. Check schema activation, database permissions, and connectivity."}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Dealership CRM Bridge</p>
+              <p className="mt-2 text-sm font-black text-white">{crmRuntime.state.replaceAll("_", " ")}</p>
+              <p className="mt-2 text-xs leading-5 text-slate-400">External provider writes are not enabled by this dashboard.</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Customer communication</p>
+              <p className="mt-2 text-sm font-black text-white">Draft only</p>
+              <p className="mt-2 text-xs leading-5 text-slate-400">Prepared follow-ups are not sent automatically. Consent and human review still apply.</p>
+            </div>
+          </div>
+          <p className="mt-4 text-xs leading-5 text-slate-400">This panel reports runtime checks, not production certification. A readable database does not prove live inventory freshness, provider activation, or outbound-message authority.</p>
+        </section>
+
         <section className="mt-8 grid gap-4 md:grid-cols-3">
           <SummaryCard icon={<CarFront size={20} />} title="Our inventory" value={String(local.length)} detail="Primary verified customer-facing scope." />
           <SummaryCard icon={<Radar size={20} />} title="Orr sourcing layers" value={String(network.length)} detail="Group and sibling Nissan discovery sources." />
