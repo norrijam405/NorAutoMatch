@@ -25,7 +25,7 @@ export default async function TorqueWatchtowerPage() {
 
   let activeHunts: Awaited<ReturnType<typeof readActiveVehicleHunts>> = [];
   let opportunityQueue: Awaited<ReturnType<typeof readWatchtowerOpportunityQueue>> = [];
-  let huntReadState: "READY" | "NOT_CONFIGURED" | "MIGRATION_PENDING" = "READY";
+  let huntReadState: "READY" | "NOT_CONFIGURED" | "READ_FAILED" = "READY";
   const connectionString = process.env.NORAUTO_CRM_DATABASE_URL?.trim();
   if (!connectionString) {
     huntReadState = "NOT_CONFIGURED";
@@ -37,7 +37,7 @@ export default async function TorqueWatchtowerPage() {
     } catch {
       // Operationally indistinguishable without an authorized database inspection:
       // schema, permissions, network, or connection failure. Do not claim migration is missing.
-      huntReadState = "MIGRATION_PENDING";
+      huntReadState = "READ_FAILED";
     } finally {
       await pool.end();
     }
@@ -93,7 +93,7 @@ export default async function TorqueWatchtowerPage() {
                   ? "Hunt and Scout queues were read successfully during this request."
                   : huntReadState === "NOT_CONFIGURED"
                     ? "CRM database connection is not configured in this runtime."
-                    : "Hunt and Scout queries failed. Check schema activation, database permissions, and connectivity."}
+                    : "Hunt and Scout queries did not complete. The cause is not yet verified; check schema activation, permissions, and database connectivity."}
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -156,7 +156,7 @@ export default async function TorqueWatchtowerPage() {
               <p className="text-[10px] font-black uppercase tracking-[.18em] text-red-400">Active Vehicle Hunts</p>
               <h2 className="mt-2 text-3xl font-black text-white">What Torque is hunting right now.</h2>
             </div>
-            <p className="text-xs text-slate-500">{huntReadState === "READY" ? activeHunts.length + " active" : huntReadState === "NOT_CONFIGURED" ? "Database not configured" : "Migration not active yet"}</p>
+            <p className="text-xs text-slate-500">{huntReadState === "READY" ? activeHunts.length + " active" : huntReadState === "NOT_CONFIGURED" ? "Database not configured" : "Database read unavailable"}</p>
           </div>
 
           {huntReadState !== "READY" ? (
