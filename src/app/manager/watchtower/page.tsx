@@ -30,16 +30,19 @@ export default async function TorqueWatchtowerPage() {
   if (!connectionString) {
     huntReadState = "NOT_CONFIGURED";
   } else {
-    const pool = createPostgresCrmPool(connectionString);
+    let pool: ReturnType<typeof createPostgresCrmPool> | undefined;
     try {
+      pool = createPostgresCrmPool(connectionString);
       activeHunts = await readActiveVehicleHunts({ pool, workspaceId: "norautomatch", limit: 30 });
       opportunityQueue = await readWatchtowerOpportunityQueue({ pool, workspaceId: "norautomatch", limit: 30 });
     } catch {
-      // Operationally indistinguishable without an authorized database inspection:
-      // schema, permissions, network, or connection failure. Do not claim migration is missing.
+      // Readiness must fail closed even if pool creation itself fails.
+      // Do not label an unverified connectivity or permission error a migration failure.
+      activeHunts = [];
+      opportunityQueue = [];
       huntReadState = "READ_FAILED";
     } finally {
-      await pool.end();
+      if (pool) await pool.end();
     }
   }
 
