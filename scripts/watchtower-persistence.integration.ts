@@ -138,6 +138,11 @@ async function main() {
     const pausedQueue = await readWatchtowerOpportunityQueue({ pool, workspaceId: 'norautomatch' });
     assert.equal(pausedQueue.length, 0);
     await pool.query("UPDATE torque_vehicle_hunts SET state = 'SEARCHING' WHERE hunt_id = $1", [hunt.huntId]);
+    // A consent change after matching must remove contact actions from the queue.
+    await pool.query("UPDATE torque_vehicle_hunts SET consent_to_contact = FALSE WHERE hunt_id = $1", [hunt.huntId]);
+    const revokedQueue = await readWatchtowerOpportunityQueue({ pool, workspaceId: 'norautomatch' });
+    assert.equal(revokedQueue.length, 0);
+    await pool.query("UPDATE torque_vehicle_hunts SET consent_to_contact = TRUE WHERE hunt_id = $1", [hunt.huntId]);
     const brief = buildSalespersonDailyBrief({
       items: queue,
       generatedAt: "2026-10-13T21:34:00.000Z",
