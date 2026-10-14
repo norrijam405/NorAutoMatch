@@ -115,6 +115,28 @@ async function main() {
     assert.equal(queue[0]?.huntId, hunt.huntId);
     assert.equal(queue[0]?.action, "TEXT_CUSTOMER");
 
+    // An already-persisted match must not remain actionable once its source expires.
+    const expired = {
+      ...observation,
+      observationId: 'ci_expired_pathfinder_incentive',
+      expiresAt: '2026-10-13T21:35:00.000Z',
+    };
+    await persistIndustryScoutObservation({ pool, observation: expired });
+    await persistScoutOpportunityMatch({
+      pool,
+      match: matchScoutObservationToHunt({
+        observation: expired, hunt, createdAt: '2026-10-13T21:33:00.000Z',
+      }),
+    });
+    const freshQueue = await readWatchtowerOpportunityQueue({ pool, workspaceId: 'norautomatch' });
+    assert.equal(freshQueue.length, 1);
+    assert.equal(freshQueue[0]?.observationId, observation.observationId);
+
+    // Queued recommendations for paused Hunts must be suppressed at read time.
+    await pool.query("UPDATE torque_vehicle_hunts SET state = 'PAUSED' WHERE hunt_id = $1", [hunt.huntId]);
+    const pausedQueue = await readWatchtowerOpportunityQueue({ pool, workspaceId: 'norautomatch' });
+    assert.equal(pausedQueue.length, 0);
+    await pool.query("UPDATE torque_vehicle_hunts SET state = 'SEARCHING' WHERE hunt_id = $1", [hunt.huntId]);
     const brief = buildSalespersonDailyBrief({
       items: queue,
       generatedAt: "2026-10-13T21:34:00.000Z",
