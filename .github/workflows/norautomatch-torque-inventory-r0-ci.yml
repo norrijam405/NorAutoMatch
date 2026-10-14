@@ -5,6 +5,9 @@ on:
     branches:
       - "feature/2026-10-12-torque-inventory-matchdna-r0"
       - "remediation/2026-10-13-scout-hunt-relevance-gate"
+  pull_request:
+    branches:
+      - "feature/2026-10-12-torque-inventory-matchdna-r0"
   workflow_dispatch:
 
 permissions:
