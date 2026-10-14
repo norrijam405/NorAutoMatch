@@ -133,6 +133,29 @@ async function main() {
     assert.equal(freshQueue.length, 1);
     assert.equal(freshQueue[0]?.observationId, observation.observationId);
 
+    // Defense in depth: even an incorrectly persisted contact action is not
+    // actionable unless both matching metadata and immutable source evidence are safe.
+    const reportedObservation: IndustryScoutObservation = {
+      ...observation,
+      observationId: "ci_reported_pathfinder",
+      evidenceState: "REPORTED",
+      torqueUse: "SALESPERSON_ONLY",
+    };
+    await persistIndustryScoutObservation({ pool, observation: reportedObservation });
+    await persistScoutOpportunityMatch({
+      pool,
+      match: {
+        ...match,
+        observationId: reportedObservation.observationId,
+        action: "TEXT_CUSTOMER",
+        customerSafe: false,
+        requiresHumanVerification: true,
+      },
+    });
+    const guardedQueue = await readWatchtowerOpportunityQueue({ pool, workspaceId: "norautomatch" });
+    assert.equal(guardedQueue.length, 1);
+    assert.equal(guardedQueue[0]?.observationId, observation.observationId);
+
     // Queued recommendations for paused Hunts must be suppressed at read time.
     await pool.query("UPDATE torque_vehicle_hunts SET state = 'PAUSED' WHERE hunt_id = $1", [hunt.huntId]);
     const pausedQueue = await readWatchtowerOpportunityQueue({ pool, workspaceId: 'norautomatch' });
