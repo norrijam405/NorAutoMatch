@@ -146,7 +146,10 @@ export async function readWatchtowerOpportunityQueue(input: {
     JOIN torque_vehicle_hunts h ON h.hunt_id = m.hunt_id
     WHERE h.workspace_id = $1
       AND m.action <> 'NO_ACTION'
-      AND h.state <> 'CLOSED'
+      AND h.state NOT IN ('CLOSED', 'PAUSED')
+      AND o.observed_at <= NOW()
+      AND (o.effective_at IS NULL OR o.effective_at <= NOW())
+      AND (o.expires_at IS NULL OR o.expires_at > NOW())
     ORDER BY
       CASE m.action
         WHEN 'TEXT_CUSTOMER' THEN 1
