@@ -31,13 +31,15 @@ export function matchScoutObservationToHunt(input: {
   let score = 0;
   const createdAt = input.createdAt ?? new Date().toISOString();
   const evaluationTime = Date.parse(createdAt);
+  const observationTime = Date.parse(observation.observedAt);
   const expiredAt = observation.expiresAt ? Date.parse(observation.expiresAt) : undefined;
   const effectiveAt = observation.effectiveAt ? Date.parse(observation.effectiveAt) : undefined;
   const inactiveHunt = hunt.state === "CLOSED" || hunt.state === "PAUSED";
-  const invalidTimeline = !Number.isFinite(evaluationTime) ||
+  const invalidTimeline = !Number.isFinite(evaluationTime) || !Number.isFinite(observationTime) ||
     (observation.expiresAt !== undefined && !Number.isFinite(expiredAt)) ||
     (observation.effectiveAt !== undefined && !Number.isFinite(effectiveAt));
   const outsideWindow = !invalidTimeline && (
+    observationTime > evaluationTime ||
     (expiredAt !== undefined && evaluationTime >= expiredAt) ||
     (effectiveAt !== undefined && evaluationTime < effectiveAt)
   );
