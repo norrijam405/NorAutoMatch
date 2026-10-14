@@ -30,3 +30,14 @@ Database pool construction in the Watchtower page was outside the error boundary
 
 ## Disposition
 Preview not established. Latest branch requires combined exact-head CI; independent challenge pending. No production authority.
+
+
+## Verified Supabase discovery, 2026-10-14
+- The **NorAutoMatch** Supabase project is `peyrnfeytjgsuxqxloxt` (us-east-2, ACTIVE_HEALTHY). This is separate from the TOAT project; never borrow TOAT infrastructure.
+- Read-only `list_tables` verified the CRM base tables, app_memberships, profiles, saved_vehicles and additional customer/market-scout tables with RLS.
+- Read-only `list_migrations` verified existing v1 CRM migrations and other R2 migrations through `r2_video_hub_library_r0`. No migration for `torque_vehicle_hunts`, `industry_scout_observations` or `scout_opportunity_matches` appears.
+- Those three Watchtower tables were also absent from the returned public tables. Current Watchtower persistence is **not database-activated**.
+- Beware that `r2_private_inventory_provider_cache_v13` is **not** the newer Torque/Scout SQL file `infrastructure/norautomatch-crm-v13-torque-hunts-scout-opportunities.sql`; matching version suffix does not imply equivalence.
+- Vercel project `prj_lBiTXmmqnvejUXPeMCIrbCxfIWvW` still shows a READY deployment of older `main` commit `71bdb2640fa2e30b8cd34d32a7cbdcf62f9966fe`, not this remediation candidate. READY proves a Vercel deployment state, not a working Watchtower route.
+- Only use scoped preview and synthetic test data. Before installing any migration in a shared Supabase project, complete reviewed exact-SQL checks, check naming/constraint conflicts and rollback/data-preservation boundaries, then obtain appropriate migration authority. Do not apply just because the file is named v13.
+- Use one exact-head consolidated software check; this branch's comprehensive Actions workflow is manual-only. Keep production Render service unchanged.
