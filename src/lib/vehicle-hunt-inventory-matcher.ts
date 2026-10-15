@@ -137,7 +137,7 @@ function compareText(
   const expected = normalize(String(requirement.value));
   const actualNormalized = normalize(actual);
   const matches = fuzzy
-    ? actualNormalized.includes(expected) || expected.includes(actualNormalized)
+    ? Boolean(actualNormalized && expected) && (actualNormalized.includes(expected) || expected.includes(actualNormalized))
     : actualNormalized === expected;
   if (matches) result.reasons.push(label + ": " + String(requirement.value));
   else priorityMiss(result, requirement.priority, label + " mismatch");
@@ -182,8 +182,8 @@ function compareSearchable(
     const normalizedNeedle = normalize(needle);
     const normalizedHaystack = normalize(searchable);
     return fuzzy
-      ? normalizedHaystack.includes(normalizedNeedle) || normalizedNeedle.includes(normalizedHaystack)
-      : normalizedHaystack.includes(normalizedNeedle);
+      ? Boolean(normalizedNeedle && normalizedHaystack) && (normalizedHaystack.includes(normalizedNeedle) || normalizedNeedle.includes(normalizedHaystack))
+      : Boolean(normalizedNeedle) && normalizedHaystack.includes(normalizedNeedle);
   });
   if (matches) result.reasons.push(label + ": " + raw);
   else priorityMiss(result, requirement.priority, "no source evidence for " + label + ": " + raw);
