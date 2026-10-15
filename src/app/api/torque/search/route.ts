@@ -154,6 +154,8 @@ export async function POST(request: Request) {
     needsMoreDetail: false,
     ...result,
     salesSpec: spec,
+    dealershipId: dealership.id,
+    dealershipLabel: dealership.label,
     matchDna: dna ?? null,
   });
 }
