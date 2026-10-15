@@ -38,6 +38,7 @@ type Turn = {
 export function TorqueChat() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
+  const [dealershipId, setDealershipId] = useState("orr-nissan-west");
   const [busy, setBusy] = useState(false);
   const [sourcingOpen, setSourcingOpen] = useState(false);
   const [sourcingRequest, setSourcingRequest] = useState("");
@@ -78,7 +79,7 @@ export function TorqueChat() {
       const response = await fetch("/api/torque/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, dealershipId }),
       });
       const body = (await response.json().catch(() => ({}))) as TorqueResponse;
       const text =
@@ -210,6 +211,18 @@ export function TorqueChat() {
           </div>
 
           <form onSubmit={submit} className="border-t border-white/10 bg-[#0e1721] p-3">
+            <label htmlFor="torque-dealership-scope" className="mb-2 block text-[10px] font-black uppercase tracking-wider text-slate-400">
+              Dealership inventory scope
+            </label>
+            <select
+              id="torque-dealership-scope"
+              value={dealershipId}
+              onChange={(event) => setDealershipId(event.target.value)}
+              className="mb-3 w-full rounded-xl border border-white/15 bg-[#111b27] p-3 text-xs text-white"
+            >
+              <option value="orr-nissan-west">Orr Nissan West — Oklahoma City, OK</option>
+              <option value="irving-hyundai-pending">Irving Hyundai — pending dealership confirmation (no live inventory)</option>
+            </select>
             <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-black/25 p-2 focus-within:border-amber-300/30">
               <textarea
                 value={input}
