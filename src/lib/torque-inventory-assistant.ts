@@ -142,10 +142,10 @@ export function answerTorqueInventory(input: {
       (near.length === 1 ? "option" : "options") +
       ", but I'm calling out the must-have compromises instead of pretending they're exact.";
   } else {
-    answer =
-      "No — I don't have what you described in " +
-      sourcePhrase +
-      " right now. I would rather tell you that straight than manufacture a match.";
+    answer = input.mode === "representative-demo"
+      ? "I couldn't find that specification in the sample vehicles. This is a demonstration catalog, NOT Orr Nissan West's live inventory, so I cannot tell you whether the dealership has it. A salesperson must check the real stock or confirm the VIN."
+      : "I couldn't find that specification in " + sourcePhrase +
+        ". That only describes this checked catalog and does not prove the dealership has no such vehicle. Ask a salesperson to verify the specific stock or VIN.";
   }
 
   if (input.dna && input.dna.signalCount > 0) {
