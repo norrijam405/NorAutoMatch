@@ -771,3 +771,15 @@ const futureObservedScout = matchScoutObservationToHunt({
 assert.equal(futureObservedScout.action, "NO_ACTION");
 assert.equal(futureObservedScout.score, 0);
 assert.ok(futureObservedScout.reasons.includes("SCOUT_OBSERVATION_OUTSIDE_EFFECTIVE_WINDOW"));
+
+
+const missingDemoVehicle = answerTorqueInventory({
+  message: "Do you have a 2026 Nissan Pathfinder?",
+  vehicles: [],
+  mode: "representative-demo",
+  spec: parseTorqueSalesInventorySpec("Do you have a 2026 Nissan Pathfinder?"),
+});
+assert.equal(missingDemoVehicle.mode, "representative-demo");
+assert.match(missingDemoVehicle.answer, /sample vehicles/i);
+assert.match(missingDemoVehicle.answer, /NOT Orr Nissan West's live inventory/);
+assert.doesNotMatch(missingDemoVehicle.answer, /No — I don't have/);
