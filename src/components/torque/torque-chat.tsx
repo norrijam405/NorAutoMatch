@@ -136,6 +136,18 @@ export function TorqueChat() {
                   {turn.text}
                 </div>
 
+                {turn.role === "torque" && turn.response?.mode && (
+                  <div role="status" className={turn.response.mode === "representative-demo"
+                    ? "mt-2 rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-[11px] leading-5 text-amber-100"
+                    : "mt-2 rounded-xl border border-emerald-300/20 bg-emerald-300/5 px-3 py-2 text-[11px] leading-5 text-emerald-100"}>
+                    {turn.response.mode === "representative-demo"
+                      ? "SAMPLE INVENTORY ONLY — These vehicles are demonstrations, not confirmed Orr Nissan West stock. Torque cannot confirm availability or absence."
+                      : turn.response.mode === "verified-cache"
+                        ? "VERIFIED CACHED CATALOG — Previously source-verified records, not a live availability promise. Confirm the VIN with the store."
+                        : "VERIFIED SOURCE CATALOG — Source-checked dealer records, but sale availability may have changed. Confirm the VIN with the store."}
+                  </div>
+                )}
+
                 {turn.role === "torque" && turn.response?.matchDna && turn.response.matchDna.signalCount > 0 && (
                   <div className="mt-2 rounded-xl border border-red-400/15 bg-red-400/[.04] px-3 py-2 text-[11px] text-red-100/75">
                     MatchDNA · {turn.response.matchDna.label}
