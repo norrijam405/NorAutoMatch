@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { readJsonBodyWithByteLimit } from "@/lib/request-body-limit";
 import { answerTorqueInventory, type TorqueInventoryMode } from "@/lib/torque-inventory-assistant";
 import { parseTorqueSalesInventorySpec } from "@/lib/torque-sales-inventory-spec";
+import { dealerInventorySearchAvailable, resolveDealershipScope } from "@/lib/dealership-scope";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +44,27 @@ export async function POST(request: Request) {
 
   if (!message || message.length > 1200) {
     return noStore({ message: "Tell Torque what you're looking for in 1,200 characters or fewer." }, 400);
+  }
+
+  const requestedDealership =
+    typeof bodyRead.value === "object" && bodyRead.value !== null &&
+    "dealershipId" in bodyRead.value
+      ? bodyRead.value.dealershipId
+      : "orr-nissan-west";
+  const dealership = resolveDealershipScope(requestedDealership);
+  if (!dealership) {
+    return noStore({ message: "Select a recognized dealership before asking Torque to search its inventory.", truthState: "UNKNOWN_DEALERSHIP" }, 400);
+  }
+  if (!dealerInventorySearchAvailable(dealership)) {
+    return noStore({
+      protocol: "NORAUTO_TORQUE_SEARCH_V1",
+      dealershipId: dealership.id,
+      dealershipLabel: dealership.label,
+      truthState: "DEALERSHIP_INVENTORY_NOT_CONNECTED",
+      message: "The Irving Hyundai dealership has not been confirmed or connected to a verified inventory source. I cannot search its stock or claim whether it has a vehicle. A salesperson can review your request manually after the dealership is confirmed.",
+      matches: [],
+      canCreateSourcingRequest: false,
+    }, 200);
   }
 
   const runtimeDecision = resolveInventoryRuntime({
