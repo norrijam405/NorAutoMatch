@@ -796,3 +796,21 @@ assert.equal(dealerInventorySearchAvailable(oklahomaDealer!), true);
 assert.equal(dealerInventorySearchAvailable(irvingDealer!), false);
 assert.equal(resolveDealershipScope("fake-dealership"), null);
 assert.equal(resolveDealershipScope(undefined), null);
+
+
+const hyundaiPalisade = parseTorqueSalesInventorySpec("Find a new 2026 Hyundai Palisade AWD under $48k");
+assert.equal(hyundaiPalisade.make?.value, "Hyundai");
+assert.equal(hyundaiPalisade.model?.value, "Palisade");
+assert.equal(hyundaiPalisade.modelYear?.value, 2026);
+assert.equal(hyundaiPalisade.drivetrain?.value, "AWD");
+const hyundaiIoniq = parseTorqueSalesInventorySpec("Looking for an Ioniq 5");
+assert.equal(hyundaiIoniq.make?.value, "Hyundai");
+assert.equal(hyundaiIoniq.model?.value, "Ioniq 5");
+assert.equal(parseTorqueSalesInventorySpec("2026 Rogue").make?.value, "Nissan");
+const unknownHyundai = answerTorqueInventory({
+  message: "2026 Hyundai Palisade",
+  vehicles: [],
+  mode: "representative-demo",
+  spec: hyundaiPalisade,
+});
+assert.match(unknownHyundai.answer, /sample vehicles/i);
