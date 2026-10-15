@@ -1,3 +1,4 @@
+import { resolveDealershipScope, dealerInventorySearchAvailable } from "../src/lib/dealership-scope";
 import assert from "node:assert/strict";
 import { parseTorqueSalesInventorySpec } from "../src/lib/torque-sales-inventory-spec";
 import { torqueSourcingTruth } from "../src/lib/torque-sourcing-language";
@@ -783,3 +784,15 @@ assert.equal(missingDemoVehicle.mode, "representative-demo");
 assert.match(missingDemoVehicle.answer, /sample vehicles/i);
 assert.match(missingDemoVehicle.answer, /NOT Orr Nissan West's live inventory/);
 assert.doesNotMatch(missingDemoVehicle.answer, /No — I don't have/);
+
+
+const oklahomaDealer = resolveDealershipScope("orr-nissan-west");
+const irvingDealer = resolveDealershipScope("irving-hyundai-pending");
+assert.ok(oklahomaDealer);
+assert.ok(irvingDealer);
+assert.equal(oklahomaDealer?.brand, "Nissan");
+assert.equal(irvingDealer?.brand, "Hyundai");
+assert.equal(dealerInventorySearchAvailable(oklahomaDealer!), true);
+assert.equal(dealerInventorySearchAvailable(irvingDealer!), false);
+assert.equal(resolveDealershipScope("fake-dealership"), null);
+assert.equal(resolveDealershipScope(undefined), null);
