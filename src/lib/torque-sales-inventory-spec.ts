@@ -104,7 +104,31 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
   else if (/\bversa\b/i.test(text)) spec.model = must("Versa");
   else if (/\bz\b/i.test(text)) spec.model = must("Z");
 
-  if (/\bnissan\b/i.test(text) || spec.model) spec.make = must("Nissan");
+  const hyundaiModel = [
+    ["Santa Fe", /\bsanta\s+fe\b/i],
+    ["Santa Cruz", /\bsanta\s+cruz\b/i],
+    ["Palisade", /\bpalisade\b/i],
+    ["Tucson", /\btucson\b/i],
+    ["Kona", /\bkona\b/i],
+    ["Elantra", /\belantra\b/i],
+    ["Sonata", /\bsonata\b/i],
+    ["Venue", /\bvenue\b/i],
+    ["Ioniq 5", /\bioniq\s*5\b/i],
+    ["Ioniq 6", /\bioniq\s*6\b/i],
+    ["Ioniq 9", /\bioniq\s*9\b/i],
+    ["Nexo", /\bnexo\b/i],
+  ] as const;
+  const detectedHyundaiModel = hyundaiModel.find(([, pattern]) => pattern.test(text));
+  const explicitHyundai = /\bhyundai\b/i.test(text);
+  const explicitNissan = /\bnissan\b/i.test(text);
+  if (detectedHyundaiModel && !spec.model) spec.model = must(detectedHyundaiModel[0]);
+  if (explicitHyundai && explicitNissan) {
+    spec.freeformNotes.push("Both Hyundai and Nissan were named. Confirm the intended make before claiming an exact inventory match.");
+  } else if (explicitHyundai || detectedHyundaiModel) {
+    spec.make = must("Hyundai");
+  } else if (explicitNissan || spec.model) {
+    spec.make = must("Nissan");
+  }
 
   const year = text.match(/\b(20\d{2})\b/);
   if (year) spec.modelYear = must(Number(year[1]));
