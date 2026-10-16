@@ -96,6 +96,7 @@ export async function POST(request: Request) {
   const spec = parseTorqueSalesInventorySpec(message);
   const hasSearchSignal = Boolean(
     spec.vin ||
+    spec.stockNumber ||
     spec.make ||
     spec.model ||
     spec.modelYear ||
