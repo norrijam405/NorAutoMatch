@@ -7,7 +7,7 @@ import { createVehicleHunt, applyVehicleHuntCandidates } from "../src/lib/vehicl
 import { requireAuthorizedDealershipCrmAdapter } from "../src/lib/dealership-crm-adapter";
 import { matchScoutObservationToHunt } from "../src/lib/scout-opportunity-matcher";
 import { buildSalespersonDailyBrief } from "../src/lib/salesperson-daily-brief";
-import { matchVehicleHuntToLocalInventory } from "../src/lib/vehicle-hunt-inventory-matcher";
+import { rankVehiclesForSalesSpec, matchVehicleHuntToLocalInventory } from "../src/lib/vehicle-hunt-inventory-matcher";
 import { prepareTorqueHuntFollowUp } from "../src/lib/torque-follow-up-draft";
 import { buildTorqueCrmSyncPlan } from "../src/lib/torque-crm-sync-plan";
 import { chooseTorqueNextBestAction } from "../src/lib/torque-next-best-action";
@@ -814,3 +814,22 @@ const unknownHyundai = answerTorqueInventory({
   spec: hyundaiPalisade,
 });
 assert.match(unknownHyundai.answer, /sample vehicles/i);
+
+const exactVin = "1N4BL4DV9SN320880";
+const vinSpec = parseTorqueSalesInventorySpec("Can you check VIN: 1N4BL4DV9SN320880?");
+assert.equal(vinSpec.vin?.value, exactVin);
+assert.equal(parseTorqueSalesInventorySpec("VIN: 1N4BL4DV9SN32088I").vin, undefined);
+const vinFixture = {
+  id: exactVin, year: 2025, make: "Nissan", model: "Altima", trim: "SV",
+  price: 19970, type: "Sedan", mileage: 40776, drivetrain: "FWD",
+  image: "", accent: "",
+};
+assert.deepEqual(
+  rankVehiclesForSalesSpec({ requirements: vinSpec, vehicles: [
+    { ...vinFixture, id: "1N4BL4DV9SN320881" }, vinFixture,
+  ] }).map((entry) => entry.vehicle.id),
+  [exactVin],
+);
+assert.equal(rankVehiclesForSalesSpec({
+  requirements: vinSpec, vehicles: [{ ...vinFixture, id: "1N4BL4DV9SN320881" }],
+}).length, 0);
