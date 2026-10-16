@@ -8,6 +8,7 @@ export type TorqueSalesRequirement<T> = {
 
 export type TorqueSalesInventorySpec = {
   vin?: TorqueSalesRequirement<string>;
+  stockNumber?: TorqueSalesRequirement<string>;
   make?: TorqueSalesRequirement<string>;
   model?: TorqueSalesRequirement<string>;
   modelYear?: TorqueSalesRequirement<number | { min?: number; max?: number }>;
@@ -134,6 +135,8 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
   // Exact VIN lookup is a strict identity request, not a preference or fuzzy match.
   const vinRequest = text.match(/\b(?:VIN|vehicle identification number)\s*[:#-]?\s*([A-HJ-NPR-Z0-9]{17})\b/i);
   if (vinRequest) spec.vin = must(vinRequest[1].toUpperCase());
+  const stockRequest = text.match(/\b(?:stock(?:\s*(?:number|no\.?|#))?|stock#)\s*[:#-]?\s*([A-Z0-9-]{3,24})\b/i);
+  if (stockRequest && /[0-9]/.test(stockRequest[1])) spec.stockNumber = must(stockRequest[1].toUpperCase());
 
   const year = text.match(/\b(20\d{2})\b/);
   if (year) spec.modelYear = must(Number(year[1]));
