@@ -852,3 +852,33 @@ assert.equal(rankVehiclesForSalesSpec({
   requirements: stockSpec,
   vehicles: [{ ...stockFixture, stockNumber: undefined }],
 }).length, 0);
+
+
+const dnaFixtures = [
+  { id: "1N4BL4DV9SN320881", stockNumber: "881P", year: 2025, make: "Nissan", model: "Altima", trim: "SV", price: 19000, type: "Sedan", mileage: 100, drivetrain: "FWD", image: "", accent: "" },
+  { id: "1N4BL4DV9SN320882", stockNumber: "882P", year: 2025, make: "Nissan", model: "Altima", trim: "SV", price: 21000, type: "Sedan", mileage: 100, drivetrain: "AWD", image: "", accent: "" },
+];
+const dnaSearch = parseTorqueSalesInventorySpec("2025 Nissan Altima");
+const dnaPreferred = answerTorqueInventory({
+  message: "2025 Nissan Altima",
+  vehicles: dnaFixtures,
+  mode: "verified-live",
+  spec: dnaSearch,
+  dna: { signalCount: 4, label: "Learning: AWD", traits: ["AWD"] },
+});
+assert.equal(dnaPreferred.matches[0]?.id, "1N4BL4DV9SN320882");
+const dnaHard = answerTorqueInventory({
+  message: "2025 Nissan Altima FWD",
+  vehicles: dnaFixtures,
+  mode: "verified-live",
+  spec: parseTorqueSalesInventorySpec("2025 Nissan Altima FWD"),
+  dna: { signalCount: 4, label: "Learning: AWD", traits: ["AWD"] },
+});
+assert.equal(dnaHard.matches[0]?.id, "1N4BL4DV9SN320881");
+const dnaNone = answerTorqueInventory({
+  message: "2025 Nissan Altima",
+  vehicles: dnaFixtures,
+  mode: "verified-live",
+  spec: dnaSearch,
+});
+assert.equal(dnaNone.matches[0]?.id, "1N4BL4DV9SN320881");
