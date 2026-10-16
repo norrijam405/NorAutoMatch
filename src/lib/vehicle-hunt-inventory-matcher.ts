@@ -225,6 +225,7 @@ function normalize(value: string) {
 
 function identityRequirementsMatch(spec: TorqueSalesInventorySpec, vehicle: Vehicle) {
   if (spec.vin && spec.vin.value.toUpperCase() !== vehicle.id.toUpperCase()) return false;
+  if (spec.stockNumber && (!vehicle.stockNumber || spec.stockNumber.value.toUpperCase() !== vehicle.stockNumber.toUpperCase())) return false;
   if (spec.make?.priority === "MUST_HAVE" && normalize(String(spec.make.value)) !== normalize(vehicle.make)) return false;
   if (spec.model?.priority === "MUST_HAVE" && normalize(String(spec.model.value)) !== normalize(vehicle.model)) return false;
   return true;
