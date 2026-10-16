@@ -90,16 +90,28 @@ export function answerTorqueInventory(input: {
         compromises: entry.compromises,
       }))
     : input.vehicles.map((vehicle) => evaluateVehicle(vehicle, request));
-  const exact = evaluated.filter((item) => item.fit === "exact");
-  const strong = evaluated
-    .filter((item) => item.fit === "strong")
-    .sort((a, b) => a.compromises.length - b.compromises.length || a.price - b.price);
-  const near = evaluated
-    .filter((item) => item.fit === "near")
-    .sort((a, b) => a.compromises.length - b.compromises.length || a.price - b.price)
-    .slice(0, 5);
+  // MatchDNA only breaks ties among vehicles in the same fit class and with
+  // the same number of compromises. It must never override a MUST_HAVE
+  // requirement, VIN identity, or inventory-source eligibility.
+  const byVehicleId = new Map(input.vehicles.map((vehicle) => [vehicle.id, vehicle]));
+  const dnaScore = (match: TorqueVehicleMatch): number => {
+    const vehicle = byVehicleId.get(match.id);
+    if (!vehicle || !input.dna?.signalCount) return 0;
+    const normalizedTraits = input.dna.traits.map((trait) => trait.trim().toLowerCase());
+    const supported = [vehicle.make, vehicle.type, vehicle.drivetrain, vehicle.condition]
+      .filter((value): value is string => Boolean(value))
+      .map((value) => value.trim().toLowerCase());
+    return normalizedTraits.filter((trait) => supported.includes(trait)).length;
+  };
+  const compareMatch = (a: TorqueVehicleMatch, b: TorqueVehicleMatch) =>
+    a.compromises.length - b.compromises.length ||
+    dnaScore(b) - dnaScore(a) ||
+    a.price - b.price;
+  const exact = evaluated.filter((item) => item.fit === "exact").sort(compareMatch);
+  const strong = evaluated.filter((item) => item.fit === "strong").sort(compareMatch);
+  const near = evaluated.filter((item) => item.fit === "near").sort(compareMatch).slice(0, 5);
   const matches = exact.length > 0
-    ? exact.sort((a, b) => a.price - b.price).slice(0, 5)
+    ? exact.slice(0, 5)
     : strong.length > 0
       ? strong.slice(0, 5)
       : near;
