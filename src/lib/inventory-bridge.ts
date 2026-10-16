@@ -31,6 +31,7 @@ export function liveRecordToVehicle(record: LiveInventoryRecord): Vehicle | unde
 
   return {
     id: record.vin,
+    stockNumber: record.stockNumber,
     year: record.year,
     make: record.make,
     model: record.model,
