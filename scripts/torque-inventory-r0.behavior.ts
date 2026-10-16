@@ -76,7 +76,7 @@ const suppressed = planTorqueFollowUp("NO_REPLY", {
 assert.equal(suppressed.allowed, false);
 assert.ok(suppressed.stopReasons.includes("CUSTOMER_SUPPRESSED"));
 
-console.log("Torque inventory + sourcing + follow-up R0 behavior: PASS");
+// PASS is printed only after all assertions, including identity and MatchDNA guards, complete.
 
 
 const huntSpec = parseTorqueSalesInventorySpec(
@@ -882,3 +882,6 @@ const dnaNone = answerTorqueInventory({
   spec: dnaSearch,
 });
 assert.equal(dnaNone.matches[0]?.id, "1N4BL4DV9SN320881");
+
+
+console.log("Torque inventory + sourcing + follow-up R0 behavior: PASS");
