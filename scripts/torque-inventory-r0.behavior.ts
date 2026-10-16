@@ -833,3 +833,22 @@ assert.deepEqual(
 assert.equal(rankVehiclesForSalesSpec({
   requirements: vinSpec, vehicles: [{ ...vinFixture, id: "1N4BL4DV9SN320881" }],
 }).length, 0);
+
+
+const stockSpec = parseTorqueSalesInventorySpec("Please check stock # 320880P");
+assert.equal(stockSpec.stockNumber?.value, "320880P");
+assert.equal(parseTorqueSalesInventorySpec("Any stock available?").stockNumber, undefined);
+const stockFixture = {
+  id: "1N4BL4DV9SN320880", stockNumber: "320880P",
+  year: 2025, make: "Nissan", model: "Altima", trim: "SV",
+  price: 19970, type: "Sedan", mileage: 40776, drivetrain: "FWD",
+  image: "", accent: "",
+};
+assert.deepEqual(rankVehiclesForSalesSpec({
+  requirements: stockSpec,
+  vehicles: [{ ...stockFixture, id: "1N4BL4DV9SN320881", stockNumber: "320880X" }, stockFixture],
+}).map((entry) => entry.vehicle.id), ["1N4BL4DV9SN320880"]);
+assert.equal(rankVehiclesForSalesSpec({
+  requirements: stockSpec,
+  vehicles: [{ ...stockFixture, stockNumber: undefined }],
+}).length, 0);
