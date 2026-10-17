@@ -10,6 +10,7 @@ export type TorqueVehicleMatch = {
   label: string;
   price: number;
   mileage: number;
+  mileageVerified?: boolean;
   type: string;
   drivetrain: string;
   fit: "exact" | "strong" | "near";
@@ -79,6 +80,7 @@ export function answerTorqueInventory(input: {
         label: [entry.vehicle.year, entry.vehicle.make, entry.vehicle.model, entry.vehicle.trim].filter(Boolean).join(" "),
         price: entry.vehicle.price,
         mileage: entry.vehicle.mileage,
+        mileageVerified: entry.vehicle.mileageVerified,
         type: entry.vehicle.type,
         drivetrain: entry.vehicle.drivetrain,
         fit: entry.fit === "EXACT"
@@ -270,6 +272,7 @@ function evaluateVehicle(vehicle: Vehicle, request: ReturnType<typeof interpret>
     label: [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(" "),
     price: vehicle.price,
     mileage: vehicle.mileage,
+    mileageVerified: vehicle.mileageVerified,
     type: vehicle.type,
     drivetrain: vehicle.drivetrain,
     fit: compromises.length === 0 ? "exact" : "near",
