@@ -150,7 +150,7 @@ export default async function TorqueWatchtowerPage() {
         </section>
 
         <section className="mt-10">
-          <FreshUpHuntForm />
+          <FreshUpHuntForm persistenceReady={huntReadState === "READY"} />
         </section>
 
         <section className="mt-10 rounded-[28px] border border-white/10 bg-white/[.025] p-6 sm:p-8">
