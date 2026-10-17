@@ -26,6 +26,16 @@ export function FreshUpHuntForm() {
       </div>
 
       <label className="mt-6 block">
+        <span className="text-[10px] font-black uppercase tracking-[.14em] text-slate-500">Dealership workspace</span>
+        <select name="dealershipId" required defaultValue="orr-nissan-west"
+          className="mt-2 w-full rounded-xl border border-white/10 bg-[#111b27] px-4 py-3 text-sm text-white">
+          <option value="orr-nissan-west">Orr Nissan West — OKC (current)</option>
+          <option value="irving-hyundai-pending" disabled>Irving Hyundai — pending verified workspace</option>
+        </select>
+        <span className="mt-1 block text-xs text-slate-500">Customer Hunts stay in the selected authorized dealership workspace. Unconnected dealerships cannot accept Hunts.</span>
+      </label>
+
+      <label className="mt-6 block">
         <span className="text-[10px] font-black uppercase tracking-[.14em] text-slate-500">Customer vehicle request</span>
         <textarea
           name="request"
