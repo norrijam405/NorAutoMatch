@@ -884,4 +884,28 @@ const dnaNone = answerTorqueInventory({
 assert.equal(dnaNone.matches[0]?.id, "1N4BL4DV9SN320881");
 
 
+
+const unverifiedMileage = {
+  id: "1N4BL4DV9SN320880", year: 2025, make: "Nissan",
+  model: "Altima", trim: "SV", price: 19970, mileage: 0,
+  mileageVerified: false, type: "Sedan", drivetrain: "FWD",
+  image: "", accent: "",
+};
+const mileageCeiling = parseTorqueSalesInventorySpec("2025 Nissan Altima under 50000 miles");
+const uncertainMileageResults = rankVehiclesForSalesSpec({
+  requirements: mileageCeiling,
+  vehicles: [unverifiedMileage],
+});
+assert.equal(uncertainMileageResults.length, 1);
+assert.equal(uncertainMileageResults[0].fit, "NEAR");
+assert.ok(uncertainMileageResults[0].compromises.includes("mileage not verified by source"));
+const uncertainMileageAnswer = answerTorqueInventory({
+  message: "2025 Nissan Altima under 50000 miles",
+  vehicles: [unverifiedMileage],
+  mode: "verified-live",
+  spec: mileageCeiling,
+});
+assert.equal(uncertainMileageAnswer.matches[0]?.mileageVerified, false);
+assert.equal(uncertainMileageAnswer.matches[0]?.fit, "near");
+
 console.log("Torque inventory + sourcing + follow-up R0 behavior: PASS");
