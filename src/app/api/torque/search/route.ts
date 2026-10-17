@@ -94,6 +94,17 @@ export async function POST(request: Request) {
   }
 
   const spec = parseTorqueSalesInventorySpec(message);
+  if (spec.freeformNotes.some((note) => note.startsWith("Both Hyundai and Nissan were named."))) {
+    return noStore({
+      protocol: "NORAUTO_TORQUE_SEARCH_V1",
+      truthState: "BRAND_CLARIFICATION_REQUIRED",
+      dealershipId: dealership.id,
+      dealershipLabel: dealership.label,
+      needsMoreDetail: true,
+      answer: "You mentioned both Hyundai and Nissan. Are you comparing the two brands, or searching for a specific make? I won't assume one and give you the wrong inventory.",
+      matches: [],
+    });
+  }
   const hasSearchSignal = Boolean(
     spec.vin ||
     spec.stockNumber ||
