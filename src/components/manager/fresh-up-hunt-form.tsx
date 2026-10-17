@@ -9,7 +9,7 @@ const initialState: FreshUpHuntActionState = {
   message: "",
 };
 
-export function FreshUpHuntForm() {
+export function FreshUpHuntForm({ persistenceReady = false }: { persistenceReady?: boolean }) {
   const [state, action, pending] = useActionState(createFreshUpVehicleHunt, initialState);
 
   return (
@@ -55,14 +55,16 @@ export function FreshUpHuntForm() {
         </span>
       </label>
 
+      {!persistenceReady && <p role="status" className="mt-4 text-xs leading-5 text-amber-200">Vehicle Hunt saving is disabled until the private Watchtower database connection is verified. No customer request will be silently lost.</p>}
+
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || !persistenceReady}
           className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 text-sm font-black text-black disabled:cursor-not-allowed disabled:opacity-50"
         >
           {pending ? <Loader2 size={17} className="animate-spin" /> : <Radar size={17} />}
-          {pending ? "Saving Hunt…" : "Start Vehicle Hunt"}
+          {pending ? "Saving Hunt…" : persistenceReady ? "Start Vehicle Hunt" : "Vehicle Hunt unavailable"}
         </button>
         {state.message && (
           <p className={state.ok ? "text-xs leading-5 text-emerald-300" : "text-xs leading-5 text-rose-300"}>
