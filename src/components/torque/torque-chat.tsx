@@ -10,6 +10,7 @@ type Match = {
   label: string;
   price: number;
   mileage: number;
+  mileageVerified?: boolean;
   type: string;
   drivetrain: string;
   fit: "exact" | "strong" | "near";
@@ -176,7 +177,7 @@ export function TorqueChat() {
                             </div>
                             <span className="shrink-0 text-sm font-black text-amber-300">${match.price.toLocaleString()}</span>
                           </div>
-                          <p className="mt-1 text-[11px] text-slate-500">{match.mileage.toLocaleString()} mi · {match.drivetrain} · {match.type}</p>
+                          <p className="mt-1 text-[11px] text-slate-500">{match.mileageVerified === false ? "Mileage not verified" : `${match.mileage.toLocaleString()} mi`} · {match.drivetrain} · {match.type}</p>
                           {match.reasons.length > 0 && <p className="mt-2 text-[11px] leading-5 text-emerald-200/70">✓ {match.reasons.slice(0, 3).join(" · ")}</p>}
                           {match.compromises.length > 0 && <p className="mt-1 text-[11px] leading-5 text-amber-100/65">Tradeoff: {match.compromises.slice(0, 2).join(" · ")}</p>}
                           <Link href={vehicleHref} className="mt-3 inline-flex items-center gap-1 text-[11px] font-black text-amber-300 hover:text-amber-200">
