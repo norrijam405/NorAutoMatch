@@ -7,6 +7,8 @@ export type TorqueSalesRequirement<T> = {
 };
 
 export type TorqueSalesInventorySpec = {
+  vin?: TorqueSalesRequirement<string>;
+  stockNumber?: TorqueSalesRequirement<string>;
   make?: TorqueSalesRequirement<string>;
   model?: TorqueSalesRequirement<string>;
   modelYear?: TorqueSalesRequirement<number | { min?: number; max?: number }>;
@@ -104,7 +106,37 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
   else if (/\bversa\b/i.test(text)) spec.model = must("Versa");
   else if (/\bz\b/i.test(text)) spec.model = must("Z");
 
-  if (/\bnissan\b/i.test(text) || spec.model) spec.make = must("Nissan");
+  const hyundaiModel = [
+    ["Santa Fe", /\bsanta\s+fe\b/i],
+    ["Santa Cruz", /\bsanta\s+cruz\b/i],
+    ["Palisade", /\bpalisade\b/i],
+    ["Tucson", /\btucson\b/i],
+    ["Kona", /\bkona\b/i],
+    ["Elantra", /\belantra\b/i],
+    ["Sonata", /\bsonata\b/i],
+    ["Venue", /\bvenue\b/i],
+    ["Ioniq 5", /\bioniq\s*5\b/i],
+    ["Ioniq 6", /\bioniq\s*6\b/i],
+    ["Ioniq 9", /\bioniq\s*9\b/i],
+    ["Nexo", /\bnexo\b/i],
+  ] as const;
+  const detectedHyundaiModel = hyundaiModel.find(([, pattern]) => pattern.test(text));
+  const explicitHyundai = /\bhyundai\b/i.test(text);
+  const explicitNissan = /\bnissan\b/i.test(text);
+  if (detectedHyundaiModel && !spec.model) spec.model = must(detectedHyundaiModel[0]);
+  if (explicitHyundai && explicitNissan) {
+    spec.freeformNotes.push("Both Hyundai and Nissan were named. Confirm the intended make before claiming an exact inventory match.");
+  } else if (explicitHyundai || detectedHyundaiModel) {
+    spec.make = must("Hyundai");
+  } else if (explicitNissan || spec.model) {
+    spec.make = must("Nissan");
+  }
+
+  // Exact VIN lookup is a strict identity request, not a preference or fuzzy match.
+  const vinRequest = text.match(/\b(?:VIN|vehicle identification number)\s*[:#-]?\s*([A-HJ-NPR-Z0-9]{17})\b/i);
+  if (vinRequest) spec.vin = must(vinRequest[1].toUpperCase());
+  const stockRequest = text.match(/\b(?:stock(?:\s*(?:number|no\.?|#))?|stock#)\s*[:#-]?\s*([A-Z0-9-]{3,24})\b/i);
+  if (stockRequest && /[0-9]/.test(stockRequest[1])) spec.stockNumber = must(stockRequest[1].toUpperCase());
 
   const year = text.match(/\b(20\d{2})\b/);
   if (year) spec.modelYear = must(Number(year[1]));
