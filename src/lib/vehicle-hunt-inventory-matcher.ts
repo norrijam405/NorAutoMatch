@@ -89,7 +89,11 @@ function evaluateVehicle(
   compareText(result, spec.trim, vehicle.trim, "trim", true);
   compareText(result, spec.condition, vehicle.condition ?? "", "condition");
   compareMax(result, spec.maxPrice, vehicle.price, "price");
-  compareMax(result, spec.maxMileage, vehicle.mileage, "mileage");
+  if (spec.maxMileage && vehicle.mileageVerified === false) {
+    priorityMiss(result, spec.maxMileage.priority, "mileage not verified by source");
+  } else {
+    compareMax(result, spec.maxMileage, vehicle.mileage, "mileage");
+  }
   compareText(result, spec.exteriorColor, vehicle.exteriorColor ?? vehicle.accent ?? "", "exterior color", true);
   compareText(result, spec.interiorColor, vehicle.interiorColor ?? "", "interior color", true);
   compareText(result, spec.drivetrain, vehicle.drivetrain, "drivetrain", true);
