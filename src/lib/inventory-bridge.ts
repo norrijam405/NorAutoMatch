@@ -39,6 +39,7 @@ export function liveRecordToVehicle(record: LiveInventoryRecord): Vehicle | unde
     price: record.price,
     type,
     mileage: record.mileage ?? 0,
+    mileageVerified: typeof record.mileage === "number" && Number.isFinite(record.mileage) && record.mileage >= 0,
     drivetrain: record.drivetrain ?? "Unknown",
     image: record.photos?.[0] ?? "/images/vehicle-placeholder.jpg",
     accent: record.exteriorColor ?? "Color unavailable",
