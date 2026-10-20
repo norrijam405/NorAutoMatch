@@ -63,6 +63,7 @@ export default async function SaveTheSalePage({
           Start with cars you can sell at Orr Nissan West, but never override a customer's must-haves.
           Search all verified eligible local vehicles before presenting comparable choices. Listings still require a human stock and price check.
         </p>
+        <p className="mt-3 text-xs text-amber-200">Preview testing: describe the vehicle only. Do not enter customer names, phone numbers or private financial information.</p>
         <form method="get" className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6">
           <label htmlFor="request" className="block text-sm font-bold">What does the customer need?</label>
           <textarea id="request" name="request" required minLength={4} maxLength={1200} rows={3}
