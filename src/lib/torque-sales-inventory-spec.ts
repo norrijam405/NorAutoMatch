@@ -188,7 +188,7 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
 
   if (/\bnew\b/i.test(text)) spec.condition = must("NEW");
   else if (/\bcpo|certified\b/i.test(text)) spec.condition = must("CPO");
-  else if (/\bused|pre[- ]owned\b/i.test(text)) spec.condition = must("USED");
+  else if (/\b(?:used|pre[- ]?owned|preowned)\b/i.test(text)) spec.condition = must("USED");
 
   if (/\bleather\b/i.test(text)) spec.interiorMaterial = preferred("Leather");
 
