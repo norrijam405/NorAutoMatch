@@ -16,7 +16,8 @@ export function rankVehiclesForSalesSpec(input: {
   vehicles: Vehicle[];
   limit?: number;
 }): SalesSpecVehicleEvaluation[] {
-  const limit = Math.max(1, Math.min(input.limit ?? 12, 50));
+  // Search the entire verified dealer catalog before returning the requested top matches.
+  const limit = Math.max(1, Math.min(input.limit ?? 12, 2_000));
   const fitRank = { EXACT: 0, STRONG: 1, NEAR: 2 };
 
   return input.vehicles
