@@ -32,6 +32,41 @@ export function buildSaveTheSaleResult(input: {
 }): SaveTheSaleResult {
   // No truncation before ranking. The caller's catalog must already have passed
   // full-source verification and dealership eligibility checks.
+  // The current dealer Vehicle model does not carry validated capacity/tow/payload
+  // specifications. Never treat an unverified safety/utility requirement as met.
+  const unsupportedMustHave = [
+    input.requirements.seatingCapacity,
+    input.requirements.towingMinimumLbs,
+    input.requirements.payloadMinimumLbs,
+  ].some((requirement) => requirement?.priority === "MUST_HAVE");
+  const hasSpecificRequirements = Boolean(
+    input.requirements.vin || input.requirements.stockNumber ||
+    input.requirements.make || input.requirements.model ||
+    input.requirements.modelYear || input.requirements.trim ||
+    input.requirements.condition || input.requirements.maxPrice ||
+    input.requirements.maxMileage || input.requirements.exteriorColor ||
+    input.requirements.interiorColor || input.requirements.drivetrain ||
+    input.requirements.features.length || input.requirements.packages.length ||
+    input.requirements.exclusions.length || input.requirements.interiorMaterial ||
+    input.requirements.cabStyle || input.requirements.bedLength ||
+    input.requirements.seatingLayout || input.requirements.seatingCapacity ||
+    input.requirements.towingMinimumLbs || input.requirements.payloadMinimumLbs,
+  );
+  if (unsupportedMustHave || !hasSpecificRequirements) {
+    return {
+      protocol: "NORAUTO_SAVE_THE_SALE_R0",
+      eligibleVehicleCount: input.vehicles.length,
+      exactCount: 0,
+      strongCount: 0,
+      localOptions: [],
+      opportunity: "VERIFY_AND_SOURCE",
+      nextStep: unsupportedMustHave
+        ? "Seating, towing or payload requirements need confirmed manufacturer/VIN evidence before recommending a specific vehicle. Have a salesperson verify these specifications."
+        : "Ask for a specific vehicle requirement (make, model, budget, features or body) before recommending local inventory.",
+      commissionEffect: "LOCAL_FIRST_WITHIN_CUSTOMER_FIT_ONLY",
+      externalAvailabilityClaim: false,
+    };
+  }
   const evaluated = rankVehiclesForSalesSpec({
     requirements: input.requirements,
     vehicles: input.vehicles,
