@@ -908,4 +908,27 @@ const uncertainMileageAnswer = answerTorqueInventory({
 assert.equal(uncertainMileageAnswer.matches[0]?.mileageVerified, false);
 assert.equal(uncertainMileageAnswer.matches[0]?.fit, "near");
 
+
+const fullOrrRankingSpec = parseTorqueSalesInventorySpec("2025 Nissan Altima");
+const fullOrrRankingVehicles = Array.from({ length: 120 }, (_, index) => ({
+  ...stockFixture,
+  id: `1N4BL4DV9SN${String(index).padStart(6, "0")}`,
+  stockNumber: `ST${index}`,
+  price: 19000 + index,
+}));
+const fullOrrRanking = rankVehiclesForSalesSpec({
+  requirements: fullOrrRankingSpec,
+  vehicles: fullOrrRankingVehicles,
+  limit: 2_000,
+});
+assert.equal(fullOrrRanking.length, 120);
+const fullOrrAnswer = answerTorqueInventory({
+  message: "2025 Nissan Altima",
+  vehicles: fullOrrRankingVehicles,
+  mode: "verified-live",
+  spec: fullOrrRankingSpec,
+});
+assert.equal(fullOrrAnswer.exactCount, 120);
+assert.equal(fullOrrAnswer.matches.length, 5);
+
 console.log("Torque inventory + sourcing + follow-up R0 behavior: PASS");
