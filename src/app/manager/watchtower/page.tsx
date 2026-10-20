@@ -72,6 +72,7 @@ export default async function TorqueWatchtowerPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
+            <Link href="/manager/watchtower/save-the-sale" className="rounded-full bg-red-600 px-5 py-3 text-sm font-black text-white">Save the Sale</Link>
             <Link href="/manager/follow-up" className="rounded-full border border-white/15 px-5 py-3 text-sm font-black text-white">Follow-up desk</Link>
             <Link href="/inventory" className="rounded-full bg-amber-300 px-5 py-3 text-sm font-black text-black">Verified inventory</Link>
           </div>
