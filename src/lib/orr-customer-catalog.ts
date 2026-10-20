@@ -69,7 +69,7 @@ export async function loadOrrCustomerCatalog(options: OrrCustomerCatalogOptions 
     }));
   }
 
-  const discover = options.discover ?? (() => discoverOrrAlgoliaInventoryCached({ hitsPerPage: 100, maxPages: 10 }));
+  const discover = options.discover ?? (() => discoverOrrAlgoliaInventoryCached({ hitsPerPage: 100, maxPages: 20 }));
   const discovery = await discover();
   const sourceGate = buildInventoryShadowReceipt(discovery);
   if (sourceGate.gate.status !== "PASS") {
