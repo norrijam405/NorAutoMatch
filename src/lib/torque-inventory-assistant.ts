@@ -75,7 +75,7 @@ export function answerTorqueInventory(input: {
 }): TorqueInventoryAnswer {
   const request = interpret(input.message, input.vehicles);
   const evaluated = input.spec
-    ? rankVehiclesForSalesSpec({ requirements: input.spec, vehicles: input.vehicles, limit: 50 }).map((entry) => ({
+    ? rankVehiclesForSalesSpec({ requirements: input.spec, vehicles: input.vehicles, limit: 2_000 }).map((entry) => ({
         id: entry.vehicle.id,
         label: [entry.vehicle.year, entry.vehicle.make, entry.vehicle.model, entry.vehicle.trim].filter(Boolean).join(" "),
         price: entry.vehicle.price,
