@@ -5,6 +5,7 @@ import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
 import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
 import { parseTorqueSalesInventorySpec } from "@/lib/torque-sales-inventory-spec";
 import { buildSaveTheSaleResult } from "@/lib/save-the-sale";
+import { VehicleMediaSearch } from "@/components/manager/vehicle-media-search";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -64,15 +65,7 @@ export default async function SaveTheSalePage({
           Search all verified eligible local vehicles before presenting comparable choices. Listings still require a human stock and price check.
         </p>
         <p className="mt-3 text-xs text-amber-200">Preview testing: describe the vehicle only. Do not enter customer names, phone numbers or private financial information.</p>
-        <form method="get" className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6">
-          <label htmlFor="request" className="block text-sm font-bold">What does the customer need?</label>
-          <textarea id="request" name="request" required minLength={4} maxLength={1200} rows={3}
-            defaultValue={request} placeholder="Example: 2026 Pathfinder AWD under $45000, preferably SV"
-            className="mt-3 w-full rounded-xl border border-white/20 bg-[#101922] p-4 text-white placeholder:text-slate-500" />
-          <button type="submit" className="mt-3 rounded-full bg-amber-300 px-6 py-3 text-sm font-black text-black">
-            Find local sales opportunities
-          </button>
-        </form>
+        <VehicleMediaSearch initialRequest={request} />
         {reason && <section role="status" className="mt-6 rounded-2xl border border-amber-300/30 bg-amber-300/5 p-5 text-sm text-amber-100">
           {reason} You can still create a manual Vehicle Hunt from <Link className="font-bold underline" href="/manager/watchtower">Watchtower</Link>.
         </section>}
