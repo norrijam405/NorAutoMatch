@@ -26,6 +26,7 @@ export default function HomePage() {
             <p className="mt-7 max-w-xl text-base font-medium leading-7 text-slate-200 sm:text-xl sm:leading-8">Start with the budget or payment range that feels comfortable to you, then react to real VINs. Your number is a shopping preference — not a dealer quote, approval, or promise.</p>
             <div className="mt-8 grid gap-3 sm:flex">
               <a href="#matcher" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-amber-300 px-7 text-sm font-black text-black shadow-[0_0_28px_rgba(252,211,77,.14)]">Start my match <ArrowDown size={18} /></a>
+              <Link href="/find-my-car" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-white/20 bg-black/25 px-7 text-sm font-black text-white backdrop-blur">Search by photo or description →</Link>
               <a href={brand.textHref} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-white/20 bg-black/25 px-7 text-sm font-black text-white backdrop-blur"><MessageSquareText size={18} /> Ask me directly</a>
             </div>
             <p className="mt-6 max-w-xl text-xs leading-5 text-white/45">NorAutoMatch helps organize your search and request follow-up. The dealership and, when applicable, the lender determine and confirm final price, payment, trade value, financing, incentives, availability, and other deal terms.</p>
