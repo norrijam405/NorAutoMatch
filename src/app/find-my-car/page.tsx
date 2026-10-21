@@ -80,7 +80,8 @@ export default async function FindMyCarPage({
           </div>
           <p className="mt-3 text-sm text-slate-300">{verifiedReasons.join(" · ") || "Details require confirmation"}</p>
           {preferenceCompromises.length > 0 && <p className="mt-2 text-sm text-amber-200">Differences: {preferenceCompromises.join(" · ")}</p>}
-          <p className="mt-3 text-xs text-slate-500">Adding to Garage saves your interest; it never reserves or holds a unit. Cars can sell before confirmation.</p>
+          <Link href={`/vehicles/${vehicle.id}`} className="mt-4 inline-flex rounded-full bg-amber-300 px-5 py-2.5 text-sm font-black text-black">View vehicle photos and details →</Link>
+          <p className="mt-3 text-xs text-slate-500">A Garage save does not reserve or hold the vehicle. Cars can sell before confirmation.</p>
         </article>)}
       </div>
       <Link href="/inventory" className="mt-6 inline-block rounded-full bg-amber-300 px-6 py-3 text-sm font-black text-black">Browse and save vehicles when ready →</Link>
