@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 
-type Props = { initialRequest: string };
+type Props = { initialRequest: string; publicShopping?: boolean };
 
 /**
  * Privacy-preserving media intake: local preview only. No media upload, no
  * misleading automated recognition, no inference from a filename.
  */
-export function VehicleMediaSearch({ initialRequest }: Props) {
+export function VehicleMediaSearch({ initialRequest, publicShopping = false }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -63,7 +63,7 @@ export function VehicleMediaSearch({ initialRequest }: Props) {
           <button type="button" onClick={() => setFile(null)} className="text-xs font-bold text-amber-200 underline">Remove media preview</button>
         </div>}
       </div>
-      <button type="submit" className="mt-5 rounded-full bg-amber-300 px-6 py-3 text-sm font-black text-black">Find local sales opportunities</button>
+      <button type="submit" className="mt-5 rounded-full bg-amber-300 px-6 py-3 text-sm font-black text-black">{publicShopping ? "Find matching vehicles" : "Find local sales opportunities"}</button>
     </form>
   );
 }
