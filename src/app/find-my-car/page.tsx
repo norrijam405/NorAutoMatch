@@ -60,7 +60,7 @@ export default async function FindMyCarPage({
     </p>
     <VehicleMediaSearch initialRequest={request} publicShopping />
     {reason && <section role="status" className="mt-6 rounded-2xl border border-amber-300/30 bg-amber-300/5 p-5 text-sm text-amber-100">
-      {reason} You can still <Link href="/" className="font-bold underline">tell us what you need</Link> without creating an account.
+      {reason} <a href="https://orrnissanwest.com/inventory" target="_blank" rel="noopener noreferrer" className="font-bold underline">Browse Orr Nissan West inventory directly →</a> No account is required for our search.
     </section>}
     {result && <section className="mt-8">
       <div className="rounded-2xl border border-white/15 bg-white/5 p-5">
