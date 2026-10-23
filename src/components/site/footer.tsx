@@ -20,7 +20,7 @@ export function Footer() {
         <div>
           <p className="eyebrow">Explore</p>
           <div className="mt-4 grid gap-3 text-sm text-slate-300">
-            <Link href="/#matcher" className="hover:text-white">Interactive matcher</Link>
+            <Link href="/find-my-car" className="hover:text-white">Interactive matcher</Link>
             <Link href="/how-it-works" className="hover:text-white">How it works</Link>
             <Link href="/privacy" className="hover:text-white">Privacy & consent</Link>
             <Link href="/terms" className="hover:text-white">Disclosures & terms</Link>
