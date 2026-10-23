@@ -21,7 +21,7 @@ export function Logo() {
 }
 
 const links = [
-  { href: "/#matcher", label: "Find my match" },
+  { href: "/find-my-car", label: "Find my match" },
   { href: "/inventory", label: "Inventory" },
   { href: "/garage", label: "Garage" },
   { href: "/how-it-works", label: "How it works" },
