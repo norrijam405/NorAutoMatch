@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, Fuel, Gauge, ImageIcon, Palette, ShieldCheck, Sparkles, Wrench } from "lucide-react";
 import { notFound } from "next/navigation";
 import { formatMoney } from "@/lib/inventory";
+import { VehiclePriceCheck } from "@/components/inventory/vehicle-price-check";
 import { loadVerifiedOrrVehicleDetail } from "@/lib/orr-vehicle-detail";
 
 export const dynamic = "force-dynamic";
@@ -59,7 +60,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
           <div className="mt-6 space-y-1 font-mono text-xs text-slate-500"><p>VIN {vehicle.vin}</p>{vehicle.stockNumber && <p>STOCK {vehicle.stockNumber}</p>}</div>
           {vehicle.incentives && vehicle.incentives.length > 0 && <div className="mt-5 rounded-xl border border-amber-300/20 bg-amber-300/[.05] p-4"><p className="text-[9px] font-black uppercase tracking-[.16em] text-amber-300">Source incentive evidence</p>{vehicle.incentives.map((item) => <p key={item} className="mt-2 text-xs leading-5 text-amber-100/75">{item}</p>)}</div>}
           <div className="mt-6 grid grid-cols-2 gap-3">
-            <Link href="/#matcher" className="inline-flex min-h-12 items-center justify-center rounded-xl bg-red-600 px-4 text-center text-sm font-black text-white">Ask NorAuto about it</Link>
+            <Link href={`/find-my-car?request=${encodeURIComponent([vehicle.year, vehicle.make, vehicle.model, vehicle.trim].join(" "))}`} className="inline-flex min-h-12 items-center justify-center rounded-xl bg-red-600 px-4 text-center text-sm font-black text-white">Ask NorAuto about it</Link>
             <Link href="/inventory" className="inline-flex min-h-12 items-center justify-center rounded-xl border border-white/10 px-4 text-center text-sm font-black text-slate-200">Compare inventory</Link>
           </div>
         </section>
@@ -69,6 +70,8 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
         {specs.map(({ label, value, icon: Icon }) => <article key={label} className="rounded-2xl border border-white/10 bg-white/[.025] p-4"><Icon size={16} className="text-amber-300" /><p className="mt-3 text-[9px] font-black uppercase tracking-[.16em] text-slate-600">{label}</p><p className="mt-1 text-sm font-bold text-white">{value}</p></article>)}
         <article className="rounded-2xl border border-white/10 bg-white/[.025] p-4"><ImageIcon size={16} className="text-amber-300" /><p className="mt-3 text-[9px] font-black uppercase tracking-[.16em] text-slate-600">Source photos</p><p className="mt-1 text-sm font-bold text-white">{photos[0].startsWith("/images/") ? "Not supplied" : `${photos.length} image${photos.length === 1 ? "" : "s"}`}</p></article>
       </section>
+
+      <VehiclePriceCheck vehicle={{ vin: vehicle.vin, year: vehicle.year, make: vehicle.make, model: vehicle.model, trim: vehicle.trim, price: vehicle.price, mileage: vehicle.mileage, condition: vehicle.condition }} />
 
       <section className="mt-8 rounded-[28px] border border-white/10 bg-[#0d131b] p-6 sm:p-8">
         <div className="flex items-start gap-3"><Sparkles size={20} className="mt-1 shrink-0 text-amber-300" /><div><p className="text-[10px] font-black uppercase tracking-[.24em] text-amber-300">Source-provided equipment</p><h2 className="mt-2 text-3xl font-black text-white">What this VIN actually reports.</h2><p className="mt-2 text-sm leading-6 text-slate-500">NorAuto lists equipment only when it is present in the dealer/provider evidence. An absent feature is not silently assumed.</p></div></div>

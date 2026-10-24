@@ -14,7 +14,7 @@ export async function loadVerifiedOrrVehicleDetail(vinInput: string): Promise<{
   const vin = vinInput.trim().toUpperCase();
   if (!VIN_RE.test(vin)) throw new Error("NORAUTO_VEHICLE_DETAIL_INVALID_VIN");
 
-  const discovery = await discoverOrrAlgoliaInventoryCached({ hitsPerPage: 100, maxPages: 10 });
+  const discovery = await discoverOrrAlgoliaInventoryCached({ hitsPerPage: 100, maxPages: 20 });
   const sourceGate = buildInventoryShadowReceipt(discovery);
   if (sourceGate.gate.status !== "PASS") {
     throw new Error(`NORAUTO_VEHICLE_DETAIL_SOURCE_GATE_FAILED:${sourceGate.gate.reasons.join(",")}`);

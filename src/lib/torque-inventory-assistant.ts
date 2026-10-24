@@ -10,6 +10,7 @@ export type TorqueVehicleMatch = {
   label: string;
   price: number;
   mileage: number;
+  mileageVerified?: boolean;
   type: string;
   drivetrain: string;
   fit: "exact" | "strong" | "near";
@@ -74,11 +75,12 @@ export function answerTorqueInventory(input: {
 }): TorqueInventoryAnswer {
   const request = interpret(input.message, input.vehicles);
   const evaluated = input.spec
-    ? rankVehiclesForSalesSpec({ requirements: input.spec, vehicles: input.vehicles, limit: 50 }).map((entry) => ({
+    ? rankVehiclesForSalesSpec({ requirements: input.spec, vehicles: input.vehicles, limit: 2_000 }).map((entry) => ({
         id: entry.vehicle.id,
         label: [entry.vehicle.year, entry.vehicle.make, entry.vehicle.model, entry.vehicle.trim].filter(Boolean).join(" "),
         price: entry.vehicle.price,
         mileage: entry.vehicle.mileage,
+        mileageVerified: entry.vehicle.mileageVerified,
         type: entry.vehicle.type,
         drivetrain: entry.vehicle.drivetrain,
         fit: entry.fit === "EXACT"
@@ -90,16 +92,28 @@ export function answerTorqueInventory(input: {
         compromises: entry.compromises,
       }))
     : input.vehicles.map((vehicle) => evaluateVehicle(vehicle, request));
-  const exact = evaluated.filter((item) => item.fit === "exact");
-  const strong = evaluated
-    .filter((item) => item.fit === "strong")
-    .sort((a, b) => a.compromises.length - b.compromises.length || a.price - b.price);
-  const near = evaluated
-    .filter((item) => item.fit === "near")
-    .sort((a, b) => a.compromises.length - b.compromises.length || a.price - b.price)
-    .slice(0, 5);
+  // MatchDNA only breaks ties among vehicles in the same fit class and with
+  // the same number of compromises. It must never override a MUST_HAVE
+  // requirement, VIN identity, or inventory-source eligibility.
+  const byVehicleId = new Map(input.vehicles.map((vehicle) => [vehicle.id, vehicle]));
+  const dnaScore = (match: TorqueVehicleMatch): number => {
+    const vehicle = byVehicleId.get(match.id);
+    if (!vehicle || !input.dna?.signalCount) return 0;
+    const normalizedTraits = input.dna.traits.map((trait) => trait.trim().toLowerCase());
+    const supported = [vehicle.make, vehicle.type, vehicle.drivetrain, vehicle.condition]
+      .filter((value): value is string => Boolean(value))
+      .map((value) => value.trim().toLowerCase());
+    return normalizedTraits.filter((trait) => supported.includes(trait)).length;
+  };
+  const compareMatch = (a: TorqueVehicleMatch, b: TorqueVehicleMatch) =>
+    a.compromises.length - b.compromises.length ||
+    dnaScore(b) - dnaScore(a) ||
+    a.price - b.price;
+  const exact = evaluated.filter((item) => item.fit === "exact").sort(compareMatch);
+  const strong = evaluated.filter((item) => item.fit === "strong").sort(compareMatch);
+  const near = evaluated.filter((item) => item.fit === "near").sort(compareMatch).slice(0, 5);
   const matches = exact.length > 0
-    ? exact.sort((a, b) => a.price - b.price).slice(0, 5)
+    ? exact.slice(0, 5)
     : strong.length > 0
       ? strong.slice(0, 5)
       : near;
@@ -142,10 +156,10 @@ export function answerTorqueInventory(input: {
       (near.length === 1 ? "option" : "options") +
       ", but I'm calling out the must-have compromises instead of pretending they're exact.";
   } else {
-    answer =
-      "No — I don't have what you described in " +
-      sourcePhrase +
-      " right now. I would rather tell you that straight than manufacture a match.";
+    answer = input.mode === "representative-demo"
+      ? "I couldn't find that specification in the sample vehicles. This is a demonstration catalog, NOT Orr Nissan West's live inventory, so I cannot tell you whether the dealership has it. A salesperson must check the real stock or confirm the VIN."
+      : "I couldn't find that specification in " + sourcePhrase +
+        ". That only describes this checked catalog and does not prove the dealership has no such vehicle. Ask a salesperson to verify the specific stock or VIN.";
   }
 
   if (input.dna && input.dna.signalCount > 0) {
@@ -258,6 +272,7 @@ function evaluateVehicle(vehicle: Vehicle, request: ReturnType<typeof interpret>
     label: [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(" "),
     price: vehicle.price,
     mileage: vehicle.mileage,
+    mileageVerified: vehicle.mileageVerified,
     type: vehicle.type,
     drivetrain: vehicle.drivetrain,
     fit: compromises.length === 0 ? "exact" : "near",

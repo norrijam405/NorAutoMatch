@@ -146,7 +146,20 @@ export async function readWatchtowerOpportunityQueue(input: {
     JOIN torque_vehicle_hunts h ON h.hunt_id = m.hunt_id
     WHERE h.workspace_id = $1
       AND m.action <> 'NO_ACTION'
-      AND h.state <> 'CLOSED'
+      AND (
+        m.action NOT IN ('TEXT_CUSTOMER', 'EMAIL_CUSTOMER')
+        OR (
+          h.consent_to_contact = TRUE
+          AND m.customer_safe = TRUE
+          AND m.requires_human_verification = FALSE
+          AND o.torque_use = 'CUSTOMER_SAFE'
+          AND o.evidence_state IN ('PRIMARY_VERIFIED', 'CORROBORATED')
+        )
+      )
+      AND h.state NOT IN ('CLOSED', 'PAUSED')
+      AND o.observed_at <= NOW()
+      AND (o.effective_at IS NULL OR o.effective_at <= NOW())
+      AND (o.expires_at IS NULL OR o.expires_at > NOW())
     ORDER BY
       CASE m.action
         WHEN 'TEXT_CUSTOMER' THEN 1
@@ -213,6 +226,7 @@ export async function readActiveVehicleHunts(input: {
       requirements,
       match_dna_label,
       candidate_vins,
+      truth,
       consent_to_contact,
       salesperson_owner,
       created_at,
