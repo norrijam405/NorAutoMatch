@@ -20,7 +20,7 @@ assert.equal(parseTorqueSalesInventorySpec("under 12,500 miles").maxMileage?.val
 const rogue: Vehicle = {
   id: "5N1BT3BA0TC123456", year: 2026, make: "Nissan", model: "Rogue",
   trim: "SV", price: 26640, mileage: 10, type: "SUV",
-  drivetrain: "FWD", image: "/rogue.jpg", condition: "New",
+  drivetrain: "FWD", image: "/rogue.jpg", accent: "Gun Metallic", condition: "New",
 };
 const matches = buildSaveTheSaleResult({
   requirements: parseTorqueSalesInventorySpec("2026 Nissan Rogue under $30,000"),
