@@ -141,17 +141,17 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
   const year = text.match(/\b(20\d{2})\b/);
   if (year) spec.modelYear = must(Number(year[1]));
 
-  const maxPrice = text.match(/(?:under|below|max(?:imum)?|up to)\s*\$?\s*([0-9]+(?:\.[0-9]+)?)\s*(k|thousand)?/i);
+  const maxPrice = text.match(/(?:under|below|max(?:imum)?|up to|less than)\s*\$?\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?)\s*(k|thousand)?/i);
   if (maxPrice) {
-    const raw = Number(maxPrice[1]);
+    const raw = Number(maxPrice[1].replace(/,/g, ""));
     if (Number.isFinite(raw) && raw > 0) {
       spec.maxPrice = must(maxPrice[2] || raw < 1000 ? Math.round(raw * 1000) : Math.round(raw));
     }
   }
 
-  const maxMileage = text.match(/(?:under|below|max(?:imum)?|less than)\s*([0-9]+(?:\.[0-9]+)?)\s*(k|thousand)?\s*(?:miles?|mi)\b/i);
+  const maxMileage = text.match(/(?:under|below|max(?:imum)?|less than)\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?)\s*(k|thousand)?\s*(?:miles?|mi)\b/i);
   if (maxMileage) {
-    const raw = Number(maxMileage[1]);
+    const raw = Number(maxMileage[1].replace(/,/g, ""));
     if (Number.isFinite(raw) && raw >= 0) {
       spec.maxMileage = must(maxMileage[2] || raw < 1000 ? Math.round(raw * 1000) : Math.round(raw));
     }
