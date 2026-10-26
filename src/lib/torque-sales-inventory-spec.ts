@@ -142,7 +142,7 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
   const year = text.match(/\b(20\d{2})\b/);
   if (year) spec.modelYear = must(Number(year[1]));
 
-  const maxPrice = text.match(/(?:under|below|max(?:imum)?|up to|less than)\s*\$?\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?)\s*(k|thousand)?/i);
+  const maxPrice = text.match(/(?:under|below|max(?:imum)?|up to|less than|no more than|not more than)\s*\$?\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?)\s*(k|thousand)?/i);
   if (maxPrice) {
     const raw = Number(maxPrice[1].replace(/,/g, ""));
     if (Number.isFinite(raw) && raw > 0) {
