@@ -82,7 +82,7 @@ function evaluateVehicle(
   spec: TorqueSalesInventorySpec,
   vehicle: Vehicle,
 ): Omit<SalesSpecVehicleEvaluation, "vehicle" | "fit"> {
-  const result = { reasons: [], compromises: [], hardMisses: 0, softMisses: 0 };
+  const result: Omit<SalesSpecVehicleEvaluation, "vehicle" | "fit"> = { reasons: [], compromises: [], hardMisses: 0, softMisses: 0 };
 
   compareText(result, spec.make, vehicle.make, "make");
   compareText(result, spec.model, vehicle.model, "model");
