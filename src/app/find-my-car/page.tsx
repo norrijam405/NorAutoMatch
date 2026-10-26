@@ -75,7 +75,7 @@ export default async function FindMyCarPage({
         <h2 className="text-2xl font-black">{lifestyleIntent?.thirdRow ? "Verified third-row SUVs to explore" : lifestyleIntent?.teen ? "Sedans worth exploring for a new driver" : "Vehicles to explore based on your priorities"}</h2>
         <p className="mt-2 text-sm text-slate-300">We use body style, dealer-listed prices, and available fuel economy evidence to narrow the request. A stated price ceiling is enforced. Fuel-efficient means a preference unless you provide a specific MPG target; missing MPG is never invented.</p>
         <p className="mt-3 text-xs text-amber-200">Before choosing for a teen, confirm the specific VIN's crash-test ratings, driver-assistance equipment, insurance cost, condition and recalls. NorAutoMatch does not independently verify those safety facts.</p>
-        <p className="mt-2 text-xs text-slate-400">{lifestyleIntent?.maxPrice !== null && <span>Budget ceiling: ${lifestyleIntent.maxPrice.toLocaleString("en-US")} · </span>}Source: {source} · Checked: {fetchedAt ?? "time unavailable"}. Prices and availability must be confirmed with the dealer.</p>
+        <p className="mt-2 text-xs text-slate-400">{lifestyleIntent && lifestyleIntent.maxPrice !== null && <span>Budget ceiling: ${lifestyleIntent.maxPrice.toLocaleString("en-US")} · </span>}Source: {source} · Checked: {fetchedAt ?? "time unavailable"}. Prices and availability must be confirmed with the dealer.</p>
         {!lifestyleResults.length && <p className="mt-3 text-sm text-amber-200">No vehicles with verified evidence for those requirements were found in this catalog. Try browsing all inventory or ask the dealership to confirm equipment.</p>}
       </div>
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
