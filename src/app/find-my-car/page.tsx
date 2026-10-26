@@ -5,7 +5,7 @@ import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
 import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
 import { parseTorqueSalesInventorySpec } from "@/lib/torque-sales-inventory-spec";
 import { buildSaveTheSaleResult } from "@/lib/save-the-sale";
-import { interpretLifestyleSearch, lifestyleSedanCandidates } from "@/lib/lifestyle-car-search";
+import { interpretLifestyleSearch, lifestyleCandidates } from "@/lib/lifestyle-car-search";
 import type { Vehicle } from "@/lib/inventory";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +29,7 @@ export default async function FindMyCarPage({
   let source: string | undefined;
   let fetchedAt: string | undefined;
   let reason: string | undefined;
-  let lifestyleResults: Array<{ vehicle: Vehicle; compact: boolean; score: number }> | null = null;
+  let lifestyleResults: Array<{ vehicle: Vehicle; compact: boolean; mpg: number | null; score: number }> | null = null;
   const lifestyleIntent = interpretLifestyleSearch(request);
 
   if (request.length >= 4) {
@@ -43,7 +43,7 @@ export default async function FindMyCarPage({
         });
         if (!catalog.customerVisibleLiveInventory || catalog.source === "demo") throw new Error("NOT_VERIFIED");
         if (lifestyleIntent) {
-          lifestyleResults = lifestyleSedanCandidates(catalog.vehicles, request);
+          lifestyleResults = lifestyleCandidates(catalog.vehicles, lifestyleIntent);
         } else {
           result = buildSaveTheSaleResult({
             requirements: parseTorqueSalesInventorySpec(request),
@@ -72,18 +72,18 @@ export default async function FindMyCarPage({
     </section>}
     {lifestyleResults && <section className="mt-8">
       <div className="rounded-2xl border border-white/15 bg-white/5 p-5">
-        <h2 className="text-2xl font-black">Sedans worth exploring for a new driver</h2>
-        <p className="mt-2 text-sm text-slate-300">We understood “small sedan” and “teen driver” as shopping preferences and prioritized compact sedans in verified dealer stock. These are suggestions to investigate, not certified safe choices.</p>
+        <h2 className="text-2xl font-black">{lifestyleIntent?.thirdRow ? "Verified third-row SUVs to explore" : lifestyleIntent?.teen ? "Sedans worth exploring for a new driver" : "Vehicles to explore based on your priorities"}</h2>
+        <p className="mt-2 text-sm text-slate-300">We use the body style and available dealer evidence to narrow down your request. Affordable and good on gas are preferences, not guarantees; where verified fuel economy is absent, we do not invent MPG.</p>
         <p className="mt-3 text-xs text-amber-200">Before choosing for a teen, confirm the specific VIN's crash-test ratings, driver-assistance equipment, insurance cost, condition and recalls. NorAutoMatch does not independently verify those safety facts.</p>
         <p className="mt-2 text-xs text-slate-400">Source: {source} · Checked: {fetchedAt ?? "time unavailable"}. Prices and availability must be confirmed with the dealer.</p>
-        {!lifestyleResults.length && <p className="mt-3 text-sm text-amber-200">No verified sedans are available in this catalog right now. Try browsing the full inventory or contact the dealership.</p>}
+        {!lifestyleResults.length && <p className="mt-3 text-sm text-amber-200">No vehicles with verified evidence for those requirements were found in this catalog. Try browsing all inventory or ask the dealership to confirm equipment.</p>}
       </div>
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        {lifestyleResults.map(({ vehicle, compact }) => <article key={vehicle.id} className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
-          <p className="text-xs font-black uppercase text-emerald-300">{compact ? "Compact sedan candidate" : "Sedan alternative"}</p>
+        {lifestyleResults.map(({ vehicle, compact, mpg }) => <article key={vehicle.id} className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
+          <p className="text-xs font-black uppercase text-emerald-300">{lifestyleIntent?.thirdRow ? "Third-row documented" : compact ? "Compact sedan candidate" : "Vehicle to explore"}</p>
           <h3 className="mt-2 text-xl font-black">{vehicle.year} {vehicle.make} {vehicle.model} {vehicle.trim}</h3>
           <p className="mt-2 text-lg font-black text-amber-300">${vehicle.price.toLocaleString("en-US")}</p>
-          <p className="mt-1 text-xs text-slate-400">VIN {vehicle.id}</p>
+          <p className="mt-1 text-xs text-slate-400">VIN {vehicle.id}{mpg !== null ? ` · Approx. ${mpg} combined MPG from source city/highway figures` : " · MPG not verified"}</p>
           <Link href={`/vehicles/${vehicle.id}`} className="mt-4 inline-flex rounded-full bg-amber-300 px-5 py-2.5 text-sm font-black text-black">Check photos and vehicle details →</Link>
         </article>)}
       </div>
