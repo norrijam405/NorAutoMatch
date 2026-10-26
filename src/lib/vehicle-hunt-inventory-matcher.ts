@@ -89,6 +89,13 @@ function evaluateVehicle(
   compareYear(result, spec.modelYear, vehicle.year);
   compareText(result, spec.trim, vehicle.trim, "trim", true);
   compareText(result, spec.condition, vehicle.condition ?? "", "condition");
+  if (spec.bodyType) {
+    const type = vehicle.type.toLowerCase();
+    const match = spec.bodyType.value === "TRUCK" ? /truck|pickup/.test(type)
+      : spec.bodyType.value === "SEDAN" ? /sedan/.test(type) : /suv|crossover/.test(type);
+    if (match) result.reasons.push("body style: " + spec.bodyType.value.toLowerCase());
+    else priorityMiss(result, spec.bodyType.priority, "body style mismatch");
+  }
   compareMax(result, spec.maxPrice, vehicle.price, "price");
   if (spec.maxMileage && vehicle.mileageVerified === false) {
     priorityMiss(result, spec.maxMileage.priority, "mileage not verified by source");
@@ -98,7 +105,12 @@ function evaluateVehicle(
   compareText(result, spec.exteriorColor, vehicle.exteriorColor ?? vehicle.accent ?? "", "exterior color", true);
   compareText(result, spec.interiorColor, vehicle.interiorColor ?? "", "interior color", true);
   compareText(result, spec.drivetrain, vehicle.drivetrain, "drivetrain", true);
-  compareText(result, spec.engine, vehicle.engine ?? "", "engine", true);
+  if (spec.engine?.value === "V6") {
+    // Never infer cylinders from model/trim; require engine data on this VIN.
+    const evidence = (vehicle.engine ?? "").toLowerCase();
+    if (/\bv\s*[- ]?6\b|\b6\s*cyl(?:inder)?s?\b/.test(evidence)) result.reasons.push("verified V6 engine");
+    else priorityMiss(result, spec.engine.priority, "V6 engine not verified by source");
+  } else compareText(result, spec.engine, vehicle.engine ?? "", "engine", true);
   compareText(result, spec.transmission, vehicle.transmission ?? "", "transmission", true);
   compareText(result, spec.fuelType, vehicle.fuelType ?? "", "fuel type", true);
 
