@@ -8,6 +8,8 @@ export type LifestyleIntent = {
   thirdRow: boolean;
   economy: boolean;
   affordable: boolean;
+  maxPrice: number | null;
+  acceptsSedanOrSuv: boolean;
 };
 
 /** Translate broad shopping language into advisory preferences, not unsupported facts. */
@@ -15,14 +17,19 @@ export function interpretLifestyleSearch(query: string): LifestyleIntent | null 
   const text = query.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const teen = /\b(teen|teenager|teenage|new driver|first car|young driver)\b/.test(text);
   const small = /\b(small|compact|little|easy to park)\b/.test(text);
-  const sedan = /\b(sedan|four door|4 door)\b/.test(text);
+  const fromSedan = /\b(coming from|moving from|switching from|currently drive|used to drive|driving a)\s+(?:a\s+)?(?:small\s+|compact\s+)?sedan\b/.test(text);
+  const sedan = /\b(sedan|four door|4 door)\b/.test(text) && !fromSedan;
   const suv = /\b(suv|crossover|sport utility)\b/.test(text);
   const thirdRow = /\b(third row|3rd row|three row|7 seater|seven seater|7 passenger|seven passenger)\b/.test(text);
   const economy = /\b(good on gas|gas mileage|fuel efficient|fuel economy|good mpg|save on gas|economical)\b/.test(text);
   const affordable = /\b(affordable|budget friendly|inexpensive|cheap|low cost)\b/.test(text);
-  if (!(teen || thirdRow || economy || affordable)) return null;
+  const acceptsSedanOrSuv = fromSedan && suv;
+  const budgetMatch = query.match(/\b(?:under|below|up to|no more than|not more than|less than|maximum|max)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)(\s*k)?\b/i);
+  const budgetNumber = budgetMatch ? Number(budgetMatch[1].replace(/,/g, "")) : NaN;
+  const maxPrice = Number.isFinite(budgetNumber) && budgetNumber > 0 ? (budgetMatch?.[2] ? budgetNumber * 1000 : budgetNumber) : null;
+  if (!(teen || thirdRow || economy || affordable || maxPrice !== null)) return null;
   if (!(sedan || suv || thirdRow)) return null;
-  return { teen, small, sedan, suv, thirdRow, economy, affordable };
+  return { teen, small, sedan, suv, thirdRow, economy, affordable, maxPrice, acceptsSedanOrSuv };
 }
 
 function verifiedThirdRow(vehicle: Vehicle) {
@@ -32,6 +39,7 @@ function verifiedThirdRow(vehicle: Vehicle) {
 export function lifestyleCandidates(vehicles: Vehicle[], intent: LifestyleIntent) {
   const compactModels = new Set(["versa", "sentra", "corolla", "civic", "elantra", "forte", "rio", "mazda3", "impreza", "jetta"]);
   return vehicles.filter((vehicle) => {
+    if (intent.maxPrice !== null && (!Number.isFinite(vehicle.price) || vehicle.price > intent.maxPrice)) return false;
     if (intent.sedan && !/sedan/i.test(vehicle.type)) return false;
     if ((intent.suv || intent.thirdRow) && !/suv|crossover/i.test(vehicle.type)) return false;
     // Third-row seating must be attested by the feed; a model name is not enough.
