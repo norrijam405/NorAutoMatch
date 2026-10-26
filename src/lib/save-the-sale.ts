@@ -42,7 +42,7 @@ export function buildSaveTheSaleResult(input: {
   const hasSpecificRequirements = Boolean(
     input.requirements.vin || input.requirements.stockNumber ||
     input.requirements.make || input.requirements.model ||
-    input.requirements.modelYear || input.requirements.trim ||
+    input.requirements.modelYear || input.requirements.trim || input.requirements.bodyType || input.requirements.engine ||
     input.requirements.condition || input.requirements.maxPrice ||
     input.requirements.maxMileage || input.requirements.exteriorColor ||
     input.requirements.interiorColor || input.requirements.drivetrain ||
