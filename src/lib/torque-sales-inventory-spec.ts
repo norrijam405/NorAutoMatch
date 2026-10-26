@@ -13,6 +13,7 @@ export type TorqueSalesInventorySpec = {
   model?: TorqueSalesRequirement<string>;
   modelYear?: TorqueSalesRequirement<number | { min?: number; max?: number }>;
   trim?: TorqueSalesRequirement<string>;
+  bodyType?: TorqueSalesRequirement<"TRUCK" | "SEDAN" | "SUV">;
   condition?: TorqueSalesRequirement<"NEW" | "USED" | "CPO">;
   maxPrice?: TorqueSalesRequirement<number>;
   maxMileage?: TorqueSalesRequirement<number>;
@@ -185,6 +186,12 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
   else if (/\bpro-?x\b/i.test(text)) spec.trim = preferenceNear("pro-x") ? preferred("PRO-X") : must("PRO-X");
   else if (/\bsl\b/i.test(text)) spec.trim = preferenceNear("sl") ? preferred("SL") : must("SL");
   else if (/\bsv\b/i.test(text)) spec.trim = preferenceNear("sv") ? preferred("SV") : must("SV");
+
+  if (/\btruck|pickup\b/i.test(text)) spec.bodyType = must("TRUCK");
+  else if (/\bsedan\b/i.test(text)) spec.bodyType = must("SEDAN");
+  else if (/\bsuv|crossover\b/i.test(text)) spec.bodyType = must("SUV");
+
+  if (/\bv\s*[- ]?6\b|\b6\s*cylinder\b/i.test(text)) spec.engine = must("V6");
 
   if (/\bnew\b/i.test(text)) spec.condition = must("NEW");
   else if (/\bcpo|certified\b/i.test(text)) spec.condition = must("CPO");
