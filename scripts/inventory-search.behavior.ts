@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { parseInventoryQuery, searchInventory } from "../src/lib/inventory-search";
+import { parseInventoryQuery, searchInventory, searchInventoryConversational } from "../src/lib/inventory-search";
 import type { Vehicle } from "../src/lib/inventory";
 
 const vehicles: Vehicle[] = [
@@ -140,3 +140,117 @@ const vehicles: Vehicle[] = [
 }
 
 console.log("PASS_INVENTORY_SEARCH_STRUCTURED_CONSTRAINTS");
+
+
+{
+  const conversationalVehicles: Vehicle[] = [
+    ...vehicles,
+    {
+      id: "SENTRA-EFFICIENT",
+      year: 2025,
+      make: "Nissan",
+      model: "Sentra",
+      trim: "SV",
+      price: 27_800,
+      type: "Sedan",
+      mileage: 15,
+      drivetrain: "FWD",
+      image: "/sentra.jpg",
+      accent: "Gun Metallic",
+      exteriorColor: "Gun Metallic",
+      condition: "New",
+      features: ["Apple CarPlay"],
+    },
+    {
+      id: "KICKS-UNDER-BUDGET",
+      year: 2025,
+      make: "Nissan",
+      model: "Kicks",
+      trim: "S",
+      price: 28_900,
+      type: "SUV",
+      mileage: 11,
+      drivetrain: "FWD",
+      image: "/kicks-under.jpg",
+      accent: "Super Black",
+      exteriorColor: "Super Black",
+      condition: "New",
+      features: ["Apple CarPlay"],
+    },
+    {
+      id: "FRONTIER-EXCLUDED",
+      year: 2025,
+      make: "Nissan",
+      model: "Frontier",
+      trim: "S",
+      price: 28_500,
+      type: "Truck",
+      mileage: 12,
+      drivetrain: "RWD",
+      image: "/frontier.jpg",
+      accent: "Super Black",
+      exteriorColor: "Super Black",
+      condition: "New",
+      features: ["Apple CarPlay"],
+    },
+  ];
+
+  const result = searchInventoryConversational(
+    conversationalVehicles,
+    "I want a small sedan that's good on fuel economy, but it could be an SUV. No more than $29,800.",
+  );
+  assert.equal(result.intent.maxPrice, 29_800);
+  assert.deepEqual(result.intent.bodyStylesAllowed.sort(), ["SEDAN", "SUV"]);
+  assert.ok(result.exact.some((match) => match.vehicle.id === "SENTRA-EFFICIENT"));
+  assert.ok(result.exact.some((match) => match.vehicle.id === "KICKS-UNDER-BUDGET"));
+  assert.ok(!result.exact.some((match) => match.vehicle.price > 29_800));
+  assert.equal(result.truth.fuelEconomyFilterApplied, false);
+}
+
+{
+  const conversationalVehicles: Vehicle[] = [
+    ...vehicles,
+    {
+      id: "ALTIMA-TEEN",
+      year: 2023,
+      make: "Nissan",
+      model: "Altima",
+      trim: "S",
+      price: 21_500,
+      type: "Sedan",
+      mileage: 74_000,
+      drivetrain: "FWD",
+      image: "/altima.jpg",
+      accent: "Gray",
+      exteriorColor: "Gray",
+      condition: "Used",
+      features: ["Apple CarPlay"],
+    },
+    {
+      id: "FRONTIER-TEEN-EXCLUDED",
+      year: 2022,
+      make: "Nissan",
+      model: "Frontier",
+      trim: "S",
+      price: 20_500,
+      type: "Truck",
+      mileage: 70_000,
+      drivetrain: "RWD",
+      image: "/frontier-used.jpg",
+      accent: "Black",
+      exteriorColor: "Black",
+      condition: "Used",
+      features: ["Apple CarPlay"],
+    },
+  ];
+  const result = searchInventoryConversational(
+    conversationalVehicles,
+    "I need something for a teen driver, no more than 90,000 miles, and I don't want a truck.",
+  );
+  assert.equal(result.intent.maxMileage, 90_000);
+  assert.deepEqual(result.intent.bodyStylesExcluded, ["TRUCK"]);
+  assert.ok(result.exact.some((match) => match.vehicle.id === "ALTIMA-TEEN"));
+  assert.ok(!result.exact.some((match) => match.vehicle.type === "Truck"));
+}
+
+console.log("PASS_IGNICHECK_CONVERSATION_INTENT_R0");
