@@ -1,4 +1,5 @@
 import type { Vehicle } from "./inventory";
+import { compileNorAutoMatchIntent, type IgniCheckConversationIntent } from "./ignicheck-intent";
 
 export type InventoryConstraintKind =
   | "year"
@@ -35,6 +36,15 @@ export type InventorySearchResult = {
   parsed: ParsedInventoryQuery;
   exact: InventorySearchMatch[];
   close: InventorySearchMatch[];
+};
+
+export type ConversationalInventorySearchResult = InventorySearchResult & {
+  intent: IgniCheckConversationIntent;
+  truth: {
+    intentCompiler: "IGNICHECK_COMPATIBILITY_R0";
+    rawQueryPreserved: true;
+    fuelEconomyFilterApplied: boolean;
+  };
 };
 
 type FeatureDefinition = {
@@ -310,4 +320,109 @@ export function searchInventory(vehicles: Vehicle[], query: string): InventorySe
     .map(({ vehicle, matched, missing, score }) => ({ vehicle, kind: "close" as const, matched, missing, score }));
 
   return { parsed, exact, close };
+}
+
+
+function normalizedBodyType(vehicle: Vehicle) {
+  return normalizeText(vehicle.type).toUpperCase();
+}
+
+function conversationalCandidatePassesIntent(vehicle: Vehicle, intent: IgniCheckConversationIntent) {
+  if (intent.maxPrice != null && Number(vehicle.price) > intent.maxPrice) return false;
+  if (intent.maxMileage != null && Number(vehicle.mileage ?? Number.POSITIVE_INFINITY) > intent.maxMileage) return false;
+
+  const body = normalizedBodyType(vehicle);
+  if (intent.bodyStylesExcluded.includes(body)) return false;
+  if (intent.bodyStylesAllowed.length && !intent.bodyStylesAllowed.includes(body)) return false;
+
+  if (intent.featureHints.some((featureId) => !vehicleHasFeature(vehicle, featureId))) return false;
+  return true;
+}
+
+/**
+ * Conversation-first search path.
+ *
+ * IgniCheck-style intent is compiled before the existing structured matcher runs.
+ * The original search path remains unchanged for exact structured queries.
+ *
+ * R0 deliberately does not invent an MPG threshold because the canonical Vehicle
+ * contract does not currently expose a normalized fuel-economy field.
+ */
+export function searchInventoryConversational(
+  vehicles: Vehicle[],
+  query: string,
+): ConversationalInventorySearchResult {
+  const intent = compileNorAutoMatchIntent(query);
+  const parsed = parseInventoryQuery(query, vehicles);
+
+  const flexibleBodyType = intent.flexibilityObserved || intent.bodyStylesAllowed.length > 1;
+  const constraints = parsed.constraints.filter((constraint) => {
+    if (constraint.kind === "bodyType" && flexibleBodyType) return false;
+    if (constraint.kind === "bodyType" && intent.bodyStylesExcluded.includes(constraint.value.toUpperCase())) return false;
+    return true;
+  });
+
+  const evaluated = vehicles.map((vehicle) => {
+    const matchedConstraints = constraints.filter((constraint) => evaluateConstraint(vehicle, constraint));
+    const missingConstraints = constraints.filter((constraint) => !evaluateConstraint(vehicle, constraint));
+    const intentPass = conversationalCandidatePassesIntent(vehicle, intent);
+    const matched = matchedConstraints.map((constraint) => constraint.label);
+    if (intent.maxPrice != null && Number(vehicle.price) <= intent.maxPrice) matched.push("price within stated maximum");
+    if (intent.maxMileage != null && Number(vehicle.mileage ?? Number.POSITIVE_INFINITY) <= intent.maxMileage) matched.push("mileage within stated maximum");
+    if (intent.bodyStylesAllowed.length && intent.bodyStylesAllowed.includes(normalizedBodyType(vehicle))) matched.push("allowed body style");
+    const score =
+      matchedConstraints.reduce((sum, constraint) => sum + constraintWeight(constraint.kind), 0) +
+      (intentPass ? 10 : 0);
+
+    return {
+      vehicle,
+      matchedConstraints,
+      missingConstraints,
+      matched,
+      missing: missingConstraints.map((constraint) => missingExplanation(vehicle, constraint)),
+      score,
+      intentPass,
+    };
+  });
+
+  const exact = evaluated
+    .filter((candidate) => candidate.intentPass && candidate.missingConstraints.length === 0)
+    .sort((a, b) => b.score - a.score || stableVehicleTieBreak(a.vehicle, b.vehicle))
+    .map(({ vehicle, matched, missing, score }) => ({ vehicle, kind: "exact" as const, matched, missing, score }));
+
+  const identityConstraints = constraints.filter((constraint) => constraint.kind === "model" || constraint.kind === "make");
+  const close = evaluated
+    .filter((candidate) => !candidate.intentPass || candidate.missingConstraints.length > 0)
+    .filter((candidate) => candidate.matchedConstraints.length > 0 || intent.bodyStylesAllowed.length > 0)
+    .filter((candidate) => identityConstraints.length === 0 || identityConstraints.every((constraint) => evaluateConstraint(candidate.vehicle, constraint)))
+    .sort((a, b) => {
+      if (a.intentPass !== b.intentPass) return a.intentPass ? -1 : 1;
+      if (a.missingConstraints.length !== b.missingConstraints.length) return a.missingConstraints.length - b.missingConstraints.length;
+      if (a.score !== b.score) return b.score - a.score;
+      return stableVehicleTieBreak(a.vehicle, b.vehicle);
+    })
+    .map(({ vehicle, matched, missing, score }) => ({
+      vehicle,
+      kind: "close" as const,
+      matched,
+      missing: [
+        ...missing,
+        ...(intent.maxPrice != null && Number(vehicle.price) > intent.maxPrice ? [`price exceeds stated maximum: $${vehicle.price.toLocaleString()}`] : []),
+        ...(intent.maxMileage != null && Number(vehicle.mileage ?? Number.POSITIVE_INFINITY) > intent.maxMileage ? [`mileage exceeds stated maximum: ${vehicle.mileage ?? "not supplied"}`] : []),
+        ...(intent.bodyStylesExcluded.includes(normalizedBodyType(vehicle)) ? [`body style excluded: ${vehicle.type}`] : []),
+      ],
+      score,
+    }));
+
+  return {
+    parsed: { ...parsed, constraints, softTerms: [] },
+    exact,
+    close,
+    intent,
+    truth: {
+      intentCompiler: "IGNICHECK_COMPATIBILITY_R0",
+      rawQueryPreserved: true,
+      fuelEconomyFilterApplied: false,
+    },
+  };
 }
