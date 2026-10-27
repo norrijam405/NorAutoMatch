@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { AlertTriangle, ArrowLeftRight, Check, Filter, Heart, Search, Shuffle, Sparkles, X } from "lucide-react";
 import type { Vehicle } from "@/lib/inventory";
-import { searchInventory, vehicleHasFeature, type InventorySearchMatch } from "@/lib/inventory-search";
+import { searchInventoryConversational, vehicleHasFeature, type InventorySearchMatch } from "@/lib/inventory-search";
 import { buildGarageBattleStory } from "@/lib/garage-battle";
 import { cn } from "@/lib/cn";
 import { FinanceInterestModal } from "@/components/finance/finance-interest-modal";
@@ -54,7 +54,7 @@ export function InteractiveInventory({ vehicles, fetchedAt, initialSavedVins = [
     return activeSmartFilters.every((id) => smartFilterMatches(vehicle, id));
   }), [vehicles, bodyType, activeSmartFilters]);
 
-  const searchResult = useMemo(() => searchInventory(filterEligibleVehicles, query), [filterEligibleVehicles, query]);
+  const searchResult = useMemo(() => searchInventoryConversational(filterEligibleVehicles, query), [filterEligibleVehicles, query]);
   const queryActive = query.trim().length > 0;
   const exactMatches = searchResult.exact;
   const closeMatches = queryActive ? searchResult.close.slice(0, CLOSE_MATCH_LIMIT) : [];
@@ -184,7 +184,14 @@ export function InteractiveInventory({ vehicles, fetchedAt, initialSavedVins = [
             <input value={query} onChange={(event) => updateQuery(event.target.value)} placeholder="Try: gun metal Rogue AWD with CarPlay" className="w-full bg-transparent text-base text-white outline-none placeholder:text-slate-600" />
             {query && <button onClick={() => updateQuery("")} className="grid size-9 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-white/5 hover:text-white" aria-label="Clear search"><X size={16} /></button>}
           </label>
-          <p className="mt-2 text-[11px] leading-5 text-slate-600">Feature matches come only from source-provided feature evidence. If a close match differs, NorAuto says exactly what is missing instead of silently breaking your request.</p>
+          <p className="mt-2 text-[11px] leading-5 text-slate-600">NorAuto first translates normal conversation into bounded search intent, then checks source-provided inventory evidence. Preferences are not silently promoted into hard requirements.</p>
+          {queryActive && <div className="mt-3 flex flex-wrap gap-2">
+            {searchResult.intent.maxPrice != null && <span className="rounded-full border border-amber-300/20 bg-amber-300/[.06] px-2.5 py-1 text-[10px] font-bold text-amber-200">Max price: ${searchResult.intent.maxPrice.toLocaleString()}</span>}
+            {searchResult.intent.maxMileage != null && <span className="rounded-full border border-amber-300/20 bg-amber-300/[.06] px-2.5 py-1 text-[10px] font-bold text-amber-200">Max mileage: {searchResult.intent.maxMileage.toLocaleString()}</span>}
+            {searchResult.intent.bodyStylesAllowed.map((type) => <span key={`intent-body-${type}`} className="rounded-full border border-sky-300/20 bg-sky-300/[.06] px-2.5 py-1 text-[10px] font-bold text-sky-200">Allowed: {type}</span>)}
+            {searchResult.intent.bodyStylesExcluded.map((type) => <span key={`intent-exclude-${type}`} className="rounded-full border border-red-300/20 bg-red-300/[.06] px-2.5 py-1 text-[10px] font-bold text-red-200">Exclude: {type}</span>)}
+            {searchResult.intent.fuelEconomyPreference && <span className="rounded-full border border-violet-300/20 bg-violet-300/[.06] px-2.5 py-1 text-[10px] font-bold text-violet-200">Preference: fuel economy · MPG not normalized yet</span>}
+          </div>}
           {queryActive && searchResult.parsed.constraints.length > 0 && <div className="mt-3 flex flex-wrap gap-2">
             {searchResult.parsed.constraints.map((constraint, index) => <span key={`${constraint.kind}-${constraint.value}-${index}`} className="rounded-full border border-emerald-400/20 bg-emerald-400/[.06] px-2.5 py-1 text-[10px] font-bold text-emerald-200">Required: {constraint.label}</span>)}
           </div>}
