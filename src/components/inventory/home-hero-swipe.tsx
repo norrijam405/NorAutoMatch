@@ -28,7 +28,7 @@ export function HomeHeroSwipe({ vehicles, sourceLabel, sourceCount, inTransitCou
     return "Adapting to this session";
   }, [kept.length]);
 
-  if (!current) return <HeroUnavailable />;
+  if (!current) return <div className="mx-auto w-full max-w-[470px] rounded-[32px] border border-emerald-400/20 bg-[#0b1418] p-8 text-center"><p className="text-xs font-black uppercase tracking-widest text-emerald-300">Deck complete</p><h2 className="mt-3 text-3xl font-black text-white">You have seen this round.</h2><p className="mt-3 text-sm text-slate-400">Mix up the cards for another round, or browse the full inventory.</p><button type="button" onClick={() => { setDeck(vehicles); setSeen(0); setSaveNotice(null); }} className="mt-6 rounded-full bg-amber-300 px-6 py-3 text-sm font-black text-black">Play again</button><Link href="/inventory" className="mt-4 block text-sm font-bold text-slate-300 underline underline-offset-4">Browse all cars</Link></div>;
 
   function act(action: SwipeAction) {
     const actedOn = current;
@@ -59,7 +59,7 @@ export function HomeHeroSwipe({ vehicles, sourceLabel, sourceCount, inTransitCou
   }
 
   return (
-    <div className="relative mx-auto w-full max-w-[470px] lg:mx-0 lg:ml-auto">
+    <div className="relative mx-auto w-full max-w-[470px]">
       <div className="absolute -inset-6 rounded-[42px] bg-red-500/[.08] blur-3xl" />
       <div className="relative overflow-hidden rounded-[32px] border border-white/15 bg-[#07090d]/95 shadow-[0_30px_90px_rgba(0,0,0,.55)] backdrop-blur-xl">
         <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">

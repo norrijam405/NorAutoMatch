@@ -7,10 +7,13 @@ export type TorqueSalesRequirement<T> = {
 };
 
 export type TorqueSalesInventorySpec = {
+  vin?: TorqueSalesRequirement<string>;
+  stockNumber?: TorqueSalesRequirement<string>;
   make?: TorqueSalesRequirement<string>;
   model?: TorqueSalesRequirement<string>;
   modelYear?: TorqueSalesRequirement<number | { min?: number; max?: number }>;
   trim?: TorqueSalesRequirement<string>;
+  bodyType?: TorqueSalesRequirement<"TRUCK" | "SEDAN" | "SUV">;
   condition?: TorqueSalesRequirement<"NEW" | "USED" | "CPO">;
   maxPrice?: TorqueSalesRequirement<number>;
   maxMileage?: TorqueSalesRequirement<number>;
@@ -104,22 +107,52 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
   else if (/\bversa\b/i.test(text)) spec.model = must("Versa");
   else if (/\bz\b/i.test(text)) spec.model = must("Z");
 
-  if (/\bnissan\b/i.test(text) || spec.model) spec.make = must("Nissan");
+  const hyundaiModel = [
+    ["Santa Fe", /\bsanta\s+fe\b/i],
+    ["Santa Cruz", /\bsanta\s+cruz\b/i],
+    ["Palisade", /\bpalisade\b/i],
+    ["Tucson", /\btucson\b/i],
+    ["Kona", /\bkona\b/i],
+    ["Elantra", /\belantra\b/i],
+    ["Sonata", /\bsonata\b/i],
+    ["Venue", /\bvenue\b/i],
+    ["Ioniq 5", /\bioniq\s*5\b/i],
+    ["Ioniq 6", /\bioniq\s*6\b/i],
+    ["Ioniq 9", /\bioniq\s*9\b/i],
+    ["Nexo", /\bnexo\b/i],
+  ] as const;
+  const detectedHyundaiModel = hyundaiModel.find(([, pattern]) => pattern.test(text));
+  const explicitHyundai = /\bhyundai\b/i.test(text);
+  const explicitNissan = /\bnissan\b/i.test(text);
+  if (detectedHyundaiModel && !spec.model) spec.model = must(detectedHyundaiModel[0]);
+  if (explicitHyundai && explicitNissan) {
+    spec.freeformNotes.push("Both Hyundai and Nissan were named. Confirm the intended make before claiming an exact inventory match.");
+  } else if (explicitHyundai || detectedHyundaiModel) {
+    spec.make = must("Hyundai");
+  } else if (explicitNissan || spec.model) {
+    spec.make = must("Nissan");
+  }
+
+  // Exact VIN lookup is a strict identity request, not a preference or fuzzy match.
+  const vinRequest = text.match(/\b(?:VIN|vehicle identification number)\s*[:#-]?\s*([A-HJ-NPR-Z0-9]{17})\b/i);
+  if (vinRequest) spec.vin = must(vinRequest[1].toUpperCase());
+  const stockRequest = text.match(/\b(?:stock(?:\s*(?:number|no\.?|#))?|stock#)\s*[:#-]?\s*([A-Z0-9-]{3,24})\b/i);
+  if (stockRequest && /[0-9]/.test(stockRequest[1])) spec.stockNumber = must(stockRequest[1].toUpperCase());
 
   const year = text.match(/\b(20\d{2})\b/);
   if (year) spec.modelYear = must(Number(year[1]));
 
-  const maxPrice = text.match(/(?:under|below|max(?:imum)?|up to)\s*\$?\s*([0-9]+(?:\.[0-9]+)?)\s*(k|thousand)?/i);
+  const maxPrice = text.match(/(?:under|below|max(?:imum)?|up to|less than|no more than|not more than)\s*\$?\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?)\s*(k|thousand)?/i);
   if (maxPrice) {
-    const raw = Number(maxPrice[1]);
+    const raw = Number(maxPrice[1].replace(/,/g, ""));
     if (Number.isFinite(raw) && raw > 0) {
       spec.maxPrice = must(maxPrice[2] || raw < 1000 ? Math.round(raw * 1000) : Math.round(raw));
     }
   }
 
-  const maxMileage = text.match(/(?:under|below|max(?:imum)?|less than)\s*([0-9]+(?:\.[0-9]+)?)\s*(k|thousand)?\s*(?:miles?|mi)\b/i);
+  const maxMileage = text.match(/(?:under|below|max(?:imum)?|less than)\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?)\s*(k|thousand)?\s*(?:miles?|mi)\b/i);
   if (maxMileage) {
-    const raw = Number(maxMileage[1]);
+    const raw = Number(maxMileage[1].replace(/,/g, ""));
     if (Number.isFinite(raw) && raw >= 0) {
       spec.maxMileage = must(maxMileage[2] || raw < 1000 ? Math.round(raw * 1000) : Math.round(raw));
     }
@@ -154,9 +187,15 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
   else if (/\bsl\b/i.test(text)) spec.trim = preferenceNear("sl") ? preferred("SL") : must("SL");
   else if (/\bsv\b/i.test(text)) spec.trim = preferenceNear("sv") ? preferred("SV") : must("SV");
 
+  if (/\btruck|pickup\b/i.test(text)) spec.bodyType = must("TRUCK");
+  else if (/\bsedan\b/i.test(text)) spec.bodyType = must("SEDAN");
+  else if (/\bsuv|crossover\b/i.test(text)) spec.bodyType = must("SUV");
+
+  if (/\bv\s*[- ]?6\b|\b6\s*cylinder\b/i.test(text)) spec.engine = must("V6");
+
   if (/\bnew\b/i.test(text)) spec.condition = must("NEW");
   else if (/\bcpo|certified\b/i.test(text)) spec.condition = must("CPO");
-  else if (/\bused|pre[- ]owned\b/i.test(text)) spec.condition = must("USED");
+  else if (/\b(?:used|pre[- ]?owned|preowned)\b/i.test(text)) spec.condition = must("USED");
 
   if (/\bleather\b/i.test(text)) spec.interiorMaterial = preferred("Leather");
 

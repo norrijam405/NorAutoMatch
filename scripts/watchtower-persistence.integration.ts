@@ -75,6 +75,7 @@ async function main() {
       workspaceId: "norautomatch",
     });
     assert.equal(active.some((item) => item.huntId === hunt.huntId), true);
+    assert.deepEqual(active.find((item) => item.huntId === hunt.huntId)?.truth, hunt.truth);
 
     const observation: IndustryScoutObservation = {
       observationId: "ci_pathfinder_incentive",
@@ -115,6 +116,56 @@ async function main() {
     assert.equal(queue[0]?.huntId, hunt.huntId);
     assert.equal(queue[0]?.action, "TEXT_CUSTOMER");
 
+    // An already-persisted match must not remain actionable once its source expires.
+    const expired = {
+      ...observation,
+      observationId: 'ci_expired_pathfinder_incentive',
+      expiresAt: '2026-10-13T21:35:00.000Z',
+    };
+    await persistIndustryScoutObservation({ pool, observation: expired });
+    await persistScoutOpportunityMatch({
+      pool,
+      match: matchScoutObservationToHunt({
+        observation: expired, hunt, createdAt: '2026-10-13T21:33:00.000Z',
+      }),
+    });
+    const freshQueue = await readWatchtowerOpportunityQueue({ pool, workspaceId: 'norautomatch' });
+    assert.equal(freshQueue.length, 1);
+    assert.equal(freshQueue[0]?.observationId, observation.observationId);
+
+    // Defense in depth: even an incorrectly persisted contact action is not
+    // actionable unless both matching metadata and immutable source evidence are safe.
+    const reportedObservation: IndustryScoutObservation = {
+      ...observation,
+      observationId: "ci_reported_pathfinder",
+      evidenceState: "REPORTED",
+      torqueUse: "SALESPERSON_ONLY",
+    };
+    await persistIndustryScoutObservation({ pool, observation: reportedObservation });
+    await persistScoutOpportunityMatch({
+      pool,
+      match: {
+        ...match,
+        observationId: reportedObservation.observationId,
+        action: "TEXT_CUSTOMER",
+        customerSafe: false,
+        requiresHumanVerification: true,
+      },
+    });
+    const guardedQueue = await readWatchtowerOpportunityQueue({ pool, workspaceId: "norautomatch" });
+    assert.equal(guardedQueue.length, 1);
+    assert.equal(guardedQueue[0]?.observationId, observation.observationId);
+
+    // Queued recommendations for paused Hunts must be suppressed at read time.
+    await pool.query("UPDATE torque_vehicle_hunts SET state = 'PAUSED' WHERE hunt_id = $1", [hunt.huntId]);
+    const pausedQueue = await readWatchtowerOpportunityQueue({ pool, workspaceId: 'norautomatch' });
+    assert.equal(pausedQueue.length, 0);
+    await pool.query("UPDATE torque_vehicle_hunts SET state = 'SEARCHING' WHERE hunt_id = $1", [hunt.huntId]);
+    // A consent change after matching must remove contact actions from the queue.
+    await pool.query("UPDATE torque_vehicle_hunts SET consent_to_contact = FALSE WHERE hunt_id = $1", [hunt.huntId]);
+    const revokedQueue = await readWatchtowerOpportunityQueue({ pool, workspaceId: 'norautomatch' });
+    assert.equal(revokedQueue.length, 0);
+    await pool.query("UPDATE torque_vehicle_hunts SET consent_to_contact = TRUE WHERE hunt_id = $1", [hunt.huntId]);
     const brief = buildSalespersonDailyBrief({
       items: queue,
       generatedAt: "2026-10-13T21:34:00.000Z",

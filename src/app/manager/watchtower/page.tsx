@@ -25,18 +25,24 @@ export default async function TorqueWatchtowerPage() {
 
   let activeHunts: Awaited<ReturnType<typeof readActiveVehicleHunts>> = [];
   let opportunityQueue: Awaited<ReturnType<typeof readWatchtowerOpportunityQueue>> = [];
-  let huntReadState: "READY" | "NOT_CONFIGURED" | "MIGRATION_PENDING" = "READY";
+  let huntReadState: "READY" | "NOT_CONFIGURED" | "READ_FAILED" = "READY";
   const connectionString = process.env.NORAUTO_CRM_DATABASE_URL?.trim();
   if (!connectionString) {
     huntReadState = "NOT_CONFIGURED";
   } else {
+    let pool: ReturnType<typeof createPostgresCrmPool> | undefined;
     try {
-      const pool = createPostgresCrmPool(connectionString);
+      pool = createPostgresCrmPool(connectionString);
       activeHunts = await readActiveVehicleHunts({ pool, workspaceId: "norautomatch", limit: 30 });
       opportunityQueue = await readWatchtowerOpportunityQueue({ pool, workspaceId: "norautomatch", limit: 30 });
-      await pool.end();
     } catch {
-      huntReadState = "MIGRATION_PENDING";
+      // Readiness must fail closed even if pool creation itself fails.
+      // Do not label an unverified connectivity or permission error a migration failure.
+      activeHunts = [];
+      opportunityQueue = [];
+      huntReadState = "READ_FAILED";
+    } finally {
+      if (pool) await pool.end();
     }
   }
 
@@ -66,10 +72,47 @@ export default async function TorqueWatchtowerPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
+            <Link href="/manager/watchtower/save-the-sale" className="rounded-full bg-red-600 px-5 py-3 text-sm font-black text-white">Save the Sale</Link>
             <Link href="/manager/follow-up" className="rounded-full border border-white/15 px-5 py-3 text-sm font-black text-white">Follow-up desk</Link>
             <Link href="/inventory" className="rounded-full bg-amber-300 px-5 py-3 text-sm font-black text-black">Verified inventory</Link>
           </div>
         </div>
+
+        <section aria-label="Watchtower operational readiness" className="mt-8 rounded-[28px] border border-amber-300/20 bg-amber-300/[.035] p-5 sm:p-7">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[.18em] text-amber-300">Operational readiness</p>
+              <h2 className="mt-2 text-xl font-black text-white">What is actually connected?</h2>
+            </div>
+            <span className="rounded-full border border-amber-300/20 px-3 py-1 text-[10px] font-black uppercase tracking-[.14em] text-amber-200">
+              {huntReadState === "READY" ? "Database readable" : "Setup incomplete"}
+            </span>
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-3">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Vehicle Hunt database</p>
+              <p className="mt-2 text-sm font-black text-white">{huntReadState.replaceAll("_", " ")}</p>
+              <p className="mt-2 text-xs leading-5 text-slate-400">
+                {huntReadState === "READY"
+                  ? "Hunt and Scout queues were read successfully during this request."
+                  : huntReadState === "NOT_CONFIGURED"
+                    ? "CRM database connection is not configured in this runtime."
+                    : "Hunt and Scout queries did not complete. The cause is not yet verified; check schema activation, permissions, and database connectivity."}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Dealership CRM Bridge</p>
+              <p className="mt-2 text-sm font-black text-white">{crmRuntime.state.replaceAll("_", " ")}</p>
+              <p className="mt-2 text-xs leading-5 text-slate-400">External provider writes are not enabled by this dashboard.</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Customer communication</p>
+              <p className="mt-2 text-sm font-black text-white">Draft only</p>
+              <p className="mt-2 text-xs leading-5 text-slate-400">Prepared follow-ups are not sent automatically. Consent and human review still apply.</p>
+            </div>
+          </div>
+          <p className="mt-4 text-xs leading-5 text-slate-400">This panel reports runtime checks, not production certification. A readable database does not prove live inventory freshness, provider activation, or outbound-message authority.</p>
+        </section>
 
         <section className="mt-8 grid gap-4 md:grid-cols-3">
           <SummaryCard icon={<CarFront size={20} />} title="Our inventory" value={String(local.length)} detail="Primary verified customer-facing scope." />
@@ -108,7 +151,7 @@ export default async function TorqueWatchtowerPage() {
         </section>
 
         <section className="mt-10">
-          <FreshUpHuntForm />
+          <FreshUpHuntForm persistenceReady={huntReadState === "READY"} />
         </section>
 
         <section className="mt-10 rounded-[28px] border border-white/10 bg-white/[.025] p-6 sm:p-8">
@@ -117,7 +160,7 @@ export default async function TorqueWatchtowerPage() {
               <p className="text-[10px] font-black uppercase tracking-[.18em] text-red-400">Active Vehicle Hunts</p>
               <h2 className="mt-2 text-3xl font-black text-white">What Torque is hunting right now.</h2>
             </div>
-            <p className="text-xs text-slate-500">{huntReadState === "READY" ? activeHunts.length + " active" : huntReadState === "NOT_CONFIGURED" ? "Database not configured" : "Migration not active yet"}</p>
+            <p className="text-xs text-slate-500">{huntReadState === "READY" ? activeHunts.length + " active" : huntReadState === "NOT_CONFIGURED" ? "Database not configured" : "Database read unavailable"}</p>
           </div>
 
           {huntReadState !== "READY" ? (

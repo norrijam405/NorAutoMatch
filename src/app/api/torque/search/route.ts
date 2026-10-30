@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { readJsonBodyWithByteLimit } from "@/lib/request-body-limit";
 import { answerTorqueInventory, type TorqueInventoryMode } from "@/lib/torque-inventory-assistant";
 import { parseTorqueSalesInventorySpec } from "@/lib/torque-sales-inventory-spec";
+import { dealerInventorySearchAvailable, resolveDealershipScope } from "@/lib/dealership-scope";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,6 +46,27 @@ export async function POST(request: Request) {
     return noStore({ message: "Tell Torque what you're looking for in 1,200 characters or fewer." }, 400);
   }
 
+  const requestedDealership =
+    typeof bodyRead.value === "object" && bodyRead.value !== null &&
+    "dealershipId" in bodyRead.value
+      ? bodyRead.value.dealershipId
+      : "orr-nissan-west";
+  const dealership = resolveDealershipScope(requestedDealership);
+  if (!dealership) {
+    return noStore({ message: "Select a recognized dealership before asking Torque to search its inventory.", truthState: "UNKNOWN_DEALERSHIP" }, 400);
+  }
+  if (!dealerInventorySearchAvailable(dealership)) {
+    return noStore({
+      protocol: "NORAUTO_TORQUE_SEARCH_V1",
+      dealershipId: dealership.id,
+      dealershipLabel: dealership.label,
+      truthState: "DEALERSHIP_INVENTORY_NOT_CONNECTED",
+      message: "The Irving Hyundai dealership has not been confirmed or connected to a verified inventory source. I cannot search its stock or claim whether it has a vehicle. A salesperson can review your request manually after the dealership is confirmed.",
+      matches: [],
+      canCreateSourcingRequest: false,
+    }, 200);
+  }
+
   const runtimeDecision = resolveInventoryRuntime({
     mode: process.env.NORAUTO_INVENTORY_MODE,
     liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
@@ -72,7 +94,20 @@ export async function POST(request: Request) {
   }
 
   const spec = parseTorqueSalesInventorySpec(message);
+  if (spec.freeformNotes.some((note) => note.startsWith("Both Hyundai and Nissan were named."))) {
+    return noStore({
+      protocol: "NORAUTO_TORQUE_SEARCH_V1",
+      truthState: "BRAND_CLARIFICATION_REQUIRED",
+      dealershipId: dealership.id,
+      dealershipLabel: dealership.label,
+      needsMoreDetail: true,
+      answer: "You mentioned both Hyundai and Nissan. Are you comparing the two brands, or searching for a specific make? I won't assume one and give you the wrong inventory.",
+      matches: [],
+    });
+  }
   const hasSearchSignal = Boolean(
+    spec.vin ||
+    spec.stockNumber ||
     spec.make ||
     spec.model ||
     spec.modelYear ||
@@ -132,6 +167,8 @@ export async function POST(request: Request) {
     needsMoreDetail: false,
     ...result,
     salesSpec: spec,
+    dealershipId: dealership.id,
+    dealershipLabel: dealership.label,
     matchDna: dna ?? null,
   });
 }

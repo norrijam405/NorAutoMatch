@@ -16,7 +16,8 @@ export function rankVehiclesForSalesSpec(input: {
   vehicles: Vehicle[];
   limit?: number;
 }): SalesSpecVehicleEvaluation[] {
-  const limit = Math.max(1, Math.min(input.limit ?? 12, 50));
+  // Search the entire verified dealer catalog before returning the requested top matches.
+  const limit = Math.max(1, Math.min(input.limit ?? 12, 2_000));
   const fitRank = { EXACT: 0, STRONG: 1, NEAR: 2 };
 
   return input.vehicles
@@ -81,19 +82,35 @@ function evaluateVehicle(
   spec: TorqueSalesInventorySpec,
   vehicle: Vehicle,
 ): Omit<SalesSpecVehicleEvaluation, "vehicle" | "fit"> {
-  const result = { reasons: [], compromises: [], hardMisses: 0, softMisses: 0 };
+  const result: Omit<SalesSpecVehicleEvaluation, "vehicle" | "fit"> = { reasons: [], compromises: [], hardMisses: 0, softMisses: 0 };
 
   compareText(result, spec.make, vehicle.make, "make");
   compareText(result, spec.model, vehicle.model, "model");
   compareYear(result, spec.modelYear, vehicle.year);
   compareText(result, spec.trim, vehicle.trim, "trim", true);
   compareText(result, spec.condition, vehicle.condition ?? "", "condition");
+  if (spec.bodyType) {
+    const type = vehicle.type.toLowerCase();
+    const match = spec.bodyType.value === "TRUCK" ? /truck|pickup/.test(type)
+      : spec.bodyType.value === "SEDAN" ? /sedan/.test(type) : /suv|crossover/.test(type);
+    if (match) result.reasons.push("body style: " + spec.bodyType.value.toLowerCase());
+    else priorityMiss(result, spec.bodyType.priority, "body style mismatch");
+  }
   compareMax(result, spec.maxPrice, vehicle.price, "price");
-  compareMax(result, spec.maxMileage, vehicle.mileage, "mileage");
+  if (spec.maxMileage && vehicle.mileageVerified === false) {
+    priorityMiss(result, spec.maxMileage.priority, "mileage not verified by source");
+  } else {
+    compareMax(result, spec.maxMileage, vehicle.mileage, "mileage");
+  }
   compareText(result, spec.exteriorColor, vehicle.exteriorColor ?? vehicle.accent ?? "", "exterior color", true);
   compareText(result, spec.interiorColor, vehicle.interiorColor ?? "", "interior color", true);
   compareText(result, spec.drivetrain, vehicle.drivetrain, "drivetrain", true);
-  compareText(result, spec.engine, vehicle.engine ?? "", "engine", true);
+  if (spec.engine?.value === "V6") {
+    // Never infer cylinders from model/trim; require engine data on this VIN.
+    const evidence = (vehicle.engine ?? "").toLowerCase();
+    if (/\bv\s*[- ]?6\b|\b6\s*cyl(?:inder)?s?\b/.test(evidence)) result.reasons.push("verified V6 engine");
+    else priorityMiss(result, spec.engine.priority, "V6 engine not verified by source");
+  } else compareText(result, spec.engine, vehicle.engine ?? "", "engine", true);
   compareText(result, spec.transmission, vehicle.transmission ?? "", "transmission", true);
   compareText(result, spec.fuelType, vehicle.fuelType ?? "", "fuel type", true);
 
@@ -137,7 +154,7 @@ function compareText(
   const expected = normalize(String(requirement.value));
   const actualNormalized = normalize(actual);
   const matches = fuzzy
-    ? actualNormalized.includes(expected) || expected.includes(actualNormalized)
+    ? Boolean(actualNormalized && expected) && (actualNormalized.includes(expected) || expected.includes(actualNormalized))
     : actualNormalized === expected;
   if (matches) result.reasons.push(label + ": " + String(requirement.value));
   else priorityMiss(result, requirement.priority, label + " mismatch");
@@ -182,8 +199,8 @@ function compareSearchable(
     const normalizedNeedle = normalize(needle);
     const normalizedHaystack = normalize(searchable);
     return fuzzy
-      ? normalizedHaystack.includes(normalizedNeedle) || normalizedNeedle.includes(normalizedHaystack)
-      : normalizedHaystack.includes(normalizedNeedle);
+      ? Boolean(normalizedNeedle && normalizedHaystack) && (normalizedHaystack.includes(normalizedNeedle) || normalizedNeedle.includes(normalizedHaystack))
+      : Boolean(normalizedNeedle) && normalizedHaystack.includes(normalizedNeedle);
   });
   if (matches) result.reasons.push(label + ": " + raw);
   else priorityMiss(result, requirement.priority, "no source evidence for " + label + ": " + raw);
@@ -224,6 +241,8 @@ function normalize(value: string) {
 
 
 function identityRequirementsMatch(spec: TorqueSalesInventorySpec, vehicle: Vehicle) {
+  if (spec.vin && spec.vin.value.toUpperCase() !== vehicle.id.toUpperCase()) return false;
+  if (spec.stockNumber && (!vehicle.stockNumber || spec.stockNumber.value.toUpperCase() !== vehicle.stockNumber.toUpperCase())) return false;
   if (spec.make?.priority === "MUST_HAVE" && normalize(String(spec.make.value)) !== normalize(vehicle.make)) return false;
   if (spec.model?.priority === "MUST_HAVE" && normalize(String(spec.model.value)) !== normalize(vehicle.model)) return false;
   return true;
