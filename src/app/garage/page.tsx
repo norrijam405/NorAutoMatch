@@ -5,6 +5,7 @@ import { buildMatchDnaSummary } from "@/lib/match-dna";
 import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
 import type { Vehicle } from "@/lib/inventory";
 import { SavedGarageBattle } from "@/components/garage/saved-garage-battle";
+import { garageFitNote } from "@/lib/garage-fit-note";
 import type { Json } from "@/lib/supabase/database.types";
 
 export const metadata: Metadata = {
@@ -41,6 +42,7 @@ export default async function GaragePage() {
   const jobsByVin = new Map((scoutJobs ?? []).map((job) => [job.vin, job]));
   const dossiersByVin = new Map((dossiers ?? []).map((dossier) => [dossier.vin, dossier]));
   const dna = buildMatchDnaSummary(dnaEvents ?? []);
+  const availableSavedVehicles = vins.map(vin => byVin.get(vin.toUpperCase())).filter((v): v is Vehicle => Boolean(v));
 
   return (
     <section className="min-h-[72vh] border-b border-white/5 bg-slate-950/35 py-12 sm:py-16">
@@ -66,7 +68,7 @@ export default async function GaragePage() {
         </div>
 
         {saved?.length && !liveCatalog && <p role="status" className="mt-6 rounded-xl border border-amber-300/25 bg-amber-300/5 p-4 text-sm text-amber-200">Dealer inventory cannot be verified. Saved VINs remain in your Garage, but prices and availability cannot be confirmed.</p>}
-        <SavedGarageBattle savedVehicles={vins.map(vin => byVin.get(vin.toUpperCase())).filter((v): v is Vehicle => Boolean(v))} unavailableCount={vins.filter(vin => !byVin.has(vin.toUpperCase())).length} />
+        <SavedGarageBattle savedVehicles={availableSavedVehicles} unavailableCount={vins.filter(vin => !byVin.has(vin.toUpperCase())).length} />
         <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {saved?.length ? saved.map((item) => {
             const vehicle = byVin.get(item.vin.toUpperCase());
@@ -89,17 +91,18 @@ export default async function GaragePage() {
 
                 <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-[10px] font-black uppercase tracking-[.16em] text-red-300">Market Scout</p>
-                    <span className="text-[10px] font-bold text-slate-500">{dossier?.status === "researched" ? "Research ready" : job?.status === "failed" ? "Needs retry" : "Queued"}</span>
+                    <p className="text-[10px] font-black uppercase tracking-[.16em] text-red-300">Why this might fit</p>
+                    <span className="text-[10px] font-bold text-slate-500">{dossier?.status === "researched" ? "Research available" : job?.status === "failed" ? "Research unavailable" : "Research pending"}</span>
                   </div>
-                  {dossier?.status === "researched" ? <details className="mt-2">
+                  <p className="mt-3 text-xs leading-5 text-slate-300">{garageFitNote(vehicle, availableSavedVehicles)}</p>
+                  {dossier?.status === "researched" ? <details className="mt-3">
                     <summary className="cursor-pointer text-xs font-bold text-white">Pros, cons & watch-outs</summary>
                     {dossier.summary && <p className="mt-3 text-xs leading-5 text-slate-400">{dossier.summary}</p>}
                     {pros.length > 0 && <ScoutList title="Pros" items={pros} />}
                     {cons.length > 0 && <ScoutList title="Cons" items={cons} />}
                     {watch.length > 0 && <ScoutList title="Watch" items={watch} />}
                     <p className="mt-3 text-[10px] leading-4 text-slate-600">Scout claims stay evidence-linked and refreshable; missing evidence stays missing.</p>
-                  </details> : <p className="mt-2 text-xs leading-5 text-slate-500">This VIN is in the research queue. Deep pros/cons will appear here when the Market Scout worker completes its evidence pass.</p>}
+                  </details> : <p className="mt-2 text-xs leading-5 text-slate-500">Additional vehicle research is pending. We will not claim pros, cons, or a completed review without evidence.</p>}
                 </div>
 
                 <div className="mt-5 flex flex-wrap gap-3 text-sm font-bold">
