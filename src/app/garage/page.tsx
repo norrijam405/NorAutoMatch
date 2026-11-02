@@ -4,6 +4,7 @@ import { requireAuthenticatedUser } from "@/lib/supabase/authz";
 import { buildMatchDnaSummary } from "@/lib/match-dna";
 import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
 import type { Vehicle } from "@/lib/inventory";
+import { SavedGarageBattle } from "@/components/garage/saved-garage-battle";
 import type { Json } from "@/lib/supabase/database.types";
 
 export const metadata: Metadata = {
@@ -65,6 +66,7 @@ export default async function GaragePage() {
         </div>
 
         {saved?.length && !liveCatalog && <p role="status" className="mt-6 rounded-xl border border-amber-300/25 bg-amber-300/5 p-4 text-sm text-amber-200">Dealer inventory cannot be verified. Saved VINs remain in your Garage, but prices and availability cannot be confirmed.</p>}
+        <SavedGarageBattle savedVehicles={vins.map(vin => byVin.get(vin.toUpperCase())).filter((v): v is Vehicle => Boolean(v))} unavailableCount={vins.filter(vin => !byVin.has(vin.toUpperCase())).length} />
         <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {saved?.length ? saved.map((item) => {
             const vehicle = byVin.get(item.vin.toUpperCase());
@@ -102,7 +104,7 @@ export default async function GaragePage() {
 
                 <div className="mt-5 flex flex-wrap gap-3 text-sm font-bold">
                   {vehicle ? <Link href={`/vehicles/${encodeURIComponent(item.vin)}`} className="text-amber-300 hover:text-amber-200">Full details →</Link> : <span className="text-xs text-slate-500">Live details unavailable</span>}
-                  <Link href="/inventory" className="text-slate-400 hover:text-white">Compare inventory</Link>
+                  <a href="#garage-battle" className="text-slate-400 hover:text-white">Garage Battle</a>
                 </div>
                 <p className="mt-4 text-[9px] text-slate-700">VIN {item.vin}</p>
               </article>
