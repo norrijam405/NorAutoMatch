@@ -140,7 +140,7 @@ export async function POST(request: Request) {
       truthState: mode === "verified-cache" ? "VERIFIED_CACHED_CATALOG" : "VERIFIED_SOURCE_CATALOG",
       mode, dealershipId: dealership.id,
       answer: observations.length
-        ? observations.join("\n\n") + "\n\nWhich tradeoff matters more to you?"
+        ? `About ${priorityLabel[priority]}: ` + observations.join("\n\n") + "\n\n" + advice
         : `I can't establish a source-backed difference for ${priorityLabel[priority]} between those two exact VINs. Ask about another factor or review the evidence gaps in Garage Battle.`,
       battle: { vins: ids, priority, signals, evidenceGaps: story.evidenceGaps },
       matches: [], needsMoreDetail: false,
