@@ -7,12 +7,32 @@ import { buildGarageBattleStory } from "@/lib/garage-battle";
 
 type Props = { savedVehicles: Vehicle[]; unavailableCount: number };
 
+const priorities = [
+  { id: "all", label: "Show everything", signals: [] },
+  { id: "budget", label: "Lower price", signals: ["advertised-price"] },
+  { id: "fuel", label: "Fuel economy", signals: ["highway-mpg", "city-mpg"] },
+  { id: "space", label: "More room", signals: ["cargo", "seating"] },
+  { id: "weather", label: "Traction", signals: ["traction"] },
+  { id: "city", label: "Easy parking", signals: ["footprint"] },
+] as const;
+type Priority = typeof priorities[number]["id"];
+
+
 export function SavedGarageBattle({ savedVehicles, unavailableCount }: Props) {
   const [first, setFirst] = useState(savedVehicles[0]?.id ?? "");
   const [second, setSecond] = useState(savedVehicles[1]?.id ?? "");
-  const a = savedVehicles.find(vehicle => vehicle.id === first);
-  const b = savedVehicles.find(vehicle => vehicle.id === second);
+  const [priority, setPriority] = useState<Priority>("all");
+  // Resolve selections against the current catalog so an old VIN cannot linger after an inventory refresh.
+  const validFirst = savedVehicles.some(v => v.id === first) ? first : (savedVehicles[0]?.id ?? "");
+  const validSecond = savedVehicles.some(v => v.id === second) && second !== validFirst
+    ? second : (savedVehicles.find(v => v.id !== validFirst)?.id ?? "");
+  const a = savedVehicles.find(vehicle => vehicle.id === validFirst);
+  const b = savedVehicles.find(vehicle => vehicle.id === validSecond);
   const story = useMemo(() => a && b && a.id !== b.id ? buildGarageBattleStory(a,b) : null, [a,b]);
+  const selectedPriority = priorities.find(p => p.id === priority) ?? priorities[0];
+  const relevantSignals = story && priority !== "all"
+    ? story.signals.filter(signal => (selectedPriority.signals as readonly string[]).includes(signal.id))
+    : (story?.signals ?? []);
   const name = (v: Vehicle) => `${v.year} ${v.make} ${v.model} ${v.trim}`.trim();
 
   return <section id="garage-battle" aria-labelledby="garage-battle-heading" className="mt-8 rounded-3xl border border-amber-300/25 bg-amber-300/[.045] p-5 sm:p-7">
@@ -24,7 +44,7 @@ export function SavedGarageBattle({ savedVehicles, unavailableCount }: Props) {
       Save at least two currently verified vehicles to start a battle. <Link href="/inventory" className="font-bold text-amber-300 underline">Browse inventory</Link>
     </div> : <>
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        {[{value:first,set:setFirst,label:"Vehicle one",id:"battle-one"},{value:second,set:setSecond,label:"Vehicle two",id:"battle-two"}].map(field=><div key={field.id}>
+        {[{value:validFirst,set:setFirst,label:"Vehicle one",id:"battle-one"},{value:validSecond,set:setSecond,label:"Vehicle two",id:"battle-two"}].map(field=><div key={field.id}>
           <label htmlFor={field.id} className="mb-2 block text-xs font-bold text-slate-300">{field.label}</label>
           <select id={field.id} value={field.value} onChange={event=>field.set(event.target.value)} className="min-h-12 w-full rounded-xl border border-white/20 bg-[#101922] p-3 text-sm text-white">
             {savedVehicles.map(v=><option key={v.id} value={v.id}>{name(v)}</option>)}
@@ -40,9 +60,20 @@ export function SavedGarageBattle({ savedVehicles, unavailableCount }: Props) {
             <Link href={`/vehicles/${encodeURIComponent(v.id)}`} className="mt-3 inline-block text-xs font-bold text-amber-200 underline">Full vehicle details</Link>
           </div>)}
         </div>
+        <div className="mt-6">
+          <p className="text-xs font-black uppercase tracking-wider text-amber-300">What matters most to you?</p>
+          <div role="group" aria-label="Choose your comparison priority" className="mt-3 flex flex-wrap gap-2">
+            {priorities.map(option => <button key={option.id} type="button" aria-pressed={priority === option.id}
+              onClick={() => setPriority(option.id)}
+              className={`min-h-11 rounded-full border px-4 py-2 text-xs font-bold transition-colors ${priority === option.id ? "border-amber-300 bg-amber-300 text-black" : "border-white/20 text-slate-300 hover:border-amber-300/60"}`}>
+              {option.label}
+            </button>)}
+          </div>
+        </div>
         <h3 className="mt-6 text-lg font-black text-white">{story.headline}</h3>
-        {story.signals.length ? <div className="mt-4 grid gap-3">
-          {story.signals.map(signal=><article key={signal.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+        {priority !== "all" && <p className="mt-2 text-sm text-slate-300">Showing evidence for <strong>{selectedPriority.label.toLowerCase()}</strong>. This is your selected priority, not a requirement inferred from saved cars.</p>}
+        {relevantSignals.length ? <div className="mt-4 grid gap-3">
+          {relevantSignals.map(signal=><article key={signal.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
             <p className="text-sm font-black text-white">{signal.title}</p>
             <p className="mt-2 text-sm leading-6 text-slate-300">{signal.text}</p>
             <p className="mt-2 text-xs text-slate-500">Evidence: {signal.evidence.map((e,i)=><span key={i}>{i>0?" · ":""}{e.url?<a href={e.url} target="_blank" rel="noopener noreferrer" className="underline">{e.label}</a>:e.label}</span>)}</p>
@@ -53,7 +84,7 @@ export function SavedGarageBattle({ savedVehicles, unavailableCount }: Props) {
           {story.evidenceGaps.map((gap,i)=><p key={i} className="mt-2 text-xs leading-5 text-slate-400">{gap}</p>)}
         </details>}
         <p className="mt-5 text-sm font-medium leading-6 text-amber-200">{story.decisionPrompt}</p>
-        <p className="mt-2 text-xs text-slate-500">Pricing and availability may change; confirm details with the dealership. This is a factual comparison, not an independent live AI conversation.</p>
+        <p className="mt-2 text-xs text-slate-500">Pricing and availability may change; confirm details with the dealership. This is a factual comparison, not a live Torque AI conversation.</p>
       </>}
     </>}
   </section>;
