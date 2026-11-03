@@ -192,7 +192,11 @@ export async function POST(request: Request) {
       truthState: mode === "representative-demo" ? "REPRESENTATIVE_ONLY" : "VERIFIED_INVENTORY_READY",
       mode,
       needsMoreDetail: true,
-      answer: "Tell me what you actually need in the vehicle. Model or body style is a good start, then give me the must-haves — color, drivetrain, cab or bed, seats, features, budget, whatever matters. I won't quietly drop a requirement just to force a match.",
+      answer: /\\b(?:which|what)\\s+(?:one|vehicle)\\s+(?:is\\s+)?better\\b|\\bwhich would you (?:pick|choose|recommend)\\b/i.test(message)
+        ? "I can compare two exact VINs, but I need to know which two vehicles you mean. Open Garage Battle and select them, or give me their VINs. I won't guess."
+        : /\\b(?:space|room|cargo|family|fuel economy|mpg|good on gas)\\b/i.test(message)
+          ? "You're weighing passenger or cargo space against fuel economy. That makes sense. How many people must fit, and are you looking for an SUV, minivan, or either? I won't rank cars before confirming those basics."
+          : "Which vehicle type are you considering, and what is your top non-negotiable requirement? You can describe it in plain language; I won't quietly drop what matters.",
       spec,
       matches: [],
     });
