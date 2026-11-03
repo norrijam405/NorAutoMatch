@@ -127,7 +127,9 @@ export async function POST(request: Request) {
     }
     const story = buildGarageBattleStory(a, bVehicle);
     const signals = priority === "all" ? story.signals : story.signals.filter(s => allowedPriorities[priority].includes(s.id));
-    const observations = signals.slice(0, 4).map(s => s.text);
+    // Conversational summary: the Garage already shows the full evidence cards.
+    // Give the customer the most relevant two points, not a wall of repeated facts.
+    const observations = signals.slice(0, 2).map(s => s.text);
     return noStore({
       protocol: "NORAUTO_TORQUE_GARAGE_BATTLE_V1",
       truthState: mode === "verified-cache" ? "VERIFIED_CACHED_CATALOG" : "VERIFIED_SOURCE_CATALOG",
