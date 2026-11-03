@@ -28,6 +28,7 @@ type TorqueResponse = {
   exactCount?: number;
   handoff?: { required?: boolean; reason?: string; summary?: string };
   matchDna?: { signalCount: number; label: string } | null;
+  battle?: { vins: string[]; priority: string; signals?: unknown[]; evidenceGaps?: string[] };
 };
 
 type Turn = {
@@ -88,7 +89,6 @@ export function TorqueChat() {
 
     setTurns((current) => [...current, { role: "user", text: message }]);
     setInput("");
-    setBattleContext(null);
     setBusy(true);
 
     try {
@@ -98,6 +98,9 @@ export function TorqueChat() {
         body: JSON.stringify({ message, dealershipId, ...(battleContext ? { battle: battleContext } : {}) }),
       });
       const body = (await response.json().catch(() => ({}))) as TorqueResponse;
+      if (body.battle?.vins?.length === 2 && typeof body.battle.priority === "string") {
+        setBattleContext({ vins: body.battle.vins, priority: body.battle.priority });
+      }
       const text =
         body.answer ||
         body.message ||
@@ -226,7 +229,7 @@ export function TorqueChat() {
             )}
           </div>
 
-          {battleContext && <p role="status" className="border-t border-amber-300/20 bg-amber-300/[.06] px-4 py-2 text-xs text-amber-100">Garage Battle: comparing your two selected VINs. Send to get a source-backed breakdown. Editing the message switches back to normal search.</p>}
+          {battleContext && <div role="status" className="flex items-center justify-between gap-2 border-t border-amber-300/20 bg-amber-300/[.06] px-4 py-2 text-xs text-amber-100"><span>Garage Battle mode: Torque keeps your two selected VINs for follow-up questions. Change topics by choosing Exit comparison.</span><button type="button" onClick={() => { setBattleContext(null); setInput(""); }} className="shrink-0 rounded-lg border border-amber-300/40 px-3 py-2 font-bold">Exit comparison</button></div>}
           <form onSubmit={submit} className="border-t border-white/10 bg-[#0e1721] p-3">
             <label htmlFor="torque-dealership-scope" className="mb-2 block text-[10px] font-black uppercase tracking-wider text-slate-400">
               Dealership inventory scope
@@ -234,7 +237,7 @@ export function TorqueChat() {
             <select
               id="torque-dealership-scope"
               value={dealershipId}
-              onChange={(event) => setDealershipId(event.target.value)}
+              onChange={(event) => { setDealershipId(event.target.value); setBattleContext(null); }}
               className="mb-3 w-full rounded-xl border border-white/15 bg-[#111b27] p-3 text-xs text-white"
             >
               <option value="orr-nissan-west">Orr Nissan West — Oklahoma City, OK</option>
@@ -243,7 +246,7 @@ export function TorqueChat() {
             <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-black/25 p-2 focus-within:border-amber-300/30">
               <textarea
                 value={input}
-                onChange={(event) => { setInput(event.target.value); setBattleContext(null); }}
+                onChange={(event) => setInput(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
