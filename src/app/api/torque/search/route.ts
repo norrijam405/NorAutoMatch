@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { readJsonBodyWithByteLimit } from "@/lib/request-body-limit";
 import { answerTorqueInventory, type TorqueInventoryMode } from "@/lib/torque-inventory-assistant";
 import { buildGarageBattleStory } from "@/lib/garage-battle";
+import { BATTLE_PRIORITIES, isBattlePriority, resolveBattlePriority, battleFollowupType } from "@/lib/torque-battle-followup";
 import { parseTorqueSalesInventorySpec } from "@/lib/torque-sales-inventory-spec";
 import { dealerInventorySearchAvailable, resolveDealershipScope } from "@/lib/dealership-scope";
 
@@ -104,15 +105,12 @@ export async function POST(request: Request) {
   if (rawBattle !== null && rawBattle !== undefined) {
     const b = rawBattle as Record<string, unknown>;
     const ids = b && Array.isArray(b.vins) ? b.vins : [];
-    const priority = b && typeof b.priority === "string" ? b.priority : "all";
-    const allowedPriorities: Record<string, string[]> = {
-      all: [], budget: ["advertised-price"], fuel: ["highway-mpg", "city-mpg"],
-      space: ["cargo", "seating"], weather: ["traction"], city: ["footprint"]
-    };
+    const previousPriority = b && b.priority;
     if (ids.length !== 2 || !ids.every(x => typeof x === "string" && /^[A-HJ-NPR-Z0-9]{17}$/i.test(x))
-      || ids[0] === ids[1] || !Object.prototype.hasOwnProperty.call(allowedPriorities, priority)) {
+      || ids[0] === ids[1] || !isBattlePriority(previousPriority)) {
       return noStore({ truthState: "INVALID_BATTLE_REQUEST", message: "Choose two different saved vehicles and a valid comparison priority." }, 400);
     }
+    const priority = resolveBattlePriority(message, previousPriority);
     if (mode === "representative-demo") {
       return noStore({ truthState: "VERIFIED_SOURCE_REQUIRED", mode,
         answer: "I can't compare those saved VINs against demonstration inventory. Please retry when a verified dealer catalog is available.",
@@ -126,17 +124,24 @@ export async function POST(request: Request) {
         matches: [] }, 200);
     }
     const story = buildGarageBattleStory(a, bVehicle);
-    const signals = priority === "all" ? story.signals : story.signals.filter(s => allowedPriorities[priority].includes(s.id));
+    const signals = priority === "all" ? story.signals : story.signals.filter(s => (BATTLE_PRIORITIES[priority] as readonly string[]).includes(s.id));
     // Conversational summary: the Garage already shows the full evidence cards.
     // Give the customer the most relevant two points, not a wall of repeated facts.
-    const observations = signals.slice(0, 2).map(s => s.text);
+    const focus = battleFollowupType(message);
+    const observations = signals.slice(0, focus === "details" ? 3 : 2).map(s => s.text);
+    const priorityLabel: Record<string, string> = {all:"the overall tradeoffs",budget:"price",fuel:"fuel economy",space:"interior room",weather:"traction",city:"parking footprint"};
+    const advice = focus === "choice"
+      ? "Based on the available facts, I can show tradeoffs, but I can't pick a universal winner without knowing your personal constraints. What matters most in your day-to-day driving?"
+      : focus === "details"
+        ? "That's what these verified records support. If you want, ask about another factor, and I'll keep these same two vehicles in view."
+        : "Want to compare another factor, such as price, fuel economy, space, or traction?";
     return noStore({
       protocol: "NORAUTO_TORQUE_GARAGE_BATTLE_V1",
       truthState: mode === "verified-cache" ? "VERIFIED_CACHED_CATALOG" : "VERIFIED_SOURCE_CATALOG",
       mode, dealershipId: dealership.id,
       answer: observations.length
         ? observations.join("\n\n") + "\n\nWhich tradeoff matters more to you?"
-        : "I can't establish a source-backed advantage for that priority between these two VINs. Try another priority or review the evidence gaps.",
+        : `I can't establish a source-backed difference for ${priorityLabel[priority]} between those two exact VINs. Ask about another factor or review the evidence gaps in Garage Battle.`,
       battle: { vins: ids, priority, signals, evidenceGaps: story.evidenceGaps },
       matches: [], needsMoreDetail: false,
     });
