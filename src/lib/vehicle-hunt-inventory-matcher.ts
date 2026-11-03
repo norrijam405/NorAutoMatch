@@ -245,5 +245,20 @@ function identityRequirementsMatch(spec: TorqueSalesInventorySpec, vehicle: Vehi
   if (spec.stockNumber && (!vehicle.stockNumber || spec.stockNumber.value.toUpperCase() !== vehicle.stockNumber.toUpperCase())) return false;
   if (spec.make?.priority === "MUST_HAVE" && normalize(String(spec.make.value)) !== normalize(vehicle.make)) return false;
   if (spec.model?.priority === "MUST_HAVE" && normalize(String(spec.model.value)) !== normalize(vehicle.model)) return false;
+  // Hard identity and capacity constraints cannot be loosened into random near-fit cars.
+  if (spec.bodyType?.priority === "MUST_HAVE") {
+    const type = vehicle.type.toLowerCase();
+    const matches = spec.bodyType.value === "TRUCK" ? /truck|pickup/.test(type)
+      : spec.bodyType.value === "SEDAN" ? /sedan/.test(type) : /suv|crossover/.test(type);
+    if (!matches) return false;
+  }
+  if (spec.fuelType?.priority === "MUST_HAVE") {
+    const fuel = (vehicle.fuelType ?? "").toLowerCase().trim();
+    if (normalize(fuel) !== normalize(String(spec.fuelType.value))) return false;
+  }
+  // No VIN-scoped verified seat-capacity field exists in this inventory contract.
+  // Refuse to label ANY model a seating-capacity match until the data is present.
+  if (spec.seatingCapacity?.priority === "MUST_HAVE") return false;
+
   return true;
 }
