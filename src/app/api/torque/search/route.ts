@@ -135,7 +135,7 @@ export async function POST(request: Request) {
       truthState: mode === "verified-cache" ? "VERIFIED_CACHED_CATALOG" : "VERIFIED_SOURCE_CATALOG",
       mode, dealershipId: dealership.id,
       answer: observations.length
-        ? observations.join("\n\n") + "\n\nI won't declare a universal winner; it depends on your priorities."
+        ? observations.join("\n\n") + "\n\nWhich tradeoff matters more to you?"
         : "I can't establish a source-backed advantage for that priority between these two VINs. Try another priority or review the evidence gaps.",
       battle: { vins: ids, priority, signals, evidenceGaps: story.evidenceGaps },
       matches: [], needsMoreDetail: false,
