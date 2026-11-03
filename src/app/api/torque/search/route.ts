@@ -6,6 +6,7 @@ import { buildMatchDnaSummary } from "@/lib/match-dna";
 import { createClient } from "@/lib/supabase/server";
 import { readJsonBodyWithByteLimit } from "@/lib/request-body-limit";
 import { answerTorqueInventory, type TorqueInventoryMode } from "@/lib/torque-inventory-assistant";
+import { buildGarageBattleStory } from "@/lib/garage-battle";
 import { parseTorqueSalesInventorySpec } from "@/lib/torque-sales-inventory-spec";
 import { dealerInventorySearchAvailable, resolveDealershipScope } from "@/lib/dealership-scope";
 
@@ -91,6 +92,49 @@ export async function POST(request: Request) {
         canCreateSourcingRequest: true,
       }, 503);
     }
+  }
+
+  // Garage Battle uses the same Torque endpoint but never lets natural-language search
+  // silently substitute a vehicle. Both VINs must resolve in verified dealer records.
+  const rawBattle = typeof bodyRead.value === "object" && bodyRead.value !== null && "battle" in bodyRead.value
+    ? bodyRead.value.battle : null;
+  if (rawBattle !== null && rawBattle !== undefined) {
+    const b = rawBattle as Record<string, unknown>;
+    const ids = b && Array.isArray(b.vins) ? b.vins : [];
+    const priority = b && typeof b.priority === "string" ? b.priority : "all";
+    const allowedPriorities: Record<string, string[]> = {
+      all: [], budget: ["advertised-price"], fuel: ["highway-mpg", "city-mpg"],
+      space: ["cargo", "seating"], weather: ["traction"], city: ["footprint"]
+    };
+    if (ids.length !== 2 || !ids.every(x => typeof x === "string" && /^[A-HJ-NPR-Z0-9]{17}$/i.test(x))
+      || ids[0] === ids[1] || !Object.prototype.hasOwnProperty.call(allowedPriorities, priority)) {
+      return noStore({ truthState: "INVALID_BATTLE_REQUEST", message: "Choose two different saved vehicles and a valid comparison priority." }, 400);
+    }
+    if (mode === "representative-demo") {
+      return noStore({ truthState: "VERIFIED_SOURCE_REQUIRED", mode,
+        answer: "I can't compare those saved VINs against demonstration inventory. Please retry when a verified dealer catalog is available.",
+        matches: [] }, 200);
+    }
+    const a = vehicles.find(v => v.id.toUpperCase() === String(ids[0]).toUpperCase());
+    const bVehicle = vehicles.find(v => v.id.toUpperCase() === String(ids[1]).toUpperCase());
+    if (!a || !bVehicle) {
+      return noStore({ truthState: "SAVED_VIN_NOT_IN_VERIFIED_CATALOG", mode,
+        answer: "One or both saved VINs are not in the currently verified dealer catalog. I won't substitute another vehicle.",
+        matches: [] }, 200);
+    }
+    const story = buildGarageBattleStory(a, bVehicle);
+    const signals = priority === "all" ? story.signals : story.signals.filter(s => allowedPriorities[priority].includes(s.id));
+    const observations = signals.slice(0, 4).map(s => s.text);
+    return noStore({
+      protocol: "NORAUTO_TORQUE_GARAGE_BATTLE_V1",
+      truthState: mode === "verified-cache" ? "VERIFIED_CACHED_CATALOG" : "VERIFIED_SOURCE_CATALOG",
+      mode, dealershipId: dealership.id,
+      answer: observations.length
+        ? observations.join("\n\n") + "\n\nI won't declare a universal winner; it depends on your priorities."
+        : "I can't establish a source-backed advantage for that priority between these two VINs. Try another priority or review the evidence gaps.",
+      battle: { vins: ids, priority, signals, evidenceGaps: story.evidenceGaps },
+      matches: [], needsMoreDetail: false,
+    });
   }
 
   const spec = parseTorqueSalesInventorySpec(message);
