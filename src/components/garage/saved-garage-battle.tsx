@@ -83,6 +83,19 @@ export function SavedGarageBattle({ savedVehicles, unavailableCount }: Props) {
           <summary className="cursor-pointer text-sm font-bold text-slate-300">What's still unknown?</summary>
           {story.evidenceGaps.map((gap,i)=><p key={i} className="mt-2 text-xs leading-5 text-slate-400">{gap}</p>)}
         </details>}
+        <div className="mt-5 rounded-2xl border border-amber-300/25 bg-black/20 p-4">
+          <p className="text-sm font-black text-white">Want Torque's take?</p>
+          <p className="mt-1 text-xs leading-5 text-slate-400">Ask Torque to review these exact saved VINs using source-backed differences. No invented features or substitute vehicles.</p>
+          <button type="button" onClick={() => {
+            if (!a || !b) return;
+            const message = `Compare VIN ${a.id} and VIN ${b.id}. My priority is ${selectedPriority.label.toLowerCase()}. Explain verified tradeoffs only.`;
+            window.dispatchEvent(new CustomEvent("norauto:ask-torque-battle", { detail: {
+              vins: [a.id, b.id], priority, message
+            }}));
+          }} className="mt-3 min-h-11 rounded-xl bg-amber-300 px-5 py-2 text-sm font-black text-black hover:bg-amber-200">
+            Ask Torque about these two cars
+          </button>
+        </div>
         <p className="mt-5 text-sm font-medium leading-6 text-amber-200">{story.decisionPrompt}</p>
         <p className="mt-2 text-xs text-slate-500">Pricing and availability may change; confirm details with the dealership. This is a factual comparison, not a live Torque AI conversation.</p>
       </>}
