@@ -193,13 +193,20 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
 
   if (/\bv\s*[- ]?6\b|\b6\s*cylinder\b/i.test(text)) spec.engine = must("V6");
 
+  if (/\\b(?:fully?\\s+electric|all[- ]electric|full\\s+ev|electric[- ]only|pure\\s+ev)\\b/i.test(text)) {
+    spec.fuelType = must("Electric");
+  }
+  if (/\\b(?:good\\s+on\\s+gas|gas mileage|fuel econom|better mpg|best mpg|fuel efficient)\\b/i.test(text)) {
+    spec.freeformNotes.push("Fuel efficiency preference stated; compare reported MPG only, do not invent figures.");
+  }
   if (/\bnew\b/i.test(text)) spec.condition = must("NEW");
   else if (/\bcpo|certified\b/i.test(text)) spec.condition = must("CPO");
   else if (/\b(?:used|pre[- ]?owned|preowned)\b/i.test(text)) spec.condition = must("USED");
 
   if (/\bleather\b/i.test(text)) spec.interiorMaterial = preferred("Leather");
 
-  const seating = text.match(/\b(?:seat|seats|seating for)\s*(\d)\b/i);
+  // Seat capacity is a hard requirement; do not infer it from model names.
+  const seating = text.match(/\\b(?:seat(?:s|ing)?\\s*(?:for|of)?|family\\s+of|fit(?:s|ting)?\\s+(?:a\\s+)?(?:family\\s+of)?|room\\s+for)\\s*(\\d{1,2})\\b/i);
   if (seating) spec.seatingCapacity = must(Number(seating[1]));
 
   for (const [pattern, feature] of FEATURE_PATTERNS) {
