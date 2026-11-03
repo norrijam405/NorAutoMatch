@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Bot, ChevronDown, ExternalLink, Loader2, Send, Sparkles, X } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { LeadModal } from "@/components/matcher/lead-modal";
 
 type Match = {
@@ -41,6 +41,20 @@ export function TorqueChat() {
   const [input, setInput] = useState("");
   const [dealershipId, setDealershipId] = useState("orr-nissan-west");
   const [busy, setBusy] = useState(false);
+  const [battleContext, setBattleContext] = useState<{vins: string[]; priority: string} | null>(null);
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{vins:string[];priority:string;message:string}>).detail;
+      if (!detail || !Array.isArray(detail.vins) || detail.vins.length !== 2) return;
+      setBattleContext({vins: detail.vins, priority: detail.priority});
+      setInput(detail.message.slice(0,1200));
+      setDealershipId("orr-nissan-west");
+      setOpen(true);
+    };
+    window.addEventListener("norauto:ask-torque-battle", handler);
+    return () => window.removeEventListener("norauto:ask-torque-battle", handler);
+  }, []);
+
   const [sourcingOpen, setSourcingOpen] = useState(false);
   const [sourcingRequest, setSourcingRequest] = useState("");
   const [sourcingContext, setSourcingContext] = useState("");
@@ -74,13 +88,14 @@ export function TorqueChat() {
 
     setTurns((current) => [...current, { role: "user", text: message }]);
     setInput("");
+    setBattleContext(null);
     setBusy(true);
 
     try {
       const response = await fetch("/api/torque/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, dealershipId }),
+        body: JSON.stringify({ message, dealershipId, ...(battleContext ? { battle: battleContext } : {}) }),
       });
       const body = (await response.json().catch(() => ({}))) as TorqueResponse;
       const text =
@@ -211,6 +226,7 @@ export function TorqueChat() {
             )}
           </div>
 
+          {battleContext && <p role="status" className="border-t border-amber-300/20 bg-amber-300/[.06] px-4 py-2 text-xs text-amber-100">Garage Battle: comparing your two selected VINs. Send to get a source-backed breakdown. Editing the message switches back to normal search.</p>}
           <form onSubmit={submit} className="border-t border-white/10 bg-[#0e1721] p-3">
             <label htmlFor="torque-dealership-scope" className="mb-2 block text-[10px] font-black uppercase tracking-wider text-slate-400">
               Dealership inventory scope
@@ -227,7 +243,7 @@ export function TorqueChat() {
             <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-black/25 p-2 focus-within:border-amber-300/30">
               <textarea
                 value={input}
-                onChange={(event) => setInput(event.target.value)}
+                onChange={(event) => { setInput(event.target.value); setBattleContext(null); }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
