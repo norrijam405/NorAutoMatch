@@ -82,6 +82,9 @@ export async function POST(request: Request) {
         mode: process.env.NORAUTO_INVENTORY_MODE,
         liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
       });
+      if (!catalog.customerVisibleLiveInventory || catalog.source === "demo") {
+        return noStore({ truthState: "VERIFIED_SOURCE_UNAVAILABLE", message: "Dealer inventory cannot be verified right now.", matches: [] }, 503);
+      }
       vehicles = catalog.vehicles;
       mode = catalog.source === "provider-cache" ? "verified-cache" : "verified-live";
     } catch {
