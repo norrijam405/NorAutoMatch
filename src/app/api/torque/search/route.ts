@@ -155,7 +155,7 @@ export async function POST(request: Request) {
     });
   }
 
-  if (!suppliedBattle && !namedPair && /\\b(?:compare|comparison|versus|vs\\.?|between)\\b/i.test(message)) {
+  if (!suppliedBattle && !namedPair && /\b(?:compare|comparison|versus|vs\.?|between)\b/i.test(message)) {
     return noStore({
       protocol: "NORAUTO_TORQUE_SEARCH_V1",
       truthState: mode === "representative-demo" ? "REPRESENTATIVE_ONLY" : "COMPARISON_SCOPE_UNVERIFIED",
