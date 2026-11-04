@@ -2,17 +2,20 @@ import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, ShieldCheck } from "lucide-react";
 import { formatMoney } from "@/lib/inventory";
 import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
+import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
 
 export const dynamic = "force-dynamic";
 
 export default async function VehiclesPage() {
   let catalog: Awaited<ReturnType<typeof loadOrrResilientCustomerCatalog>> | null = null;
+  const decision = resolveInventoryRuntime({ mode: process.env.NORAUTO_INVENTORY_MODE, liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION });
 
-  try {
+  if (decision.effectiveMode === "live-enabled") try {
     catalog = await loadOrrResilientCustomerCatalog({
       mode: process.env.NORAUTO_INVENTORY_MODE,
       liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
     });
+    if (!catalog.customerVisibleLiveInventory || catalog.source === "demo") catalog = null;
   } catch (error) {
     console.error("NORAUTO_VEHICLES_PAGE_LOAD_FAILED", error instanceof Error ? error.message : String(error));
   }

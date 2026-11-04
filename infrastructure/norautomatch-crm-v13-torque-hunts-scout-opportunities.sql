@@ -2,6 +2,9 @@
 -- Create-only migration. NO PRODUCTION AUTHORITY is implied by this file.
 -- Requires the existing NorAutoMatch CRM v1 schema and immutable-mutation helper.
 
+-- Existing Supabase index crm_opportunity_workspace_id_unique already supports
+-- the workspace-scoped foreign key; no new index is required.
+
 CREATE TABLE IF NOT EXISTS torque_vehicle_hunts (
   hunt_id TEXT PRIMARY KEY CHECK (hunt_id ~ '^namvh_[0-9a-f]{24}$'),
   workspace_id TEXT NOT NULL,

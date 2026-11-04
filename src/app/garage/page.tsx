@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requireAuthenticatedUser } from "@/lib/supabase/authz";
 import { buildMatchDnaSummary } from "@/lib/match-dna";
+import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
+import type { Vehicle } from "@/lib/inventory";
+import { SavedGarageBattle } from "@/components/garage/saved-garage-battle";
+import { garageFitNote } from "@/lib/garage-fit-note";
 import type { Json } from "@/lib/supabase/database.types";
 
 export const metadata: Metadata = {
@@ -18,10 +22,7 @@ export default async function GaragePage() {
     .order("created_at", { ascending: false });
 
   const vins = saved?.map((row) => row.vin) ?? [];
-  const [{ data: vehicles }, { data: dnaEvents }, { data: scoutJobs }, { data: dossiers }] = await Promise.all([
-    vins.length
-      ? supabase.from("inventory_vehicles").select("vin,year,make,model,trim,price,mileage,photos,availability_state,body_type,drivetrain").in("vin", vins)
-      : Promise.resolve({ data: [] }),
+  const [{ data: dnaEvents }, { data: scoutJobs }, { data: dossiers }, liveCatalog] = await Promise.all([
     supabase
       .from("match_dna_events")
       .select("action,make,body_type,drivetrain,condition,price,mileage")
@@ -34,12 +35,14 @@ export default async function GaragePage() {
     vins.length
       ? supabase.from("vehicle_scout_dossiers").select("vin,status,summary,pros,cons,watch_items,sources,researched_at").in("vin", vins)
       : Promise.resolve({ data: [] }),
+    vins.length ? loadOrrResilientCustomerCatalog({ mode: process.env.NORAUTO_INVENTORY_MODE, liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION }).then((catalog) => catalog.customerVisibleLiveInventory && catalog.source !== "demo" ? catalog : null).catch(() => null) : Promise.resolve(null),
   ]);
 
-  const byVin = new Map((vehicles ?? []).map((vehicle) => [vehicle.vin, vehicle]));
+  const byVin = new Map<string, Vehicle>((liveCatalog?.vehicles ?? []).map((vehicle) => [vehicle.id.toUpperCase(), vehicle]));
   const jobsByVin = new Map((scoutJobs ?? []).map((job) => [job.vin, job]));
   const dossiersByVin = new Map((dossiers ?? []).map((dossier) => [dossier.vin, dossier]));
   const dna = buildMatchDnaSummary(dnaEvents ?? []);
+  const availableSavedVehicles = vins.map(vin => byVin.get(vin.toUpperCase())).filter((v): v is Vehicle => Boolean(v));
 
   return (
     <section className="min-h-[72vh] border-b border-white/5 bg-slate-950/35 py-12 sm:py-16">
@@ -64,9 +67,11 @@ export default async function GaragePage() {
           </details>
         </div>
 
+        {saved?.length && !liveCatalog && <p role="status" className="mt-6 rounded-xl border border-amber-300/25 bg-amber-300/5 p-4 text-sm text-amber-200">Dealer inventory cannot be verified. Saved VINs remain in your Garage, but prices and availability cannot be confirmed.</p>}
+        <SavedGarageBattle savedVehicles={availableSavedVehicles} unavailableCount={vins.filter(vin => !byVin.has(vin.toUpperCase())).length} />
         <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {saved?.length ? saved.map((item) => {
-            const vehicle = byVin.get(item.vin);
+            const vehicle = byVin.get(item.vin.toUpperCase());
             const job = jobsByVin.get(item.vin);
             const dossier = dossiersByVin.get(item.vin);
             const pros = jsonStrings(dossier?.pros);
@@ -79,29 +84,30 @@ export default async function GaragePage() {
                     <p className="text-[10px] font-black uppercase tracking-[.16em] text-emerald-300">Saved VIN</p>
                     <h2 className="mt-2 text-xl font-black text-white">{vehicle ? [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(" ") : "Saved vehicle"}</h2>
                   </div>
-                  <span className="rounded-full border border-white/10 px-2 py-1 text-[9px] font-black uppercase tracking-[.12em] text-slate-500">{vehicle?.body_type ?? "Vehicle"}</span>
+                  <span className="rounded-full border border-white/10 px-2 py-1 text-[9px] font-black uppercase tracking-[.12em] text-slate-500">{vehicle?.type ?? "Vehicle"}</span>
                 </div>
-                {vehicle?.price != null ? <p className="mt-3 font-bold text-amber-300">${Number(vehicle.price).toLocaleString()}</p> : null}
+                {vehicle?.price != null ? <p className="mt-3 font-bold text-amber-300">${Number(vehicle.price).toLocaleString()}</p> : <p className="mt-3 text-xs font-bold text-amber-200">Not verified as currently available — saved VIN retained</p>}
                 <p className="mt-1 text-sm text-slate-400">{vehicle?.mileage != null ? `${Number(vehicle.mileage).toLocaleString()} miles` : "Mileage unavailable"}{vehicle?.drivetrain ? ` · ${vehicle.drivetrain}` : ""}</p>
 
                 <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-[10px] font-black uppercase tracking-[.16em] text-red-300">Market Scout</p>
-                    <span className="text-[10px] font-bold text-slate-500">{dossier?.status === "researched" ? "Research ready" : job?.status === "failed" ? "Needs retry" : "Queued"}</span>
+                    <p className="text-[10px] font-black uppercase tracking-[.16em] text-red-300">Why this might fit</p>
+                    <span className="text-[10px] font-bold text-slate-500">{dossier?.status === "researched" ? "Research available" : job?.status === "failed" ? "Research unavailable" : "Research pending"}</span>
                   </div>
-                  {dossier?.status === "researched" ? <details className="mt-2">
+                  <p className="mt-3 text-xs leading-5 text-slate-300">{garageFitNote(vehicle, availableSavedVehicles)}</p>
+                  {dossier?.status === "researched" ? <details className="mt-3">
                     <summary className="cursor-pointer text-xs font-bold text-white">Pros, cons & watch-outs</summary>
                     {dossier.summary && <p className="mt-3 text-xs leading-5 text-slate-400">{dossier.summary}</p>}
                     {pros.length > 0 && <ScoutList title="Pros" items={pros} />}
                     {cons.length > 0 && <ScoutList title="Cons" items={cons} />}
                     {watch.length > 0 && <ScoutList title="Watch" items={watch} />}
                     <p className="mt-3 text-[10px] leading-4 text-slate-600">Scout claims stay evidence-linked and refreshable; missing evidence stays missing.</p>
-                  </details> : <p className="mt-2 text-xs leading-5 text-slate-500">This VIN is in the research queue. Deep pros/cons will appear here when the Market Scout worker completes its evidence pass.</p>}
+                  </details> : <p className="mt-2 text-xs leading-5 text-slate-500">Additional vehicle research is pending. We will not claim pros, cons, or a completed review without evidence.</p>}
                 </div>
 
                 <div className="mt-5 flex flex-wrap gap-3 text-sm font-bold">
-                  <Link href={`/vehicles/${encodeURIComponent(item.vin)}`} className="text-amber-300 hover:text-amber-200">Full details →</Link>
-                  <Link href="/inventory" className="text-slate-400 hover:text-white">Compare inventory</Link>
+                  {vehicle ? <Link href={`/vehicles/${encodeURIComponent(item.vin)}`} className="text-amber-300 hover:text-amber-200">Full details →</Link> : <span className="text-xs text-slate-500">Live details unavailable</span>}
+                  <a href="#garage-battle" className="text-slate-400 hover:text-white">Garage Battle</a>
                 </div>
                 <p className="mt-4 text-[9px] text-slate-700">VIN {item.vin}</p>
               </article>

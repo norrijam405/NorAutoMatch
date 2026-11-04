@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Bot, ChevronDown, ExternalLink, Loader2, Send, Sparkles, X } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { LeadModal } from "@/components/matcher/lead-modal";
 
 type Match = {
@@ -10,6 +10,7 @@ type Match = {
   label: string;
   price: number;
   mileage: number;
+  mileageVerified?: boolean;
   type: string;
   drivetrain: string;
   fit: "exact" | "strong" | "near";
@@ -27,6 +28,7 @@ type TorqueResponse = {
   exactCount?: number;
   handoff?: { required?: boolean; reason?: string; summary?: string };
   matchDna?: { signalCount: number; label: string } | null;
+  battle?: { vins: string[]; priority: string; signals?: unknown[]; evidenceGaps?: string[] };
 };
 
 type Turn = {
@@ -38,7 +40,22 @@ type Turn = {
 export function TorqueChat() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
+  const [dealershipId, setDealershipId] = useState("orr-nissan-west");
   const [busy, setBusy] = useState(false);
+  const [battleContext, setBattleContext] = useState<{vins: string[]; priority: string} | null>(null);
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{vins:string[];priority:string;message:string}>).detail;
+      if (!detail || !Array.isArray(detail.vins) || detail.vins.length !== 2) return;
+      setBattleContext({vins: detail.vins, priority: detail.priority});
+      setInput(detail.message.slice(0,1200));
+      setDealershipId("orr-nissan-west");
+      setOpen(true);
+    };
+    window.addEventListener("norauto:ask-torque-battle", handler);
+    return () => window.removeEventListener("norauto:ask-torque-battle", handler);
+  }, []);
+
   const [sourcingOpen, setSourcingOpen] = useState(false);
   const [sourcingRequest, setSourcingRequest] = useState("");
   const [sourcingContext, setSourcingContext] = useState("");
@@ -46,7 +63,7 @@ export function TorqueChat() {
   const [turns, setTurns] = useState<Turn[]>([
     {
       role: "torque",
-      text: "Tell me what you're actually looking for. Give me the details that matter and I’ll tell you what fits, what doesn’t, and where the compromises are.",
+      text: "Ask me about a car, or compare two models directly—like Rogue versus Kicks. Tell me what matters to you, and I'll distinguish verified facts from anything I can't confirm.",
     },
   ]);
 
@@ -78,9 +95,12 @@ export function TorqueChat() {
       const response = await fetch("/api/torque/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, dealershipId, ...(battleContext ? { battle: battleContext } : {}) }),
       });
       const body = (await response.json().catch(() => ({}))) as TorqueResponse;
+      if (body.battle?.vins?.length === 2 && typeof body.battle.priority === "string") {
+        setBattleContext({ vins: body.battle.vins, priority: body.battle.priority });
+      }
       const text =
         body.answer ||
         body.message ||
@@ -136,6 +156,18 @@ export function TorqueChat() {
                   {turn.text}
                 </div>
 
+                {turn.role === "torque" && turn.response?.mode && (
+                  <div role="status" className={turn.response.mode === "representative-demo"
+                    ? "mt-2 rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-[11px] leading-5 text-amber-100"
+                    : "mt-2 rounded-xl border border-emerald-300/20 bg-emerald-300/5 px-3 py-2 text-[11px] leading-5 text-emerald-100"}>
+                    {turn.response.mode === "representative-demo"
+                      ? "SAMPLE INVENTORY ONLY — These vehicles are demonstrations, not confirmed Orr Nissan West stock. Torque cannot confirm availability or absence."
+                      : turn.response.mode === "verified-cache"
+                        ? "VERIFIED CACHED CATALOG — Previously source-verified records, not a live availability promise. Confirm the VIN with the store."
+                        : "VERIFIED SOURCE CATALOG — Source-checked dealer records, but sale availability may have changed. Confirm the VIN with the store."}
+                  </div>
+                )}
+
                 {turn.role === "torque" && turn.response?.matchDna && turn.response.matchDna.signalCount > 0 && (
                   <div className="mt-2 rounded-xl border border-red-400/15 bg-red-400/[.04] px-3 py-2 text-[11px] text-red-100/75">
                     MatchDNA · {turn.response.matchDna.label}
@@ -163,7 +195,7 @@ export function TorqueChat() {
                             </div>
                             <span className="shrink-0 text-sm font-black text-amber-300">${match.price.toLocaleString()}</span>
                           </div>
-                          <p className="mt-1 text-[11px] text-slate-500">{match.mileage.toLocaleString()} mi · {match.drivetrain} · {match.type}</p>
+                          <p className="mt-1 text-[11px] text-slate-500">{match.mileageVerified === false ? "Mileage not verified" : `${match.mileage.toLocaleString()} mi`} · {match.drivetrain} · {match.type}</p>
                           {match.reasons.length > 0 && <p className="mt-2 text-[11px] leading-5 text-emerald-200/70">✓ {match.reasons.slice(0, 3).join(" · ")}</p>}
                           {match.compromises.length > 0 && <p className="mt-1 text-[11px] leading-5 text-amber-100/65">Tradeoff: {match.compromises.slice(0, 2).join(" · ")}</p>}
                           <Link href={vehicleHref} className="mt-3 inline-flex items-center gap-1 text-[11px] font-black text-amber-300 hover:text-amber-200">
@@ -197,7 +229,20 @@ export function TorqueChat() {
             )}
           </div>
 
+          {battleContext && <div role="status" className="flex items-center justify-between gap-2 border-t border-amber-300/20 bg-amber-300/[.06] px-4 py-2 text-xs text-amber-100"><span>Garage Battle mode: Torque keeps your two selected VINs for follow-up questions. Change topics by choosing Exit comparison.</span><button type="button" onClick={() => { setBattleContext(null); setInput(""); }} className="shrink-0 rounded-lg border border-amber-300/40 px-3 py-2 font-bold">Exit comparison</button></div>}
           <form onSubmit={submit} className="border-t border-white/10 bg-[#0e1721] p-3">
+            <label htmlFor="torque-dealership-scope" className="mb-2 block text-[10px] font-black uppercase tracking-wider text-slate-400">
+              Dealership inventory scope
+            </label>
+            <select
+              id="torque-dealership-scope"
+              value={dealershipId}
+              onChange={(event) => { setDealershipId(event.target.value); setBattleContext(null); }}
+              className="mb-3 w-full rounded-xl border border-white/15 bg-[#111b27] p-3 text-xs text-white"
+            >
+              <option value="orr-nissan-west">Orr Nissan West — Oklahoma City, OK</option>
+              <option value="irving-hyundai-pending">Irving Hyundai — pending dealership confirmation (no live inventory)</option>
+            </select>
             <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-black/25 p-2 focus-within:border-amber-300/30">
               <textarea
                 value={input}
@@ -210,7 +255,7 @@ export function TorqueChat() {
                 }}
                 rows={2}
                 maxLength={1200}
-                placeholder="Example: Baltic Teal Pathfinder, brown seats, 4WD…"
+                placeholder="Compare Rogue vs Kicks for a family, or describe what you need…"
                 className="min-h-[48px] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-white outline-none placeholder:text-slate-600"
               />
               <button type="submit" disabled={busy || !input.trim()} className="grid size-11 shrink-0 place-items-center rounded-xl bg-amber-300 text-black disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send to Torque">

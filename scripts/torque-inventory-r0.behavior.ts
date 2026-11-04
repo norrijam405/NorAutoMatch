@@ -1,3 +1,4 @@
+import { resolveDealershipScope, dealerInventorySearchAvailable } from "../src/lib/dealership-scope";
 import assert from "node:assert/strict";
 import { parseTorqueSalesInventorySpec } from "../src/lib/torque-sales-inventory-spec";
 import { torqueSourcingTruth } from "../src/lib/torque-sourcing-language";
@@ -6,7 +7,7 @@ import { createVehicleHunt, applyVehicleHuntCandidates } from "../src/lib/vehicl
 import { requireAuthorizedDealershipCrmAdapter } from "../src/lib/dealership-crm-adapter";
 import { matchScoutObservationToHunt } from "../src/lib/scout-opportunity-matcher";
 import { buildSalespersonDailyBrief } from "../src/lib/salesperson-daily-brief";
-import { matchVehicleHuntToLocalInventory } from "../src/lib/vehicle-hunt-inventory-matcher";
+import { rankVehiclesForSalesSpec, matchVehicleHuntToLocalInventory } from "../src/lib/vehicle-hunt-inventory-matcher";
 import { prepareTorqueHuntFollowUp } from "../src/lib/torque-follow-up-draft";
 import { buildTorqueCrmSyncPlan } from "../src/lib/torque-crm-sync-plan";
 import { chooseTorqueNextBestAction } from "../src/lib/torque-next-best-action";
@@ -75,7 +76,7 @@ const suppressed = planTorqueFollowUp("NO_REPLY", {
 assert.equal(suppressed.allowed, false);
 assert.ok(suppressed.stopReasons.includes("CUSTOMER_SUPPRESSED"));
 
-console.log("Torque inventory + sourcing + follow-up R0 behavior: PASS");
+// PASS is printed only after all assertions, including identity and MatchDNA guards, complete.
 
 
 const huntSpec = parseTorqueSalesInventorySpec(
@@ -606,3 +607,328 @@ const strongLocalDraft = prepareTorqueHuntFollowUp({
 assert.match(strongLocalDraft.body, /covers the must-haves/i);
 assert.match(strongLocalDraft.body, /preference difference/i);
 assert.equal(strongLocalDraft.status, "PREPARED_NOT_SENT");
+
+
+const unrelatedScout = matchScoutObservationToHunt({
+  hunt,
+  createdAt: "2026-10-13T22:00:00.000Z",
+  observation: {
+    observationId: "obs_unrelated_camry_incentive",
+    topic: "INCENTIVE",
+    headline: "Synthetic Toyota Camry incentive",
+    summary: "Unrelated verified primary-source observation for regression testing.",
+    affectedMakes: ["Toyota"],
+    affectedModels: ["Camry"],
+    observedAt: "2026-10-13T21:59:00.000Z",
+    sourceId: "synthetic-toyota",
+    sourceUrl: "https://example.com/toyota",
+    sourceClass: "OEM_OFFICIAL",
+    evidenceState: "PRIMARY_VERIFIED",
+    salesImpact: "HIGH_OPPORTUNITY",
+    torqueUse: "CUSTOMER_SAFE",
+  },
+});
+assert.equal(unrelatedScout.action, "NO_ACTION");
+assert.equal(unrelatedScout.customerSafe, false);
+assert.equal(unrelatedScout.score, 0);
+assert.ok(unrelatedScout.reasons.includes("NO_RELEVANT_VEHICLE_IDENTITY_EVIDENCE"));
+
+const wrongModelScout = matchScoutObservationToHunt({
+  hunt,
+  createdAt: "2026-10-13T22:01:00.000Z",
+  observation: {
+    observationId: "obs_unrelated_nissan_rogue",
+    topic: "INCENTIVE",
+    headline: "Synthetic Nissan Rogue incentive",
+    summary: "Same make but wrong model, must not trigger customer contact.",
+    affectedMakes: ["Nissan"],
+    affectedModels: ["Rogue"],
+    observedAt: "2026-10-13T22:00:00.000Z",
+    sourceId: "nissan-usa",
+    sourceUrl: "https://www.nissanusa.com/",
+    sourceClass: "OEM_OFFICIAL",
+    evidenceState: "PRIMARY_VERIFIED",
+    salesImpact: "HIGH_OPPORTUNITY",
+    torqueUse: "CUSTOMER_SAFE",
+  },
+});
+assert.equal(wrongModelScout.action, "NO_ACTION");
+assert.equal(wrongModelScout.score, 0);
+
+
+const expiredScout = matchScoutObservationToHunt({
+  hunt,
+  createdAt: "2026-10-13T22:00:00.000Z",
+  observation: {
+    observationId: "obs_expired_pathfinder_incentive",
+    topic: "INCENTIVE",
+    headline: "Expired synthetic Pathfinder incentive",
+    summary: "Validly sourced but expired offer.",
+    affectedMakes: ["Nissan"],
+    affectedModels: ["Pathfinder"],
+    observedAt: "2026-10-12T20:00:00.000Z",
+    expiresAt: "2026-10-13T21:00:00.000Z",
+    sourceId: "nissan-usa",
+    sourceUrl: "https://www.nissanusa.com/",
+    sourceClass: "OEM_OFFICIAL",
+    evidenceState: "PRIMARY_VERIFIED",
+    salesImpact: "HIGH_OPPORTUNITY",
+    torqueUse: "CUSTOMER_SAFE",
+  },
+});
+assert.equal(expiredScout.action, "NO_ACTION");
+assert.equal(expiredScout.score, 0);
+assert.ok(expiredScout.reasons.includes("SCOUT_OBSERVATION_OUTSIDE_EFFECTIVE_WINDOW"));
+
+const pausedScout = matchScoutObservationToHunt({
+  hunt: { ...hunt, state: "PAUSED" },
+  createdAt: "2026-10-12T20:05:00.000Z",
+  observation: {
+    observationId: "obs_paused_pathfinder_incentive",
+    topic: "INCENTIVE",
+    headline: "Verified synthetic Pathfinder incentive",
+    summary: "Paused Hunt must not create an outreach action.",
+    affectedMakes: ["Nissan"],
+    affectedModels: ["Pathfinder"],
+    observedAt: "2026-10-12T20:04:00.000Z",
+    sourceId: "nissan-usa",
+    sourceUrl: "https://www.nissanusa.com/",
+    sourceClass: "OEM_OFFICIAL",
+    evidenceState: "PRIMARY_VERIFIED",
+    salesImpact: "HIGH_OPPORTUNITY",
+    torqueUse: "CUSTOMER_SAFE",
+  },
+});
+assert.equal(pausedScout.action, "NO_ACTION");
+assert.equal(pausedScout.score, 0);
+assert.ok(pausedScout.reasons.includes("HUNT_NOT_ACTIVE"));
+
+
+const futureScout = matchScoutObservationToHunt({
+  hunt,
+  createdAt: "2026-10-13T22:00:00.000Z",
+  observation: {
+    observationId: "obs_future_pathfinder_incentive",
+    topic: "INCENTIVE",
+    headline: "Synthetic future Pathfinder incentive",
+    summary: "Not effective yet; do not prepare outreach.",
+    affectedMakes: ["Nissan"],
+    affectedModels: ["Pathfinder"],
+    observedAt: "2026-10-13T21:00:00.000Z",
+    effectiveAt: "2026-10-15T00:00:00.000Z",
+    sourceId: "nissan-usa",
+    sourceUrl: "https://www.nissanusa.com/",
+    sourceClass: "OEM_OFFICIAL",
+    evidenceState: "PRIMARY_VERIFIED",
+    salesImpact: "HIGH_OPPORTUNITY",
+    torqueUse: "CUSTOMER_SAFE",
+  },
+});
+assert.equal(futureScout.action, "NO_ACTION");
+assert.ok(futureScout.reasons.includes("SCOUT_OBSERVATION_OUTSIDE_EFFECTIVE_WINDOW"));
+
+const closedScout = matchScoutObservationToHunt({
+  hunt: { ...hunt, state: "CLOSED" },
+  createdAt: "2026-10-12T20:05:00.000Z",
+  observation: {
+    observationId: "obs_closed_pathfinder_incentive",
+    topic: "INCENTIVE",
+    headline: "Synthetic verified Pathfinder incentive",
+    summary: "Closed Hunt cannot generate a contact recommendation.",
+    affectedMakes: ["Nissan"],
+    affectedModels: ["Pathfinder"],
+    observedAt: "2026-10-12T20:04:00.000Z",
+    sourceId: "nissan-usa",
+    sourceUrl: "https://www.nissanusa.com/",
+    sourceClass: "OEM_OFFICIAL",
+    evidenceState: "PRIMARY_VERIFIED",
+    salesImpact: "HIGH_OPPORTUNITY",
+    torqueUse: "CUSTOMER_SAFE",
+  },
+});
+assert.equal(closedScout.action, "NO_ACTION");
+assert.ok(closedScout.reasons.includes("HUNT_NOT_ACTIVE"));
+
+
+const futureObservedScout = matchScoutObservationToHunt({
+  hunt,
+  createdAt: "2026-10-13T22:00:00.000Z",
+  observation: {
+    observationId: "obs_future_observed_pathfinder",
+    topic: "INCENTIVE",
+    headline: "Synthetic future-dated Pathfinder report",
+    summary: "A report observed in the future must not justify present customer outreach.",
+    affectedMakes: ["Nissan"],
+    affectedModels: ["Pathfinder"],
+    observedAt: "2026-10-15T00:00:00.000Z",
+    sourceId: "nissan-usa",
+    sourceUrl: "https://www.nissanusa.com/",
+    sourceClass: "OEM_OFFICIAL",
+    evidenceState: "PRIMARY_VERIFIED",
+    salesImpact: "HIGH_OPPORTUNITY",
+    torqueUse: "CUSTOMER_SAFE",
+  },
+});
+assert.equal(futureObservedScout.action, "NO_ACTION");
+assert.equal(futureObservedScout.score, 0);
+assert.ok(futureObservedScout.reasons.includes("SCOUT_OBSERVATION_OUTSIDE_EFFECTIVE_WINDOW"));
+
+
+const missingDemoVehicle = answerTorqueInventory({
+  message: "Do you have a 2026 Nissan Pathfinder?",
+  vehicles: [],
+  mode: "representative-demo",
+  spec: parseTorqueSalesInventorySpec("Do you have a 2026 Nissan Pathfinder?"),
+});
+assert.equal(missingDemoVehicle.mode, "representative-demo");
+assert.match(missingDemoVehicle.answer, /sample vehicles/i);
+assert.match(missingDemoVehicle.answer, /NOT Orr Nissan West's live inventory/);
+assert.doesNotMatch(missingDemoVehicle.answer, /No — I don't have/);
+
+
+const oklahomaDealer = resolveDealershipScope("orr-nissan-west");
+const irvingDealer = resolveDealershipScope("irving-hyundai-pending");
+assert.ok(oklahomaDealer);
+assert.ok(irvingDealer);
+assert.equal(oklahomaDealer?.brand, "Nissan");
+assert.equal(irvingDealer?.brand, "Hyundai");
+assert.equal(dealerInventorySearchAvailable(oklahomaDealer!), true);
+assert.equal(dealerInventorySearchAvailable(irvingDealer!), false);
+assert.equal(resolveDealershipScope("fake-dealership"), null);
+assert.equal(resolveDealershipScope(undefined), null);
+
+
+const hyundaiPalisade = parseTorqueSalesInventorySpec("Find a new 2026 Hyundai Palisade AWD under $48k");
+assert.equal(hyundaiPalisade.make?.value, "Hyundai");
+assert.equal(hyundaiPalisade.model?.value, "Palisade");
+assert.equal(hyundaiPalisade.modelYear?.value, 2026);
+assert.equal(hyundaiPalisade.drivetrain?.value, "AWD");
+const hyundaiIoniq = parseTorqueSalesInventorySpec("Looking for an Ioniq 5");
+assert.equal(hyundaiIoniq.make?.value, "Hyundai");
+assert.equal(hyundaiIoniq.model?.value, "Ioniq 5");
+assert.equal(parseTorqueSalesInventorySpec("2026 Rogue").make?.value, "Nissan");
+const unknownHyundai = answerTorqueInventory({
+  message: "2026 Hyundai Palisade",
+  vehicles: [],
+  mode: "representative-demo",
+  spec: hyundaiPalisade,
+});
+assert.match(unknownHyundai.answer, /sample vehicles/i);
+
+const exactVin = "1N4BL4DV9SN320880";
+const vinSpec = parseTorqueSalesInventorySpec("Can you check VIN: 1N4BL4DV9SN320880?");
+assert.equal(vinSpec.vin?.value, exactVin);
+assert.equal(parseTorqueSalesInventorySpec("VIN: 1N4BL4DV9SN32088I").vin, undefined);
+const vinFixture = {
+  id: exactVin, year: 2025, make: "Nissan", model: "Altima", trim: "SV",
+  price: 19970, type: "Sedan", mileage: 40776, drivetrain: "FWD",
+  image: "", accent: "",
+};
+assert.deepEqual(
+  rankVehiclesForSalesSpec({ requirements: vinSpec, vehicles: [
+    { ...vinFixture, id: "1N4BL4DV9SN320881" }, vinFixture,
+  ] }).map((entry) => entry.vehicle.id),
+  [exactVin],
+);
+assert.equal(rankVehiclesForSalesSpec({
+  requirements: vinSpec, vehicles: [{ ...vinFixture, id: "1N4BL4DV9SN320881" }],
+}).length, 0);
+
+
+const stockSpec = parseTorqueSalesInventorySpec("Please check stock # 320880P");
+assert.equal(stockSpec.stockNumber?.value, "320880P");
+assert.equal(parseTorqueSalesInventorySpec("Any stock available?").stockNumber, undefined);
+const stockFixture = {
+  id: "1N4BL4DV9SN320880", stockNumber: "320880P",
+  year: 2025, make: "Nissan", model: "Altima", trim: "SV",
+  price: 19970, type: "Sedan", mileage: 40776, drivetrain: "FWD",
+  image: "", accent: "",
+};
+assert.deepEqual(rankVehiclesForSalesSpec({
+  requirements: stockSpec,
+  vehicles: [{ ...stockFixture, id: "1N4BL4DV9SN320881", stockNumber: "320880X" }, stockFixture],
+}).map((entry) => entry.vehicle.id), ["1N4BL4DV9SN320880"]);
+assert.equal(rankVehiclesForSalesSpec({
+  requirements: stockSpec,
+  vehicles: [{ ...stockFixture, stockNumber: undefined }],
+}).length, 0);
+
+
+const dnaFixtures = [
+  { id: "1N4BL4DV9SN320881", stockNumber: "881P", year: 2025, make: "Nissan", model: "Altima", trim: "SV", price: 19000, type: "Sedan", mileage: 100, drivetrain: "FWD", image: "", accent: "" },
+  { id: "1N4BL4DV9SN320882", stockNumber: "882P", year: 2025, make: "Nissan", model: "Altima", trim: "SV", price: 21000, type: "Sedan", mileage: 100, drivetrain: "AWD", image: "", accent: "" },
+];
+const dnaSearch = parseTorqueSalesInventorySpec("2025 Nissan Altima");
+const dnaPreferred = answerTorqueInventory({
+  message: "2025 Nissan Altima",
+  vehicles: dnaFixtures,
+  mode: "verified-live",
+  spec: dnaSearch,
+  dna: { signalCount: 4, label: "Learning: AWD", traits: ["AWD"] },
+});
+assert.equal(dnaPreferred.matches[0]?.id, "1N4BL4DV9SN320882");
+const dnaHard = answerTorqueInventory({
+  message: "2025 Nissan Altima FWD",
+  vehicles: dnaFixtures,
+  mode: "verified-live",
+  spec: parseTorqueSalesInventorySpec("2025 Nissan Altima FWD"),
+  dna: { signalCount: 4, label: "Learning: AWD", traits: ["AWD"] },
+});
+assert.equal(dnaHard.matches[0]?.id, "1N4BL4DV9SN320881");
+const dnaNone = answerTorqueInventory({
+  message: "2025 Nissan Altima",
+  vehicles: dnaFixtures,
+  mode: "verified-live",
+  spec: dnaSearch,
+});
+assert.equal(dnaNone.matches[0]?.id, "1N4BL4DV9SN320881");
+
+
+
+const unverifiedMileage = {
+  id: "1N4BL4DV9SN320880", year: 2025, make: "Nissan",
+  model: "Altima", trim: "SV", price: 19970, mileage: 0,
+  mileageVerified: false, type: "Sedan", drivetrain: "FWD",
+  image: "", accent: "",
+};
+const mileageCeiling = parseTorqueSalesInventorySpec("2025 Nissan Altima under 50000 miles");
+const uncertainMileageResults = rankVehiclesForSalesSpec({
+  requirements: mileageCeiling,
+  vehicles: [unverifiedMileage],
+});
+assert.equal(uncertainMileageResults.length, 1);
+assert.equal(uncertainMileageResults[0].fit, "NEAR");
+assert.ok(uncertainMileageResults[0].compromises.includes("mileage not verified by source"));
+const uncertainMileageAnswer = answerTorqueInventory({
+  message: "2025 Nissan Altima under 50000 miles",
+  vehicles: [unverifiedMileage],
+  mode: "verified-live",
+  spec: mileageCeiling,
+});
+assert.equal(uncertainMileageAnswer.matches[0]?.mileageVerified, false);
+assert.equal(uncertainMileageAnswer.matches[0]?.fit, "near");
+
+
+const fullOrrRankingSpec = parseTorqueSalesInventorySpec("2025 Nissan Altima");
+const fullOrrRankingVehicles = Array.from({ length: 120 }, (_, index) => ({
+  ...stockFixture,
+  id: `1N4BL4DV9SN${String(index).padStart(6, "0")}`,
+  stockNumber: `ST${index}`,
+  price: 19000 + index,
+}));
+const fullOrrRanking = rankVehiclesForSalesSpec({
+  requirements: fullOrrRankingSpec,
+  vehicles: fullOrrRankingVehicles,
+  limit: 2_000,
+});
+assert.equal(fullOrrRanking.length, 120);
+const fullOrrAnswer = answerTorqueInventory({
+  message: "2025 Nissan Altima",
+  vehicles: fullOrrRankingVehicles,
+  mode: "verified-live",
+  spec: fullOrrRankingSpec,
+});
+assert.equal(fullOrrAnswer.exactCount, 120);
+assert.equal(fullOrrAnswer.matches.length, 5);
+
+console.log("Torque inventory + sourcing + follow-up R0 behavior: PASS");

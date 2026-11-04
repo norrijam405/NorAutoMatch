@@ -29,11 +29,59 @@ export function matchScoutObservationToHunt(input: {
   const { observation, hunt } = input;
   const reasons: string[] = [];
   let score = 0;
+  const createdAt = input.createdAt ?? new Date().toISOString();
+  const evaluationTime = Date.parse(createdAt);
+  const observationTime = Date.parse(observation.observedAt);
+  const expiredAt = observation.expiresAt ? Date.parse(observation.expiresAt) : undefined;
+  const effectiveAt = observation.effectiveAt ? Date.parse(observation.effectiveAt) : undefined;
+  const inactiveHunt = hunt.state === "CLOSED" || hunt.state === "PAUSED";
+  const invalidTimeline = !Number.isFinite(evaluationTime) || !Number.isFinite(observationTime) ||
+    (observation.expiresAt !== undefined && !Number.isFinite(expiredAt)) ||
+    (observation.effectiveAt !== undefined && !Number.isFinite(effectiveAt));
+  const outsideWindow = !invalidTimeline && (
+    observationTime > evaluationTime ||
+    (expiredAt !== undefined && evaluationTime >= expiredAt) ||
+    (effectiveAt !== undefined && evaluationTime < effectiveAt)
+  );
+  if (inactiveHunt || invalidTimeline || outsideWindow) {
+    return {
+      protocol: "NORAUTO_SCOUT_OPPORTUNITY_MATCH_V1",
+      observationId: observation.observationId,
+      huntId: hunt.huntId,
+      score: 0,
+      reasons: [inactiveHunt ? "HUNT_NOT_ACTIVE" : invalidTimeline ? "INVALID_SCOUT_TIMELINE" : "SCOUT_OBSERVATION_OUTSIDE_EFFECTIVE_WINDOW"],
+      action: "NO_ACTION",
+      customerSafe: false,
+      requiresHumanVerification: true,
+      createdAt,
+    };
+  }
 
   const requestedMake = scalar(hunt.requirements.make?.value);
   const requestedModel = scalar(hunt.requirements.model?.value);
   const affectedMakes = new Set(observation.affectedMakes.map(normalize));
   const affectedModels = new Set(observation.affectedModels.map(normalize));
+
+  // A topic bonus is not evidence that an observation concerns this customer's vehicle.
+  // Explicit make/model mismatches fail closed, including for high-impact incentives.
+  const unrelatedMake = requestedMake && affectedMakes.size > 0 && !affectedMakes.has(normalize(requestedMake));
+  const unrelatedModel = requestedModel && affectedModels.size > 0 && !affectedModels.has(normalize(requestedModel));
+  const noVehicleIdentityMatch =
+    (!requestedMake || !affectedMakes.has(normalize(requestedMake))) &&
+    (!requestedModel || !affectedModels.has(normalize(requestedModel)));
+  if (unrelatedMake || unrelatedModel || noVehicleIdentityMatch) {
+    return {
+      protocol: "NORAUTO_SCOUT_OPPORTUNITY_MATCH_V1",
+      observationId: observation.observationId,
+      huntId: hunt.huntId,
+      score: 0,
+      reasons: ["NO_RELEVANT_VEHICLE_IDENTITY_EVIDENCE"],
+      action: "NO_ACTION",
+      customerSafe: false,
+      requiresHumanVerification: true,
+      createdAt: input.createdAt ?? new Date().toISOString(),
+    };
+  }
 
   if (requestedMake && affectedMakes.has(normalize(requestedMake))) {
     score += 30;

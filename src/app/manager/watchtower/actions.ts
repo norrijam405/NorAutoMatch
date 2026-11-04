@@ -9,6 +9,7 @@ import { persistVehicleHunt, readVehicleHunt } from "@/lib/watchtower-persistenc
 import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
 import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
 import { matchVehicleHuntToLocalInventory } from "@/lib/vehicle-hunt-inventory-matcher";
+import { resolveDealershipScope, dealerInventorySearchAvailable } from "@/lib/dealership-scope";
 
 let watchtowerPool: ReturnType<typeof createPostgresCrmPool> | undefined;
 
@@ -32,6 +33,10 @@ export async function createFreshUpVehicleHunt(
   const { userId } = await requireNorAutoMembership(["operator", "admin", "founder"], "/manager/watchtower");
 
   const request = String(formData.get("request") ?? "").trim();
+  const dealership = resolveDealershipScope(formData.get("dealershipId"));
+  if (!dealership || !dealerInventorySearchAvailable(dealership) || dealership.id !== "orr-nissan-west") {
+    return { ok: false, message: "Vehicle Hunt saving is restricted to Orr Nissan West until the selected dealership is verified and its private workspace is configured." };
+  }
   const consentToContact = formData.get("consentToContact") === "on";
 
   if (request.length < 4 || request.length > 1200) {

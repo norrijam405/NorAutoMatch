@@ -1,5 +1,6 @@
 export type Vehicle = {
   id: string;
+  stockNumber?: string;
   year: number;
   make: string;
   model: string;
@@ -8,6 +9,8 @@ export type Vehicle = {
   /** Source-supported body/category label. Do not drop valid inventory because it is not SUV/Sedan/Truck. */
   type: string;
   mileage: number;
+  /** False means the feed did not verify a mileage reading; numeric zero is only a compatibility placeholder. */
+  mileageVerified?: boolean;
   drivetrain: string;
   image: string;
   accent: string;
