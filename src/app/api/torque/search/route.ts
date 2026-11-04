@@ -155,6 +155,17 @@ export async function POST(request: Request) {
     });
   }
 
+  if (!suppliedBattle && !namedPair && /\\b(?:compare|comparison|versus|vs\\.?|between)\\b/i.test(message)) {
+    return noStore({
+      protocol: "NORAUTO_TORQUE_SEARCH_V1",
+      truthState: mode === "representative-demo" ? "REPRESENTATIVE_ONLY" : "COMPARISON_SCOPE_UNVERIFIED",
+      mode, needsMoreDetail: true, matches: [],
+      answer: mode === "representative-demo"
+        ? "I can discuss what matters in a comparison, but I cannot verify two dealer vehicles from demonstration inventory. Tell me the two models and your priorities; a salesperson can confirm actual listings."
+        : "I can compare models directly, without you saving cars first. I couldn't verify both named models in this dealer catalog. Which two exact models or model years do you mean? I won't silently compare an unrelated vehicle.",
+    });
+  }
+
   const spec = parseTorqueSalesInventorySpec(message);
   if (spec.freeformNotes.some((note) => note.startsWith("Both Hyundai and Nissan were named."))) {
     return noStore({
