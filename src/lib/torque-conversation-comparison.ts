@@ -8,7 +8,12 @@ const vin = (id: string) => /^[A-HJ-NPR-Z0-9]{17}$/i.test(id);
  * Requires exactly two distinguishable model mentions from the current verified catalog.
  * No fuzzy guesses and no substitutions when a model is absent.
  */
+export function comparisonRequested(message: string) {
+  return /\b(?:compare|comparison|versus|vs\.?|better|which (?:one|car|vehicle)|between|or)\b/i.test(message);
+}
+
 export function namedComparison(message: string, vehicles: Vehicle[]) {
+  if (!comparisonRequested(message)) return null;
   const text = ` ${norm(message)} `;
   const modelNames = [...new Map(
     vehicles.filter(v => vin(v.id)).map(v => [norm(`${v.make} ${v.model}`), { make: v.make, model: v.model }])
