@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { readJsonBodyWithByteLimit } from "@/lib/request-body-limit";
 import { answerTorqueInventory, type TorqueInventoryMode } from "@/lib/torque-inventory-assistant";
 import { buildGarageBattleStory } from "@/lib/garage-battle";
+import { namedComparison } from "@/lib/torque-conversation-comparison";
 import { BATTLE_PRIORITIES, isBattlePriority, resolveBattlePriority, battleFollowupType } from "@/lib/torque-battle-followup";
 import { parseTorqueSalesInventorySpec } from "@/lib/torque-sales-inventory-spec";
 import { dealerInventorySearchAvailable, resolveDealershipScope } from "@/lib/dealership-scope";
@@ -100,8 +101,11 @@ export async function POST(request: Request) {
 
   // Garage Battle uses the same Torque endpoint but never lets natural-language search
   // silently substitute a vehicle. Both VINs must resolve in verified dealer records.
-  const rawBattle = typeof bodyRead.value === "object" && bodyRead.value !== null && "battle" in bodyRead.value
+  const suppliedBattle = typeof bodyRead.value === "object" && bodyRead.value !== null && "battle" in bodyRead.value
     ? bodyRead.value.battle : null;
+  const namedPair = suppliedBattle == null && mode !== "representative-demo"
+    ? namedComparison(message, vehicles) : null;
+  const rawBattle = suppliedBattle ?? (namedPair ? { vins: namedPair.vehicles.map(v => v.id), priority: "all" } : null);
   if (rawBattle !== null && rawBattle !== undefined) {
     const b = rawBattle as Record<string, unknown>;
     const ids = b && Array.isArray(b.vins) ? b.vins : [];
@@ -125,6 +129,10 @@ export async function POST(request: Request) {
     }
     const story = buildGarageBattleStory(a, bVehicle);
     const signals = priority === "all" ? story.signals : story.signals.filter(s => (BATTLE_PRIORITIES[priority] as readonly string[]).includes(s.id));
+    const isNamedPair = Boolean(namedPair);
+    const scopeNote = isNamedPair
+      ? `I found both models in the checked dealer catalog. For a concrete comparison I'm using one listed example of each: ${a.year} ${a.make} ${a.model} ${a.trim} (VIN ${a.id}) and ${bVehicle.year} ${bVehicle.make} ${bVehicle.model} ${bVehicle.trim} (VIN ${bVehicle.id}). Other model years or trims can differ. `
+      : "";
     // Conversational summary: the Garage already shows the full evidence cards.
     // Give the customer the most relevant two points, not a wall of repeated facts.
     const focus = battleFollowupType(message);
@@ -140,9 +148,9 @@ export async function POST(request: Request) {
       truthState: mode === "verified-cache" ? "VERIFIED_CACHED_CATALOG" : "VERIFIED_SOURCE_CATALOG",
       mode, dealershipId: dealership.id,
       answer: observations.length
-        ? `About ${priorityLabel[priority]}: ` + observations.join("\n\n") + "\n\n" + advice
+        ? scopeNote + `About ${priorityLabel[priority]}: ` + observations.join("\n\n") + "\n\n" + advice
         : `I can't establish a source-backed difference for ${priorityLabel[priority]} between those two exact VINs. Ask about another factor or review the evidence gaps in Garage Battle.`,
-      battle: { vins: ids, priority, signals, evidenceGaps: story.evidenceGaps },
+      battle: { vins: ids, priority, signals, evidenceGaps: story.evidenceGaps, basis: isNamedPair ? "named-catalog-examples" : "exact-vins" },
       matches: [], needsMoreDetail: false,
     });
   }
