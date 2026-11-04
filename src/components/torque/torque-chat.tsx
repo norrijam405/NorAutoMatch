@@ -63,7 +63,7 @@ export function TorqueChat() {
   const [turns, setTurns] = useState<Turn[]>([
     {
       role: "torque",
-      text: "Tell me what you're actually looking for. Give me the details that matter and I’ll tell you what fits, what doesn’t, and where the compromises are.",
+      text: "Ask me about a car, or compare two models directly—like Rogue versus Kicks. Tell me what matters to you, and I'll distinguish verified facts from anything I can't confirm.",
     },
   ]);
 
@@ -255,7 +255,7 @@ export function TorqueChat() {
                 }}
                 rows={2}
                 maxLength={1200}
-                placeholder="Example: Baltic Teal Pathfinder, brown seats, 4WD…"
+                placeholder="Compare Rogue vs Kicks for a family, or describe what you need…"
                 className="min-h-[48px] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-white outline-none placeholder:text-slate-600"
               />
               <button type="submit" disabled={busy || !input.trim()} className="grid size-11 shrink-0 place-items-center rounded-xl bg-amber-300 text-black disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send to Torque">
