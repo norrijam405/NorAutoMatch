@@ -253,7 +253,7 @@ export function TorqueChat() {
             <select
               id="torque-dealership-scope"
               value={dealershipId}
-              onChange={(event) => { setDealershipId(event.target.value); setBattleContext(null); }}
+              onChange={(event) => { setDealershipId(event.target.value); setBattleContext(null); setInput(""); setTurns([{ role: "torque", text: "Dealership changed. Fresh search—tell me what you need at this store." }]); }}
               className="mb-3 w-full rounded-xl border border-white/15 bg-[#111b27] p-3 text-xs text-white"
             >
               <option value="orr-nissan-west">Orr Nissan West — Oklahoma City, OK</option>
