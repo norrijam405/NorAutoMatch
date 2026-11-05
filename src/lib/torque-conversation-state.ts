@@ -27,13 +27,13 @@ export function combinedCustomerSpec(history: string[], latest: string): TorqueS
     // A customer withdrawing a requirement must never have it re-added merely
     // because the same word also appears in the withdrawal sentence.
     const withdrawn: Array<(typeof scalarFields)[number]> = [];
-    if (/\\b(?:no longer|don'?t|do not|not)\\s+(?:need|require|want|care about)\\s+(?:an?\\s+)?(?:awd|4wd|4x4|four.wheel.drive|all.wheel.drive)\\b/i.test(turn)) {
+    if (/\b(?:no longer|don'?t|do not|not)\s+(?:need|require|want|care about)\s+(?:an?\s+)?(?:awd|4wd|4x4|four.wheel.drive|all.wheel.drive)\b/i.test(turn)) {
       withdrawn.push("drivetrain");
     }
-    if (/\\b(?:no longer|don'?t|do not|not)\\s+(?:need|require|want)\\s+(?:a\\s+)?(?:fully?\\s+electric|electric|ev)\\b/i.test(turn)) {
+    if (/\b(?:no longer|don'?t|do not|not)\s+(?:need|require|want)\s+(?:a\s+)?(?:fully?\s+electric|electric|ev)\b/i.test(turn)) {
       withdrawn.push("fuelType");
     }
-    if (/\\b(?:no longer|don'?t|do not|not)\\s+(?:need|require|want)\\s+(?:a\\s+)?(?:seven|7)[- ]?(?:seater|seat|passenger)\\b/i.test(turn)) {
+    if (/\b(?:no longer|don'?t|do not|not)\s+(?:need|require|want)\s+(?:a\s+)?(?:seven|7)[- ]?(?:seater|seat|passenger)\b/i.test(turn)) {
       withdrawn.push("seatingCapacity");
     }
     for (const field of withdrawn) delete result[field];
