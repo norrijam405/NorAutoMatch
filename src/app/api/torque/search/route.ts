@@ -11,7 +11,6 @@ import { namedComparison } from "@/lib/torque-conversation-comparison";
 import { combinedCustomerSpec, readRecentCustomerMessages, customerSpecSummary } from "@/lib/torque-conversation-state";
 import { scopedTorqueFollowup } from "@/lib/torque-followup-answer";
 import { BATTLE_PRIORITIES, isBattlePriority, resolveBattlePriority, battleFollowupType } from "@/lib/torque-battle-followup";
-import { parseTorqueSalesInventorySpec } from "@/lib/torque-sales-inventory-spec";
 import { dealerInventorySearchAvailable, resolveDealershipScope } from "@/lib/dealership-scope";
 
 export const runtime = "nodejs";
