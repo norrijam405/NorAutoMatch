@@ -11,6 +11,7 @@ import { namedComparison } from "@/lib/torque-conversation-comparison";
 import { combinedCustomerSpec, readRecentCustomerMessages, customerSpecSummary } from "@/lib/torque-conversation-state";
 import { scopedTorqueFollowup } from "@/lib/torque-followup-answer";
 import { torqueNextQuestion } from "@/lib/torque-next-question";
+import { explainTorqueNoMatch } from "@/lib/torque-no-match";
 import { BATTLE_PRIORITIES, isBattlePriority, resolveBattlePriority, battleFollowupType } from "@/lib/torque-battle-followup";
 import { dealerInventorySearchAvailable, resolveDealershipScope } from "@/lib/dealership-scope";
 
@@ -265,6 +266,9 @@ export async function POST(request: Request) {
   // Behavioral MatchDNA does not turn into customer MUST_HAVE requirements.
   if (spec.seatingCapacity?.priority === "MUST_HAVE" && result.matches.length === 0) {
     result.answer = `I heard your requirement for ${spec.seatingCapacity.value} seats. The current vehicle records do not carry enough verified seating-capacity evidence for me to certify a match. I won't recommend a vehicle as meeting that requirement without proof. A salesperson should verify the exact VIN and seating configuration.`;
+  }
+  if (result.matches.length === 0 && !spec.seatingCapacity) {
+    result.answer = explainTorqueNoMatch(spec, mode);
   }
   if (result.exactCount === 0 && result.nearCount === 0 && customerRequirements.length > 0) {
     result.answer += " Your stated requirements I kept: " + customerRequirements.join(", ") + ".";
