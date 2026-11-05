@@ -259,7 +259,13 @@ export async function POST(request: Request) {
   const result = answerTorqueInventory({ message, vehicles, mode, dna, spec });
   if (recentMessages.length > 0) {
     const focusedAnswer = scopedTorqueFollowup(message, result.matches, vehicles, mode);
-    if (focusedAnswer && !spec.seatingCapacity) result.answer = focusedAnswer;
+    // A factual price/MPG follow-up must not erase an unmet must-have warning.
+    // In particular, a NEAR result is not an eligible replacement for an exact fit.
+    if (focusedAnswer && !spec.seatingCapacity) {
+      result.answer = result.exactCount > 0 || result.nearCount > 0 && result.matches.every((match) => match.fit !== "near")
+        ? focusedAnswer
+        : result.answer + "\n\n" + focusedAnswer;
+    }
   }
   const customerRequirements = customerSpecSummary(spec);
   // A no-match response must name the retained, explicit customer constraints.
