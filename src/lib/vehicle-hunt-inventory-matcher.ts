@@ -15,6 +15,7 @@ export function rankVehiclesForSalesSpec(input: {
   requirements: TorqueSalesInventorySpec;
   vehicles: Vehicle[];
   limit?: number;
+  strictMustHaves?: boolean;
 }): SalesSpecVehicleEvaluation[] {
   // Search the entire verified dealer catalog before returning the requested top matches.
   const limit = Math.max(1, Math.min(input.limit ?? 12, 2_000));
@@ -33,7 +34,7 @@ export function rankVehiclesForSalesSpec(input: {
         softMisses: evaluation.softMisses,
       };
     })
-    .filter((entry) => entry.hardMisses <= 2)
+    .filter((entry) => input.strictMustHaves ? entry.hardMisses === 0 : entry.hardMisses <= 2)
     .sort((a, b) => {
       const fitDelta = fitRank[a.fit] - fitRank[b.fit];
       if (fitDelta !== 0) return fitDelta;
