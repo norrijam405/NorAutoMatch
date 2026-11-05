@@ -90,6 +90,14 @@ function evaluateVehicle(
   compareYear(result, spec.modelYear, vehicle.year);
   compareText(result, spec.trim, vehicle.trim, "trim", true);
   compareText(result, spec.condition, vehicle.condition ?? "", "condition");
+  if (spec.bodyTypeAlternatives) {
+    const type = vehicle.type.toLowerCase();
+    if (/suv|crossover|minivan|mini-van|van/.test(type)) {
+      result.reasons.push("customer accepts SUV or minivan");
+    } else {
+      priorityMiss(result, spec.bodyTypeAlternatives.priority, "neither SUV nor minivan");
+    }
+  }
   if (spec.bodyType) {
     const type = vehicle.type.toLowerCase();
     const match = spec.bodyType.value === "TRUCK" ? /truck|pickup/.test(type)
@@ -249,6 +257,9 @@ function identityRequirementsMatch(spec: TorqueSalesInventorySpec, vehicle: Vehi
   if (spec.make?.priority === "MUST_HAVE" && normalize(String(spec.make.value)) !== normalize(vehicle.make)) return false;
   if (spec.model?.priority === "MUST_HAVE" && normalize(String(spec.model.value)) !== normalize(vehicle.model)) return false;
   // Hard identity and capacity constraints cannot be loosened into random near-fit cars.
+  if (spec.bodyTypeAlternatives?.priority === "MUST_HAVE") {
+    if (!/suv|crossover|minivan|mini-van|van/.test(vehicle.type.toLowerCase())) return false;
+  }
   if (spec.bodyType?.priority === "MUST_HAVE") {
     const type = vehicle.type.toLowerCase();
     const matches = spec.bodyType.value === "TRUCK" ? /truck|pickup/.test(type)
