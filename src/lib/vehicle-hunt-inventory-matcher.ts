@@ -93,7 +93,9 @@ function evaluateVehicle(
   if (spec.bodyType) {
     const type = vehicle.type.toLowerCase();
     const match = spec.bodyType.value === "TRUCK" ? /truck|pickup/.test(type)
-      : spec.bodyType.value === "SEDAN" ? /sedan/.test(type) : /suv|crossover/.test(type);
+      : spec.bodyType.value === "SEDAN" ? /sedan/.test(type)
+      : spec.bodyType.value === "MINIVAN" ? /minivan|mini-van|van/.test(type)
+      : /suv|crossover/.test(type);
     if (match) result.reasons.push("body style: " + spec.bodyType.value.toLowerCase());
     else priorityMiss(result, spec.bodyType.priority, "body style mismatch");
   }
@@ -250,7 +252,9 @@ function identityRequirementsMatch(spec: TorqueSalesInventorySpec, vehicle: Vehi
   if (spec.bodyType?.priority === "MUST_HAVE") {
     const type = vehicle.type.toLowerCase();
     const matches = spec.bodyType.value === "TRUCK" ? /truck|pickup/.test(type)
-      : spec.bodyType.value === "SEDAN" ? /sedan/.test(type) : /suv|crossover/.test(type);
+      : spec.bodyType.value === "SEDAN" ? /sedan/.test(type)
+      : spec.bodyType.value === "MINIVAN" ? /minivan|mini-van|van/.test(type)
+      : /suv|crossover/.test(type);
     if (!matches) return false;
   }
   if (spec.fuelType?.priority === "MUST_HAVE") {
