@@ -13,7 +13,7 @@ export type TorqueSalesInventorySpec = {
   model?: TorqueSalesRequirement<string>;
   modelYear?: TorqueSalesRequirement<number | { min?: number; max?: number }>;
   trim?: TorqueSalesRequirement<string>;
-  bodyType?: TorqueSalesRequirement<"TRUCK" | "SEDAN" | "SUV">;
+  bodyType?: TorqueSalesRequirement<"TRUCK" | "SEDAN" | "SUV" | "MINIVAN">;
   condition?: TorqueSalesRequirement<"NEW" | "USED" | "CPO">;
   maxPrice?: TorqueSalesRequirement<number>;
   maxMileage?: TorqueSalesRequirement<number>;
@@ -187,7 +187,8 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
   else if (/\bsl\b/i.test(text)) spec.trim = preferenceNear("sl") ? preferred("SL") : must("SL");
   else if (/\bsv\b/i.test(text)) spec.trim = preferenceNear("sv") ? preferred("SV") : must("SV");
 
-  if (/\btruck|pickup\b/i.test(text)) spec.bodyType = must("TRUCK");
+  if (/\bminivan|mini-van|people carrier\b/i.test(text)) spec.bodyType = must("MINIVAN");
+  else if (/\btruck|pickup\b/i.test(text)) spec.bodyType = must("TRUCK");
   else if (/\bsedan\b/i.test(text)) spec.bodyType = must("SEDAN");
   else if (/\bsuv|crossover\b/i.test(text)) spec.bodyType = must("SUV");
 
