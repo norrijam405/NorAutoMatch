@@ -5,11 +5,11 @@ import { parseTorqueSalesInventorySpec, type TorqueSalesInventorySpec } from "./
  */
 export function readRecentCustomerMessages(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return value.slice(-6).filter((x): x is string => typeof x === "string" && x.length > 0 && x.length <= 600);
+  return value.slice(-10).filter((x): x is string => typeof x === "string" && x.length > 0 && x.length <= 400);
 }
 
 export function combinedCustomerSpec(history: string[], latest: string): TorqueSalesInventorySpec {
-  const turns = [...history.slice(-6), latest];
+  const turns = [...history.slice(-10), latest];
   const result = parseTorqueSalesInventorySpec("");
   const scalarFields = [
     "vin", "stockNumber", "make", "model", "modelYear", "trim", "bodyType",
