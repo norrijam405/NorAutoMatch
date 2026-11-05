@@ -9,6 +9,7 @@ import { answerTorqueInventory, type TorqueInventoryMode } from "@/lib/torque-in
 import { buildGarageBattleStory } from "@/lib/garage-battle";
 import { namedComparison } from "@/lib/torque-conversation-comparison";
 import { combinedCustomerSpec, readRecentCustomerMessages, customerSpecSummary } from "@/lib/torque-conversation-state";
+import { scopedTorqueFollowup } from "@/lib/torque-followup-answer";
 import { BATTLE_PRIORITIES, isBattlePriority, resolveBattlePriority, battleFollowupType } from "@/lib/torque-battle-followup";
 import { parseTorqueSalesInventorySpec } from "@/lib/torque-sales-inventory-spec";
 import { dealerInventorySearchAvailable, resolveDealershipScope } from "@/lib/dealership-scope";
@@ -243,6 +244,10 @@ export async function POST(request: Request) {
   }
 
   const result = answerTorqueInventory({ message, vehicles, mode, dna, spec });
+  if (recentMessages.length > 0) {
+    const focusedAnswer = scopedTorqueFollowup(message, result.matches, vehicles, mode);
+    if (focusedAnswer && !spec.seatingCapacity) result.answer = focusedAnswer;
+  }
   const customerRequirements = customerSpecSummary(spec);
   // A no-match response must name the retained, explicit customer constraints.
   // Behavioral MatchDNA does not turn into customer MUST_HAVE requirements.
