@@ -117,6 +117,16 @@ export function answerTorqueInventory(input: {
     : strong.length > 0
       ? strong.slice(0, 5)
       : near;
+  // State the specific evidence behind the FIRST eligible recommendation.
+  // A match is not a promise of current availability or financing.
+  const leading = matches[0];
+  const matchExplanation = leading
+    ? ` My first listed option is ${leading.label}: ${leading.reasons.length
+        ? leading.reasons.slice(0, 2).join("; ")
+        : "it meets the checked requirements, but the available record does not establish additional differentiators"}.${leading.compromises.length
+        ? " Unverified or preferred tradeoffs: " + leading.compromises.slice(0, 2).join("; ") + "."
+        : ""}`
+    : "";
 
   const sourcePhrase =
     input.mode === "representative-demo"
@@ -161,6 +171,8 @@ export function answerTorqueInventory(input: {
       : "I couldn't find that specification in " + sourcePhrase +
         ". That only describes this checked catalog and does not prove the dealership has no such vehicle. Ask a salesperson to verify the specific stock or VIN.";
   }
+
+  if (leading) answer += matchExplanation;
 
   if (input.dna && input.dna.signalCount > 0) {
     answer += " Your MatchDNA currently says: " + input.dna.label.replace(/^Learning:\s*/i, "") + ".";
