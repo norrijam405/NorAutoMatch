@@ -24,10 +24,23 @@ export function combinedCustomerSpec(history: string[], latest: string): TorqueS
       for (const field of scalarFields) delete result[field];
       result.packages = []; result.features = []; result.exclusions = []; result.freeformNotes = [];
     }
+    // A customer withdrawing a requirement must never have it re-added merely
+    // because the same word also appears in the withdrawal sentence.
+    const withdrawn: Array<(typeof scalarFields)[number]> = [];
+    if (/\\b(?:no longer|don'?t|do not|not)\\s+(?:need|require|want|care about)\\s+(?:an?\\s+)?(?:awd|4wd|4x4|four.wheel.drive|all.wheel.drive)\\b/i.test(turn)) {
+      withdrawn.push("drivetrain");
+    }
+    if (/\\b(?:no longer|don'?t|do not|not)\\s+(?:need|require|want)\\s+(?:a\\s+)?(?:fully?\\s+electric|electric|ev)\\b/i.test(turn)) {
+      withdrawn.push("fuelType");
+    }
+    if (/\\b(?:no longer|don'?t|do not|not)\\s+(?:need|require|want)\\s+(?:a\\s+)?(?:seven|7)[- ]?(?:seater|seat|passenger)\\b/i.test(turn)) {
+      withdrawn.push("seatingCapacity");
+    }
+    for (const field of withdrawn) delete result[field];
     const next = parseTorqueSalesInventorySpec(turn);
     for (const field of scalarFields) {
       // Latest explicit value overrides prior requirement within the same category.
-      if (next[field] !== undefined) Object.assign(result, { [field]: next[field] });
+      if (next[field] !== undefined && !withdrawn.includes(field)) Object.assign(result, { [field]: next[field] });
     }
     // Keep each positive requirement only once, avoiding duplicative prompts.
     for (const field of ["features", "packages", "exclusions"] as const) {
