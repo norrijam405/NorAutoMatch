@@ -8,6 +8,7 @@ import { readJsonBodyWithByteLimit } from "@/lib/request-body-limit";
 import { answerTorqueInventory, type TorqueInventoryMode } from "@/lib/torque-inventory-assistant";
 import { buildGarageBattleStory } from "@/lib/garage-battle";
 import { namedComparison } from "@/lib/torque-conversation-comparison";
+import { combinedCustomerSpec, readRecentCustomerMessages, customerSpecSummary } from "@/lib/torque-conversation-state";
 import { BATTLE_PRIORITIES, isBattlePriority, resolveBattlePriority, battleFollowupType } from "@/lib/torque-battle-followup";
 import { parseTorqueSalesInventorySpec } from "@/lib/torque-sales-inventory-spec";
 import { dealerInventorySearchAvailable, resolveDealershipScope } from "@/lib/dealership-scope";
@@ -166,7 +167,11 @@ export async function POST(request: Request) {
     });
   }
 
-  const spec = parseTorqueSalesInventorySpec(message);
+  const recentMessages = readRecentCustomerMessages(
+    typeof bodyRead.value === "object" && bodyRead.value !== null && "recentMessages" in bodyRead.value
+      ? bodyRead.value.recentMessages : []
+  );
+  const spec = combinedCustomerSpec(recentMessages, message);
   if (spec.freeformNotes.some((note) => note.startsWith("Both Hyundai and Nissan were named."))) {
     return noStore({
       protocol: "NORAUTO_TORQUE_SEARCH_V1",
@@ -183,6 +188,7 @@ export async function POST(request: Request) {
     spec.stockNumber ||
     spec.make ||
     spec.model ||
+    spec.bodyType ||
     spec.modelYear ||
     spec.trim ||
     spec.condition ||
@@ -237,6 +243,12 @@ export async function POST(request: Request) {
   }
 
   const result = answerTorqueInventory({ message, vehicles, mode, dna, spec });
+  const customerRequirements = customerSpecSummary(spec);
+  // A no-match response must name the retained, explicit customer constraints.
+  // Behavioral MatchDNA does not turn into customer MUST_HAVE requirements.
+  if (result.exactCount === 0 && result.nearCount === 0 && customerRequirements.length > 0) {
+    result.answer += " Your stated requirements I kept: " + customerRequirements.join(", ") + ".";
+  }
 
   return noStore({
     protocol: "NORAUTO_TORQUE_SEARCH_V1",
@@ -244,6 +256,7 @@ export async function POST(request: Request) {
     needsMoreDetail: false,
     ...result,
     salesSpec: spec,
+    customerRequirements,
     dealershipId: dealership.id,
     dealershipLabel: dealership.label,
     matchDna: dna ?? null,
