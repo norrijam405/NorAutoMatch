@@ -190,6 +190,7 @@ export async function POST(request: Request) {
     spec.make ||
     spec.model ||
     spec.bodyType ||
+    spec.bodyTypeAlternatives ||
     spec.modelYear ||
     spec.trim ||
     spec.condition ||
