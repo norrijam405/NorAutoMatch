@@ -5,7 +5,7 @@ import type { TorqueSalesInventorySpec } from "./torque-sales-inventory-spec";
  */
 export function torqueNextQuestion(spec: TorqueSalesInventorySpec): string | null {
   // A VIN, a named model, or an explicit body style is enough to begin a bounded search.
-  if (spec.vin || spec.stockNumber || spec.model || spec.bodyType) return null;
+  if (spec.vin || spec.stockNumber || spec.model || spec.bodyType || spec.bodyTypeAlternatives) return null;
   const seats = spec.seatingCapacity?.value;
   if (seats && seats >= 6) {
     return `I heard that you need seats for ${seats}. Are you shopping for an SUV or open to a minivan as well? I won't assume a vehicle fits everyone without a verified seating configuration.`;
