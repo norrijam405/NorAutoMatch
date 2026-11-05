@@ -87,7 +87,7 @@ export function TorqueChat() {
     event.preventDefault();
     const message = input.trim();
     if (!message || busy) return;
-    const recentMessages = battleContext ? [] : turns.filter(turn => turn.role === "user").map(turn => turn.text).filter(text => text.length <= 600).slice(-6);
+    const recentMessages = battleContext ? [] : turns.filter(turn => turn.role === "user").map(turn => turn.text).filter(text => text.length <= 400).slice(-10);
 
     setTurns((current) => [...current, { role: "user", text: message }]);
     setInput("");
