@@ -10,6 +10,7 @@ import { buildGarageBattleStory } from "@/lib/garage-battle";
 import { namedComparison } from "@/lib/torque-conversation-comparison";
 import { combinedCustomerSpec, readRecentCustomerMessages, customerSpecSummary } from "@/lib/torque-conversation-state";
 import { scopedTorqueFollowup } from "@/lib/torque-followup-answer";
+import { torqueNextQuestion } from "@/lib/torque-next-question";
 import { BATTLE_PRIORITIES, isBattlePriority, resolveBattlePriority, battleFollowupType } from "@/lib/torque-battle-followup";
 import { dealerInventorySearchAvailable, resolveDealershipScope } from "@/lib/dealership-scope";
 
@@ -224,6 +225,17 @@ export async function POST(request: Request) {
           : "Which vehicle type are you considering, and what is your top non-negotiable requirement? You can describe it in plain language; I won't quietly drop what matters.",
       spec,
       matches: [],
+    });
+  }
+
+  const nextQuestion = torqueNextQuestion(spec);
+  if (nextQuestion) {
+    return noStore({
+      protocol: "NORAUTO_TORQUE_SEARCH_V1",
+      truthState: "NEEDS_CUSTOMER_CLARIFICATION",
+      mode, needsMoreDetail: true, matches: [],
+      answer: nextQuestion,
+      customerRequirements: customerSpecSummary(spec),
     });
   }
 
