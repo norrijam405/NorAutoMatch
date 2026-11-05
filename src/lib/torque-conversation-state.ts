@@ -13,7 +13,7 @@ export function combinedCustomerSpec(history: string[], latest: string): TorqueS
   const result = parseTorqueSalesInventorySpec("");
   const scalarFields = [
     "vin", "stockNumber", "make", "model", "modelYear", "trim", "bodyType",
-    "condition", "maxPrice", "maxMileage", "exteriorColor", "interiorColor",
+    "bodyTypeAlternatives", "condition", "maxPrice", "maxMileage", "exteriorColor", "interiorColor",
     "interiorMaterial", "drivetrain", "cabStyle", "bedLength", "seatingCapacity",
     "seatingLayout", "engine", "transmission", "fuelType", "towingMinimumLbs",
     "payloadMinimumLbs"
@@ -38,6 +38,10 @@ export function combinedCustomerSpec(history: string[], latest: string): TorqueS
     }
     for (const field of withdrawn) delete result[field];
     const next = parseTorqueSalesInventorySpec(turn);
+    // The latest explicit style choice replaces, rather than stacks with,
+    // an earlier single-style or flexible SUV/minivan choice.
+    if (next.bodyTypeAlternatives) delete result.bodyType;
+    if (next.bodyType) delete result.bodyTypeAlternatives;
     for (const field of scalarFields) {
       // Latest explicit value overrides prior requirement within the same category.
       if (next[field] !== undefined && !withdrawn.includes(field)) Object.assign(result, { [field]: next[field] });
@@ -57,7 +61,7 @@ export function combinedCustomerSpec(history: string[], latest: string): TorqueS
 
 export function customerSpecSummary(spec: TorqueSalesInventorySpec): string[] {
   const items = [
-    spec.make?.value, spec.model?.value, spec.bodyType?.value,
+    spec.make?.value, spec.model?.value, spec.bodyTypeAlternatives ? "SUV or minivan" : spec.bodyType?.value,
     spec.fuelType?.value ? `${spec.fuelType.value} fuel` : null,
     spec.seatingCapacity?.value ? `${spec.seatingCapacity.value} seats required` : null,
     spec.maxPrice?.value ? `up to $${spec.maxPrice.value.toLocaleString("en-US")}` : null,
