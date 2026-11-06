@@ -259,12 +259,12 @@ export async function POST(request: Request) {
   const result = answerTorqueInventory({ message, vehicles, mode, dna, spec });
   if (recentMessages.length > 0) {
     const focusedAnswer = scopedTorqueFollowup(message, result.matches, vehicles, mode);
-    // A factual price/MPG follow-up must not erase an unmet must-have warning.
-    // In particular, a NEAR result is not an eligible replacement for an exact fit.
-    if (focusedAnswer && !spec.seatingCapacity) {
-      result.answer = result.exactCount > 0 || result.nearCount > 0 && result.matches.every((match) => match.fit !== "near")
-        ? focusedAnswer
-        : result.answer + "\n\n" + focusedAnswer;
+    // Follow-up facts supplement, never overwrite, the fit assessment. In particular,
+    // an exact listing is not proof of seating capacity, available stock, or a deal.
+    // Retain must-have compromises, sourcing limits, and MatchDNA disclosures for
+    // both exact and near matches while still answering price/MPG questions.
+    if (focusedAnswer) {
+      result.answer += "\n\n" + focusedAnswer;
     }
   }
   const customerRequirements = customerSpecSummary(spec);
