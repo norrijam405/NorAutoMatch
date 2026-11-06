@@ -32,7 +32,7 @@ async function run() {
 
   let calls = 0;
   const settings = {
-    packet, endpoint: "https://torque.example.test/draft", approvedOrigin: "https://torque.example.test", bearerToken: "synthetic",
+    packet, endpoint: "https://torque.example.test/draft", approvedOrigin: "https://torque.example.test", bearerToken: "synthetic", approvedForExternalRuntime: true,
   };
   const valid = await prepareTorqueRuntimeDraft({
     ...settings,
@@ -56,6 +56,22 @@ async function run() {
   assert.equal(valid.outboundExecution, "NOT_PERFORMED");
   assert.equal(valid.customerReachedState, "NOT_CLAIMED");
   assert.equal(valid.authorityEffect, "NONE");
+  if (valid.state === "DRAFT_ONLY") assert.equal(valid.review.state, "REVIEW_REQUIRED");
+
+  const noApproval = await prepareTorqueRuntimeDraft({
+    ...settings, approvedForExternalRuntime: false,
+    transport: async () => { throw new Error("must not send customer text without approval"); },
+  });
+  assert.equal(noApproval.state, "UNAVAILABLE");
+  if (noApproval.state === "UNAVAILABLE") assert.equal(noApproval.reason, "CONTEXT_BLOCKED");
+
+  const sensitive = await prepareTorqueRuntimeDraft({
+    ...settings,
+    packet: { ...packet, customerStated: { ...packet.customerStated, summary: "Call me at 405-555-1234." } },
+    transport: async () => { throw new Error("must not leak phone number"); },
+  });
+  assert.equal(sensitive.state, "UNAVAILABLE");
+  if (sensitive.state === "UNAVAILABLE") assert.equal(sensitive.reason, "CONTEXT_BLOCKED");
 
   const badResponse = await prepareTorqueRuntimeDraft({
     ...settings,
