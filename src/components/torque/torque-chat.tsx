@@ -29,6 +29,17 @@ type TorqueResponse = {
   handoff?: { required?: boolean; reason?: string; summary?: string };
   matchDna?: { signalCount: number; label: string } | null;
   battle?: { vins: string[]; priority: string; signals?: unknown[]; evidenceGaps?: string[] };
+  vehicleEvidence?: Array<{
+    scope: "REPRESENTATIVE_DEMO" | "DEALER_CATALOG" | "VERIFIED_CACHED_CATALOG";
+    vehicleRef: string;
+    identity: "VIN" | "DEMO_ID";
+    stockNumber: string | null;
+    listedPrice: number | null;
+    mileage: { value: number | null; state: "REPORTED" | "UNVERIFIED" };
+    equipment: Array<{ label: string; state: "LISTED_IN_RECORD" }>;
+    unknowns: string[];
+    disclosure: string;
+  }>;
   customerRequirements?: string[];
   nextAction?: {
     protocol: "NORAUTO_TORQUE_NEXT_ACTION_V1";
@@ -258,6 +269,26 @@ export function TorqueChat() {
                           <p className="mt-1 text-[11px] text-slate-500">{match.mileageVerified === false ? "Mileage not verified" : `${match.mileage.toLocaleString()} mi`} · {match.drivetrain} · {match.type}</p>
                           {match.reasons.length > 0 && <p className="mt-2 text-[11px] leading-5 text-emerald-200/70">✓ {match.reasons.slice(0, 3).join(" · ")}</p>}
                           {match.compromises.length > 0 && <p className="mt-1 text-[11px] leading-5 text-amber-100/65">Tradeoff: {match.compromises.slice(0, 2).join(" · ")}</p>}
+                          {turn.response?.vehicleEvidence?.find((entry) => entry.vehicleRef === match.id) && (
+                            <details className="mt-3 rounded-xl border border-white/10 bg-white/[.025] p-3">
+                              <summary className="cursor-pointer text-[11px] font-black text-amber-200">Why this vehicle? · View listing evidence</summary>
+                              {(() => {
+                                const evidence = turn.response?.vehicleEvidence?.find((entry) => entry.vehicleRef === match.id);
+                                if (!evidence) return null;
+                                return <div className="mt-3 space-y-2 text-[11px] leading-5 text-slate-300">
+                                  <p className="text-slate-400">{evidence.disclosure}</p>
+                                  <p>{evidence.identity === "VIN" ? "VIN" : "Sample ID"}: {evidence.vehicleRef}{evidence.stockNumber ? ` · Stock ${evidence.stockNumber}` : ""}</p>
+                                  <p>Price: {evidence.listedPrice === null ? "Not verified" : `Listed ${evidence.listedPrice.toLocaleString("en-US")}`}</p>
+                                  <p>Mileage: {evidence.mileage.state === "UNVERIFIED" || evidence.mileage.value === null ? "Not verified" : `${evidence.mileage.value.toLocaleString("en-US")} miles reported`}</p>
+                                  {evidence.equipment.length > 0 && <p>Listed equipment: {evidence.equipment.slice(0, 6).map((entry) => entry.label).join(" · ")}</p>}
+                                  <div className="rounded-lg border border-amber-300/15 bg-amber-300/[.04] p-2 text-amber-100/80">
+                                    <p className="font-bold">Still needs confirmation</p>
+                                    {evidence.unknowns.slice(0, 4).map((item) => <p key={item}>• {item}</p>)}
+                                  </div>
+                                </div>;
+                              })()}
+                            </details>
+                          )}
                           <Link href={vehicleHref} className="mt-3 inline-flex items-center gap-1 text-[11px] font-black text-amber-300 hover:text-amber-200">
                             View inventory <ExternalLink size={12} />
                           </Link>
