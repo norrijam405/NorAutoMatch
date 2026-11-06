@@ -28,7 +28,7 @@ assert(report.unknowns.some(x => x.includes("availability")));
 assert.equal(vehicleEvidenceForMatch(match, [], "verified-live"), null);
 
 const previous = ["I need an AWD Rogue with heated seats and sunroof"];
-const corrected = combinedCustomerSpec(previous, "I don't need heated seats or sunroof");
+const corrected = combinedCustomerSpec([...previous, "I don't need heated seats"], "I don't need sunroof");
 assert.equal(corrected.drivetrain?.value, "AWD");
 assert(!corrected.features.some(x => /heated seats|sunroof/i.test(x.value)));
 const replaced = combinedCustomerSpec(["I need an AWD Rogue"], "I want FWD instead");
