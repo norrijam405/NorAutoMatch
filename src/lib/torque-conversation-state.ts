@@ -38,6 +38,26 @@ export function combinedCustomerSpec(history: string[], latest: string): TorqueS
     }
     for (const field of withdrawn) delete result[field];
     const next = parseTorqueSalesInventorySpec(turn);
+    // Allow customers to retract specific equipment requests without silently
+    // reintroducing them from the same negative sentence.
+    const withdrawnFeatures: string[] = [];
+    const featureWithdrawals: Array<[RegExp, string]> = [
+      [/\\b(?:no longer|don't|do not|not)\\s+(?:need|require|want|care about)\\s+(?:a\\s+)?(?:sunroof|moonroof)\\b/i, "sunroof"],
+      [/\\b(?:no longer|don't|do not|not)\\s+(?:need|require|want|care about)\\s+(?:a\\s+)?heated seats?\\b/i, "heated seats"],
+      [/\\b(?:no longer|don't|do not|not)\\s+(?:need|require|want|care about)\\s+(?:a\\s+)?(?:third|3rd) row\\b/i, "third row"],
+      [/\\b(?:no longer|don't|do not|not)\\s+(?:need|require|want|care about)\\s+(?:a\\s+)?panoramic (?:roof|moonroof)\\b/i, "panoramic roof"],
+    ];
+    for (const [pattern, feature] of featureWithdrawals) {
+      if (pattern.test(turn)) withdrawnFeatures.push(feature);
+    }
+    if (withdrawnFeatures.length) {
+      result.features = result.features.filter(
+        item => !withdrawnFeatures.includes(item.value.toLowerCase()),
+      );
+      next.features = next.features.filter(
+        item => !withdrawnFeatures.includes(item.value.toLowerCase()),
+      );
+    }
     // The latest explicit style choice replaces, rather than stacks with,
     // an earlier single-style or flexible SUV/minivan choice.
     if (next.bodyTypeAlternatives) delete result.bodyType;
