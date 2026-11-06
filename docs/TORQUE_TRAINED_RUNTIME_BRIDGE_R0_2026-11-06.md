@@ -43,3 +43,14 @@ Code written to an isolated draft branch; trained runtime **NOT_CONNECTED**; exa
 - The card is shown only when the response includes a verified planner object. Clarification and battle reply paths may not have a next-action card.
 - All new UI is on the draft engineering branch; customers cannot see it on the existing public deployment until a reviewed deployment is made.
 - Regression test batch to include: representative inventory vs verified catalog distinctions; next-action selection after near/exact/no-match; the chat follow-up card; review flags; missing trained runtime; and customer prompt injection.
+
+## R3 VIN explanation and preference correction batch (2026-11-06)
+- Added `src/lib/torque-vehicle-evidence.ts`: a bounded evidence packet constructed strictly from a ranked matched vehicle's checked catalog record. It distinguishes demo identifiers from valid VINs, reports stock number/listed price/equipment where present, treats unverified mileage as unknown, and explicitly lists availability/seating/equipment/pricing gaps. Dealer listing contents are *reported*, not independently certified.
+- Regular `/api/torque/search` responses now include VIN-scoped `vehicleEvidence` for up to three ranked results. No source fields are manufactured.
+- The customer chat shows an expandable **Why this vehicle? · View listing evidence** panel with recorded details and confirmation gaps. This is staged on the development branch only.
+- `torque-conversation-state.ts` supports explicit withdrawals of selected equipment requirements (heated seats, sunroof, third row, panoramic roof) while retaining unrelated customer requirements. A customer must state each withdrawal explicitly; multi-item shorthand is not yet fully interpreted.
+- Added `scripts/torque-evidence-and-corrections.behavior.ts` as a synthetic regression fixture. It has **not been executed**. Existing build/CI and route behavior remain unverified.
+- This R3 batch does not connect the independently trained Torque model, activate external processing, create CRM actions, or deploy.
+
+### Test gate after planned build batch
+Confirm correct TypeScript compilation, VIN evidence association, sample/catalog labeling, no false zero-mileage claim, explicit customer corrections, near-match gaps, and behavior across chat resets. Review privacy/minimization before any trained-agent runtime is enabled.
