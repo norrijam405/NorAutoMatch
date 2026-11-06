@@ -1,5 +1,7 @@
 import { z } from "zod";
 import type { ResponsePreparationPacket } from "./conversation-response-preparation";
+import { prepareMinimalTorqueContext } from "./torque-runtime-context-gate";
+import { reviewTorqueDraft, type TorqueDraftReview } from "./torque-response-review";
 
 /**
  * Isolated server-side bridge candidate for an independently verified Torque runtime.
@@ -24,13 +26,14 @@ export type TorqueRuntimeBridgeResult =
       state: "DRAFT_ONLY";
       draft: string;
       evidenceNeeded: string[];
+      review: TorqueDraftReview;
       outboundExecution: "NOT_PERFORMED";
       customerReachedState: "NOT_CLAIMED";
       authorityEffect: "NONE";
     }
   | {
       state: "UNAVAILABLE";
-      reason: "NOT_CONFIGURED" | "INVALID_ENDPOINT" | "INVALID_PACKET" | "RUNTIME_ERROR" | "INVALID_RESPONSE";
+      reason: "NOT_CONFIGURED" | "INVALID_ENDPOINT" | "INVALID_PACKET" | "RUNTIME_ERROR" | "INVALID_RESPONSE" | "CONTEXT_BLOCKED";
       outboundExecution: "NOT_PERFORMED";
       customerReachedState: "NOT_CLAIMED";
       authorityEffect: "NONE";
@@ -45,6 +48,7 @@ export async function prepareTorqueRuntimeDraft(input: {
   endpoint?: string;
   approvedOrigin?: string;
   bearerToken?: string;
+  approvedForExternalRuntime?: boolean;
   transport?: RuntimeTransport;
 }): Promise<TorqueRuntimeBridgeResult> {
   const { packet, endpoint, approvedOrigin, bearerToken } = input;
@@ -75,18 +79,15 @@ export async function prepareTorqueRuntimeDraft(input: {
     !packet.conversationId || !packet.eventId
   ) return unavailable("INVALID_PACKET");
 
-  // No customer name, contact details, raw transcript, secure-document bytes,
-  // auth credentials, or storage paths are sent to the external runtime.
+  // Explicit human/provider authorization and conservative text screening are
+  // prerequisites; a runtime credential alone cannot authorize data transfer.
+  const contextDecision = prepareMinimalTorqueContext(packet, input.approvedForExternalRuntime === true);
+  if (contextDecision.state !== "ELIGIBLE") return unavailable("CONTEXT_BLOCKED");
   const request = {
     protocol: TORQUE_RUNTIME_REQUEST_PROTOCOL,
     conversationId: packet.conversationId,
     eventId: packet.eventId,
-    context: {
-      questions: packet.customerStated.questions.slice(0, 20),
-      constraints: packet.customerStated.constraints.slice(0, 20),
-      subjectRefs: packet.customerStated.subjectRefs.slice(0, 20),
-      summary: packet.customerStated.summary?.slice(0, 2000) ?? null,
-    },
+    context: contextDecision.context,
     evidenceRequirements: packet.evidenceRequirements.map((x) => x.topic),
     requestedAuthority: "DRAFT_ONLY",
   };
@@ -118,6 +119,7 @@ export async function prepareTorqueRuntimeDraft(input: {
     return {
       state: "DRAFT_ONLY",
       draft: parsed.data.draft,
+      review: reviewTorqueDraft(parsed.data.draft),
       evidenceNeeded: [...new Set([...packet.evidenceRequirements.map((x) => x.topic), ...parsed.data.evidenceNeeded])],
       outboundExecution: "NOT_PERFORMED",
       customerReachedState: "NOT_CLAIMED",
