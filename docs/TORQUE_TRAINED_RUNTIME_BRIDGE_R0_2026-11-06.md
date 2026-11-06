@@ -22,3 +22,16 @@
 
 ## Truth state
 Code written to an isolated draft branch; trained runtime **NOT_CONNECTED**; exact-head tests **NOT_YET_OBSERVED**; production **NOT_CHANGED**.
+
+## R1 deeper build batch — code staged, testing deliberately deferred
+- `torque-runtime-context-gate.ts`: external-draft approval and conservative blocking of recognizable contact, financial, identity, and prompt-injection patterns. **Pattern screening is incomplete and does not guarantee de-identification**. Further privacy review and verified processor agreement are mandatory.
+- `torque-response-review.ts`: classifies potentially consequential vehicle availability, pricing, financing, appointment, or reservation statements for mandatory review; does not certify truth or approve outbound contact.
+- `torque-conversation-action-plan.ts`: deterministic suggestions for exact-match review, must-have verification, or human network sourcing. Does not make CRM writes.
+- `torque-trained-runtime-bridge.ts` now requires explicit per-call external-runtime approval, invokes the context gate, and attaches a human-review result to draft responses. Existing search route remains untouched.
+- Synthetic behavior script extended for approval and personal-contact blocking; **not executed yet**, in accordance with the requested deeper build-before-test sequence.
+
+## Future work before first test batch
+1. Bind a verified runtime identity and versioned adapter only after provider and data handling are authorized.
+2. Add exact VIN provenance and confidence arbitration to the draft-review handoff; never promote a generated answer to dealer evidence.
+3. Expand regression fixtures for customer corrections, contradictory constraints, missing equipment evidence, two-VIN Garage Battle, stale catalog, no-match sourcing, and PII leakage.
+4. Batch-review code and privacy, then run typecheck, behavior suite, and build on exact SHA; check CI status before promoting.
