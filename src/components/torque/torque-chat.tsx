@@ -28,7 +28,7 @@ type TorqueResponse = {
   exactCount?: number;
   handoff?: { required?: boolean; reason?: string; summary?: string };
   matchDna?: { signalCount: number; label: string } | null;
-  battle?: { vins: string[]; priority: string; signals?: unknown[]; evidenceGaps?: string[] };
+  battle?: { vins: string[]; priority: string; signals?: unknown[]; evidenceGaps?: string[]; basis?: "named-catalog-examples" | "exact-vins" };
   vehicleEvidence?: Array<{
     scope: "REPRESENTATIVE_DEMO" | "DEALER_CATALOG" | "VERIFIED_CACHED_CATALOG";
     vehicleRef: string;
@@ -215,6 +215,50 @@ export function TorqueChat() {
                   <p className="mt-2 text-[11px] leading-5 text-slate-400">
                     Remembering from this chat: {turn.response.customerRequirements.join(" · ")}
                   </p>
+                )}
+
+                {turn.role === "torque" && turn.response?.battle?.vins?.length === 2 && (
+                  <section className="mt-3 rounded-2xl border border-red-400/25 bg-red-400/[.045] p-3" aria-label="Garage Battle evidence">
+                    <p className="text-[10px] font-black uppercase tracking-[.18em] text-red-300">Garage Battle · exact vehicle context</p>
+                    <p className="mt-2 text-xs leading-5 text-slate-300">
+                      {turn.response.battle.basis === "named-catalog-examples"
+                        ? "These are two catalog examples selected for the named models, not every year or trim."
+                        : "These two exact VINs stay in the comparison until you exit."}
+                    </p>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {turn.response.battle.vins.map((vin, vinIndex) =>
+                        /^[A-HJ-NPR-Z0-9]{17}$/i.test(vin) ? (
+                          <Link key={vin} href={`/vehicles/${encodeURIComponent(vin)}`}
+                            className="min-w-0 rounded-xl border border-white/10 bg-black/20 p-3 text-[11px] font-bold text-amber-200 hover:border-amber-300/40">
+                            <span className="block text-[9px] uppercase text-slate-400">Vehicle {vinIndex + 1}</span>
+                            <span className="mt-1 block break-all">{vin}</span>
+                            <span className="mt-1 block text-[10px] text-slate-400">View listing</span>
+                          </Link>
+                        ) : <span key={vinIndex} className="text-xs text-amber-200">Vehicle identity not verified</span>
+                      )}
+                    </div>
+                    <p className="mt-3 text-[11px] text-slate-400">
+                      Current comparison focus: <span className="font-bold text-slate-200">{turn.response.battle.priority}</span>
+                    </p>
+                    {turn.response.battle.evidenceGaps && turn.response.battle.evidenceGaps.length > 0 && (
+                      <details className="mt-3 rounded-xl border border-amber-300/15 bg-amber-300/[.035] p-3">
+                        <summary className="cursor-pointer text-[11px] font-bold text-amber-200">Evidence gaps ({turn.response.battle.evidenceGaps.length})</summary>
+                        {turn.response.battle.evidenceGaps.slice(0, 6).map((gap, gapIndex) => (
+                          <p key={gapIndex} className="mt-2 text-[11px] leading-5 text-amber-100/80">• {gap}</p>
+                        ))}
+                      </details>
+                    )}
+                    <p className="mt-3 text-[10px] font-black uppercase tracking-[.12em] text-slate-400">Compare another factor</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {["Compare price", "Compare fuel economy", "Compare interior space", "Compare traction"].map((question) => (
+                        <button key={question} type="button" disabled={busy} onClick={() => setInput(question)}
+                          className="rounded-full border border-white/15 bg-white/[.04] px-3 py-2 text-[11px] font-bold text-slate-200 hover:border-amber-300/40 disabled:opacity-40">
+                          {question}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-[10px] leading-4 text-slate-500">Dealer records may change. Comparison does not guarantee stock, a quote, or a reservation.</p>
+                  </section>
                 )}
 
                 {turn.role === "torque" && turn.response?.nextAction && (
