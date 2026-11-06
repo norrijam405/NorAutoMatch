@@ -35,3 +35,11 @@ Code written to an isolated draft branch; trained runtime **NOT_CONNECTED**; exa
 2. Add exact VIN provenance and confidence arbitration to the draft-review handoff; never promote a generated answer to dealer evidence.
 3. Expand regression fixtures for customer corrections, contradictory constraints, missing equipment evidence, two-VIN Garage Battle, stale catalog, no-match sourcing, and PII leakage.
 4. Batch-review code and privacy, then run typecheck, behavior suite, and build on exact SHA; check CI status before promoting.
+
+## R2 visible customer-experience batch — staged, not deployed
+- Existing `/api/torque/search` now includes `nextAction` from the deterministic action planner for regular inventory-answer flows. No model-generated claim can overwrite the classification.
+- `src/components/torque/torque-chat.tsx` now displays quick-start shopping prompts and a recommended-next-step card including what the customer may ask next.
+- The suggestions only populate the input. They do not auto-send messages or create sourcing requests, appointments, reservations, or sales activities.
+- The card is shown only when the response includes a verified planner object. Clarification and battle reply paths may not have a next-action card.
+- All new UI is on the draft engineering branch; customers cannot see it on the existing public deployment until a reviewed deployment is made.
+- Regression test batch to include: representative inventory vs verified catalog distinctions; next-action selection after near/exact/no-match; the chat follow-up card; review flags; missing trained runtime; and customer prompt injection.
