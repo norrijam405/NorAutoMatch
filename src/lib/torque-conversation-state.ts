@@ -42,10 +42,10 @@ export function combinedCustomerSpec(history: string[], latest: string): TorqueS
     // reintroducing them from the same negative sentence.
     const withdrawnFeatures: string[] = [];
     const featureWithdrawals: Array<[RegExp, string]> = [
-      [/\\b(?:no longer|don't|do not|not)\\s+(?:need|require|want|care about)\\s+(?:a\\s+)?(?:sunroof|moonroof)\\b/i, "sunroof"],
-      [/\\b(?:no longer|don't|do not|not)\\s+(?:need|require|want|care about)\\s+(?:a\\s+)?heated seats?\\b/i, "heated seats"],
-      [/\\b(?:no longer|don't|do not|not)\\s+(?:need|require|want|care about)\\s+(?:a\\s+)?(?:third|3rd) row\\b/i, "third row"],
-      [/\\b(?:no longer|don't|do not|not)\\s+(?:need|require|want|care about)\\s+(?:a\\s+)?panoramic (?:roof|moonroof)\\b/i, "panoramic roof"],
+      [/\b(?:no longer|don't|do not|not)\s+(?:need|require|want|care about)\s+(?:a\s+)?(?:sunroof|moonroof)\b/i, "sunroof"],
+      [/\b(?:no longer|don't|do not|not)\s+(?:need|require|want|care about)\s+(?:a\s+)?heated seats?\b/i, "heated seats"],
+      [/\b(?:no longer|don't|do not|not)\s+(?:need|require|want|care about)\s+(?:a\s+)?(?:third|3rd) row\b/i, "third row"],
+      [/\b(?:no longer|don't|do not|not)\s+(?:need|require|want|care about)\s+(?:a\s+)?panoramic (?:roof|moonroof)\b/i, "panoramic roof"],
     ];
     for (const [pattern, feature] of featureWithdrawals) {
       if (pattern.test(turn)) withdrawnFeatures.push(feature);
