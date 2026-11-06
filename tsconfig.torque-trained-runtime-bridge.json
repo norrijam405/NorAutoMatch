@@ -14,6 +14,7 @@
     "src/lib/torque-trained-runtime-bridge.ts",
     "src/lib/conversation-response-preparation.ts",
     "src/lib/conversation-gateway.ts",
-    "src/lib/conversation-response-sla.ts"
+    "src/lib/conversation-response-sla.ts",
+    "scripts/torque-evidence-and-corrections.behavior.ts"
   ]
 }
