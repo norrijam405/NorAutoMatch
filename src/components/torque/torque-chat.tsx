@@ -30,6 +30,13 @@ type TorqueResponse = {
   matchDna?: { signalCount: number; label: string } | null;
   battle?: { vins: string[]; priority: string; signals?: unknown[]; evidenceGaps?: string[] };
   customerRequirements?: string[];
+  nextAction?: {
+    protocol: "NORAUTO_TORQUE_NEXT_ACTION_V1";
+    state: "PROPOSAL_ONLY";
+    nextAction: "VERIFY_INVENTORY" | "HUMAN_SOURCE_NETWORK" | "VERIFY_MUST_HAVES" | "REVIEW_EXACT_OPTIONS";
+    context: string;
+    suggestedQuestions: string[];
+  };
 };
 
 type Turn = {
@@ -157,6 +164,21 @@ export function TorqueChat() {
             </div>
           </header>
 
+          <div className="border-b border-white/10 bg-white/[.025] px-4 py-3">
+            <p className="text-[10px] font-black uppercase tracking-[.16em] text-amber-200">What can Torque help with?</p>
+            <div className="mt-2 flex gap-2 overflow-x-auto pb-1" aria-label="Suggested Torque questions">
+              {[
+                "Find a family SUV under $30,000",
+                "I need a used AWD Rogue",
+                "Compare Rogue versus Kicks",
+              ].map((prompt) => (
+                <button key={prompt} type="button" disabled={busy} onClick={() => setInput(prompt)}
+                  className="shrink-0 rounded-full border border-white/15 bg-white/[.045] px-3 py-2 text-[11px] font-bold text-slate-200 transition hover:border-amber-300/50 disabled:opacity-40">
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex-1 space-y-4 overflow-y-auto px-4 py-5">
             {turns.map((turn, index) => (
               <div key={index} className={turn.role === "user" ? "ml-8" : "mr-4"}>
@@ -182,6 +204,28 @@ export function TorqueChat() {
                   <p className="mt-2 text-[11px] leading-5 text-slate-400">
                     Remembering from this chat: {turn.response.customerRequirements.join(" · ")}
                   </p>
+                )}
+
+                {turn.role === "torque" && turn.response?.nextAction && (
+                  <div className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-300/[.045] p-3">
+                    <p className="text-[10px] font-black uppercase tracking-[.16em] text-amber-300">Torque's recommended next step</p>
+                    <p className="mt-1 text-sm font-bold text-white">
+                      {{
+                        VERIFY_INVENTORY: "Verify the dealership listing",
+                        HUMAN_SOURCE_NETWORK: "Ask a salesperson to search the network",
+                        VERIFY_MUST_HAVES: "Confirm equipment on the exact VIN",
+                        REVIEW_EXACT_OPTIONS: "Review your best matching vehicles",
+                      }[turn.response.nextAction.nextAction]}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-slate-400">{turn.response.nextAction.context}</p>
+                    {turn.response.nextAction.suggestedQuestions.slice(0, 2).map((question) => (
+                      <button key={question} type="button" disabled={busy} onClick={() => setInput(question)}
+                        className="mt-2 block w-full rounded-xl border border-white/10 bg-white/[.045] px-3 py-2 text-left text-[11px] font-semibold leading-5 text-amber-100 hover:border-amber-300/40 disabled:opacity-40">
+                        Ask: {question}
+                      </button>
+                    ))}
+                    <p className="mt-2 text-[10px] text-slate-500">Suggestion only — no appointment, reservation, or sourcing request has been submitted.</p>
+                  </div>
                 )}
 
                 {turn.role === "torque" && turn.response?.matchDna && turn.response.matchDna.signalCount > 0 && (
