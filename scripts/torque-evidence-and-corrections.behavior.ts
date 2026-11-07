@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { combinedCustomerSpec } from "../src/lib/torque-conversation-state";
+import { combinedCustomerSpec, customerSpecSummary } from "../src/lib/torque-conversation-state";
 import { vehicleEvidenceForMatch } from "../src/lib/torque-vehicle-evidence";
 import type { Vehicle } from "../src/lib/inventory";
 import type { TorqueVehicleMatch } from "../src/lib/torque-inventory-assistant";
@@ -30,6 +30,8 @@ assert.equal(vehicleEvidenceForMatch(match, [], "verified-live"), null);
 const previous = ["I need an AWD Rogue with heated seats and sunroof"];
 const corrected = combinedCustomerSpec([...previous, "I don't need heated seats"], "I don't need sunroof");
 assert.equal(corrected.drivetrain?.value, "AWD");
+assert(customerSpecSummary(corrected).includes("AWD"));
+assert(!customerSpecSummary(corrected).some(x => /heated seats|sunroof/i.test(x)));
 assert(!corrected.features.some(x => /heated seats|sunroof/i.test(x.value)));
 const multiWithdrawal = combinedCustomerSpec(previous, "I don't need heated seats or sunroof anymore");
 assert.equal(multiWithdrawal.drivetrain?.value, "AWD");
