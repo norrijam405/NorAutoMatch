@@ -40,22 +40,25 @@ export function combinedCustomerSpec(history: string[], latest: string): TorqueS
     const next = parseTorqueSalesInventorySpec(turn);
     // Allow customers to retract specific equipment requests without silently
     // reintroducing them from the same negative sentence.
-    const withdrawnFeatures: string[] = [];
-    const featureWithdrawals: Array<[RegExp, string]> = [
-      [/\b(?:no longer|don't|do not|not)\s+(?:need|require|want|care about)\s+(?:a\s+)?(?:sunroof|moonroof)\b/i, "sunroof"],
-      [/\b(?:no longer|don't|do not|not)\s+(?:need|require|want|care about)\s+(?:a\s+)?heated seats?\b/i, "heated seats"],
-      [/\b(?:no longer|don't|do not|not)\s+(?:need|require|want|care about)\s+(?:a\s+)?(?:third|3rd) row\b/i, "third row"],
-      [/\b(?:no longer|don't|do not|not)\s+(?:need|require|want|care about)\s+(?:a\s+)?panoramic (?:roof|moonroof)\b/i, "panoramic roof"],
-    ];
-    for (const [pattern, feature] of featureWithdrawals) {
-      if (pattern.test(turn)) withdrawnFeatures.push(feature);
+    const withdrawnFeatures = new Set<string>();
+    const withdrawalClauses = turn.matchAll(
+      /\b(?:no longer|don'?t|do not|not)\s+(?:need|require|want|care about)\s+([^.!?;]{1,120})/gi,
+    );
+    for (const [, clause] of withdrawalClauses) {
+      // Only the explicitly negated part is withdrawn. "but I need a
+      // sunroof" is an affirmative request and must remain eligible.
+      const negativePart = clause.split(/\b(?:but|however|instead)\b/i)[0];
+      if (/\b(?:sunroof|moonroof)\b/i.test(negativePart)) withdrawnFeatures.add("sunroof");
+      if (/\bheated seats?\b/i.test(negativePart)) withdrawnFeatures.add("heated seats");
+      if (/\b(?:third|3rd) row\b/i.test(negativePart)) withdrawnFeatures.add("third row");
+      if (/\bpanoramic (?:roof|moonroof)\b/i.test(negativePart)) withdrawnFeatures.add("panoramic roof");
     }
-    if (withdrawnFeatures.length) {
+    if (withdrawnFeatures.size) {
       result.features = result.features.filter(
-        item => !withdrawnFeatures.includes(item.value.toLowerCase()),
+        item => !withdrawnFeatures.has(item.value.toLowerCase()),
       );
       next.features = next.features.filter(
-        item => !withdrawnFeatures.includes(item.value.toLowerCase()),
+        item => !withdrawnFeatures.has(item.value.toLowerCase()),
       );
     }
     // The latest explicit style choice replaces, rather than stacks with,
