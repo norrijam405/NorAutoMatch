@@ -60,7 +60,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
           <div className="mt-6 space-y-1 font-mono text-xs text-slate-500"><p>VIN {vehicle.vin}</p>{vehicle.stockNumber && <p>STOCK {vehicle.stockNumber}</p>}</div>
           {vehicle.incentives && vehicle.incentives.length > 0 && <div className="mt-5 rounded-xl border border-amber-300/20 bg-amber-300/[.05] p-4"><p className="text-[9px] font-black uppercase tracking-[.16em] text-amber-300">Source incentive evidence</p>{vehicle.incentives.map((item) => <p key={item} className="mt-2 text-xs leading-5 text-amber-100/75">{item}</p>)}</div>}
           <div className="mt-6 grid grid-cols-2 gap-3">
-            <Link href={`/find-my-car?request=${encodeURIComponent([vehicle.year, vehicle.make, vehicle.model, vehicle.trim].join(" "))}`} className="inline-flex min-h-12 items-center justify-center rounded-xl bg-red-600 px-4 text-center text-sm font-black text-white">Ask NorAuto about it</Link>
+            <Link href={`/ask-torque?vin=${encodeURIComponent(vehicle.vin)}`} className="inline-flex min-h-12 items-center justify-center rounded-xl bg-red-600 px-4 text-center text-sm font-black text-white">Ask Torque about this VIN</Link>
             <Link href="/inventory" className="inline-flex min-h-12 items-center justify-center rounded-xl border border-white/10 px-4 text-center text-sm font-black text-slate-200">Compare inventory</Link>
           </div>
         </section>

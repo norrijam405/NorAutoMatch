@@ -10,6 +10,8 @@ import { buildGarageBattleStory } from "@/lib/garage-battle";
 import { namedComparison } from "@/lib/torque-conversation-comparison";
 import { combinedCustomerSpec, readRecentCustomerMessages, customerSpecSummary } from "@/lib/torque-conversation-state";
 import { scopedTorqueFollowup } from "@/lib/torque-followup-answer";
+import { planTorqueNextAction } from "@/lib/torque-conversation-action-plan";
+import { vehicleEvidenceForMatch } from "@/lib/torque-vehicle-evidence";
 import { torqueNextQuestion } from "@/lib/torque-next-question";
 import { explainTorqueNoMatch } from "@/lib/torque-no-match";
 import { BATTLE_PRIORITIES, isBattlePriority, resolveBattlePriority, battleFollowupType } from "@/lib/torque-battle-followup";
@@ -290,5 +292,7 @@ export async function POST(request: Request) {
     dealershipId: dealership.id,
     dealershipLabel: dealership.label,
     matchDna: dna ?? null,
+    nextAction: planTorqueNextAction({ spec, result }),
+    vehicleEvidence: result.matches.slice(0, 3).map((match) => vehicleEvidenceForMatch(match, vehicles, mode)).filter((item) => item !== null),
   });
 }

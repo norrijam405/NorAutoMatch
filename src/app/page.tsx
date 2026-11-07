@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Search, ArrowRight, Heart } from "lucide-react";
+import { Search, ArrowRight, Heart, Bot } from "lucide-react";
 import { HomeInventorySpotlight } from "@/components/inventory/home-inventory-spotlight";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +28,7 @@ export default function HomePage() {
             Find cars <ArrowRight size={17}/>
           </button>
         </form>
+        <Link href="/ask-torque" className="mx-auto mt-4 inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-amber-300/45 bg-amber-300/[.09] px-6 text-sm font-black text-amber-200 hover:bg-amber-300/[.15]"><Bot size={18}/> Ask Torque — full research workspace <ArrowRight size={16}/></Link>
         <p className="mt-3 text-xs text-slate-500">
           No account required. <Link href="/find-my-car" className="text-slate-300 underline underline-offset-4">Advanced search</Link>
           {" · "}<Link href="/inventory" className="text-slate-300 underline underline-offset-4">Browse inventory</Link>

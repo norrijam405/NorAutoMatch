@@ -23,6 +23,7 @@ export function Logo() {
 const links = [
   { href: "/#home-match", label: "Find my match" },
   { href: "/inventory", label: "Inventory" },
+  { href: "/ask-torque", label: "Ask Torque" },
   { href: "/garage", label: "Garage" },
   { href: "/how-it-works", label: "How it works" },
   { href: "/terms", label: "Disclosures" },

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Bot, ChevronDown, ExternalLink, Loader2, Send, Sparkles, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { LeadModal } from "@/components/matcher/lead-modal";
@@ -28,8 +29,26 @@ type TorqueResponse = {
   exactCount?: number;
   handoff?: { required?: boolean; reason?: string; summary?: string };
   matchDna?: { signalCount: number; label: string } | null;
-  battle?: { vins: string[]; priority: string; signals?: unknown[]; evidenceGaps?: string[] };
+  battle?: { vins: string[]; priority: string; signals?: unknown[]; evidenceGaps?: string[]; basis?: "named-catalog-examples" | "exact-vins" };
+  vehicleEvidence?: Array<{
+    scope: "REPRESENTATIVE_DEMO" | "DEALER_CATALOG" | "VERIFIED_CACHED_CATALOG";
+    vehicleRef: string;
+    identity: "VIN" | "DEMO_ID";
+    stockNumber: string | null;
+    listedPrice: number | null;
+    mileage: { value: number | null; state: "REPORTED" | "UNVERIFIED" };
+    equipment: Array<{ label: string; state: "LISTED_IN_RECORD" }>;
+    unknowns: string[];
+    disclosure: string;
+  }>;
   customerRequirements?: string[];
+  nextAction?: {
+    protocol: "NORAUTO_TORQUE_NEXT_ACTION_V1";
+    state: "PROPOSAL_ONLY";
+    nextAction: "VERIFY_INVENTORY" | "HUMAN_SOURCE_NETWORK" | "VERIFY_MUST_HAVES" | "REVIEW_EXACT_OPTIONS";
+    context: string;
+    suggestedQuestions: string[];
+  };
 };
 
 type Turn = {
@@ -38,9 +57,12 @@ type Turn = {
   response?: TorqueResponse;
 };
 
-export function TorqueChat() {
-  const [open, setOpen] = useState(false);
-  const [input, setInput] = useState("");
+export function TorqueChat({ mode = "floating", initialPrompt = "" }: { mode?: "floating" | "workspace"; initialPrompt?: string }) {
+  const pathname = usePathname();
+  const isWorkspace = mode === "workspace";
+  const [open, setOpen] = useState(mode === "workspace");
+  // A URL deep link fills the composer but NEVER sends a customer message automatically.
+  const [input, setInput] = useState(initialPrompt.slice(0, 1200));
   const [dealershipId, setDealershipId] = useState("orr-nissan-west");
   const [busy, setBusy] = useState(false);
   const [battleContext, setBattleContext] = useState<{vins: string[]; priority: string} | null>(null);
@@ -121,9 +143,11 @@ export function TorqueChat() {
     }
   }
 
+  if (!isWorkspace && pathname === "/ask-torque") return null;
+
   return (
     <>
-      {!open && (
+      {!open && !isWorkspace && (
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -136,8 +160,10 @@ export function TorqueChat() {
         </button>
       )}
 
-      {open && (
-        <section className="fixed inset-x-3 bottom-3 z-[80] flex max-h-[82vh] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#0a1119] shadow-2xl shadow-black/60 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[430px]">
+      {(open || isWorkspace) && (
+        <section className={isWorkspace
+          ? "relative flex h-[min(78vh,850px)] min-h-[540px] w-full flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#0a1119] shadow-2xl shadow-black/60"
+          : "fixed inset-x-3 bottom-3 z-[80] flex max-h-[82vh] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#0a1119] shadow-2xl shadow-black/60 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[430px]"}>
           <header className="flex items-center justify-between gap-4 border-b border-white/10 bg-[#0e1721] px-4 py-4">
             <div className="flex min-w-0 items-center gap-3">
               <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-amber-300 text-black"><Bot size={20} /></span>
@@ -153,11 +179,30 @@ export function TorqueChat() {
               }} disabled={busy} className="rounded-lg border border-white/15 px-2 py-2 text-[11px] font-bold text-slate-300 disabled:opacity-40">
                 New search
               </button>
-              <button type="button" onClick={() => setOpen(false)} className="grid size-9 place-items-center rounded-full border border-white/10 text-slate-400 hover:text-white" aria-label="Close Torque"><X size={18} /></button>
+              {isWorkspace ? (
+                <Link href="/" className="inline-flex min-h-9 items-center rounded-lg border border-white/10 px-3 text-xs font-bold text-slate-300 hover:text-white">Home</Link>
+              ) : (
+                <button type="button" onClick={() => setOpen(false)} className="grid size-9 place-items-center rounded-full border border-white/10 text-slate-400 hover:text-white" aria-label="Close Torque"><X size={18} /></button>
+              )}
             </div>
           </header>
 
-          <div className="flex-1 space-y-4 overflow-y-auto px-4 py-5">
+          <div className="border-b border-white/10 bg-white/[.025] px-4 py-3">
+            <p className="text-[10px] font-black uppercase tracking-[.16em] text-amber-200">What can Torque help with?</p>
+            <div className="mt-2 flex gap-2 overflow-x-auto pb-1" aria-label="Suggested Torque questions">
+              {[
+                "Find a family SUV under $30,000",
+                "I need a used AWD Rogue",
+                "Compare Rogue versus Kicks",
+              ].map((prompt) => (
+                <button key={prompt} type="button" disabled={busy} onClick={() => setInput(prompt)}
+                  className="shrink-0 rounded-full border border-white/15 bg-white/[.045] px-3 py-2 text-[11px] font-bold text-slate-200 transition hover:border-amber-300/50 disabled:opacity-40">
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5">
             {turns.map((turn, index) => (
               <div key={index} className={turn.role === "user" ? "ml-8" : "mr-4"}>
                 <div className={turn.role === "user"
@@ -182,6 +227,32 @@ export function TorqueChat() {
                   <p className="mt-2 text-[11px] leading-5 text-slate-400">
                     Remembering from this chat: {turn.response.customerRequirements.join(" · ")}
                   </p>
+                )}
+
+                {turn.role === "torque" && turn.response?.battle && turn.response.battle.vins.length === 2 && (
+                  <TorqueBattleEvidence battle={turn.response.battle} busy={busy} onQuestion={setInput} />
+                )}
+
+                {turn.role === "torque" && turn.response?.nextAction && (
+                  <div className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-300/[.045] p-3">
+                    <p className="text-[10px] font-black uppercase tracking-[.16em] text-amber-300">Torque's recommended next step</p>
+                    <p className="mt-1 text-sm font-bold text-white">
+                      {{
+                        VERIFY_INVENTORY: "Verify the dealership listing",
+                        HUMAN_SOURCE_NETWORK: "Ask a salesperson to search the network",
+                        VERIFY_MUST_HAVES: "Confirm equipment on the exact VIN",
+                        REVIEW_EXACT_OPTIONS: "Review your best matching vehicles",
+                      }[turn.response.nextAction.nextAction]}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-slate-400">{turn.response.nextAction.context}</p>
+                    {turn.response.nextAction.suggestedQuestions.slice(0, 2).map((question) => (
+                      <button key={question} type="button" disabled={busy} onClick={() => setInput(question)}
+                        className="mt-2 block w-full rounded-xl border border-white/10 bg-white/[.045] px-3 py-2 text-left text-[11px] font-semibold leading-5 text-amber-100 hover:border-amber-300/40 disabled:opacity-40">
+                        Ask: {question}
+                      </button>
+                    ))}
+                    <p className="mt-2 text-[10px] text-slate-500">Suggestion only — no appointment, reservation, or sourcing request has been submitted.</p>
+                  </div>
                 )}
 
                 {turn.role === "torque" && turn.response?.matchDna && turn.response.matchDna.signalCount > 0 && (
@@ -214,6 +285,26 @@ export function TorqueChat() {
                           <p className="mt-1 text-[11px] text-slate-500">{match.mileageVerified === false ? "Mileage not verified" : `${match.mileage.toLocaleString()} mi`} · {match.drivetrain} · {match.type}</p>
                           {match.reasons.length > 0 && <p className="mt-2 text-[11px] leading-5 text-emerald-200/70">✓ {match.reasons.slice(0, 3).join(" · ")}</p>}
                           {match.compromises.length > 0 && <p className="mt-1 text-[11px] leading-5 text-amber-100/65">Tradeoff: {match.compromises.slice(0, 2).join(" · ")}</p>}
+                          {turn.response?.vehicleEvidence?.find((entry) => entry.vehicleRef === match.id) && (
+                            <details className="mt-3 rounded-xl border border-white/10 bg-white/[.025] p-3">
+                              <summary className="cursor-pointer text-[11px] font-black text-amber-200">Why this vehicle? · View listing evidence</summary>
+                              {(() => {
+                                const evidence = turn.response?.vehicleEvidence?.find((entry) => entry.vehicleRef === match.id);
+                                if (!evidence) return null;
+                                return <div className="mt-3 space-y-2 text-[11px] leading-5 text-slate-300">
+                                  <p className="text-slate-400">{evidence.disclosure}</p>
+                                  <p>{evidence.identity === "VIN" ? "VIN" : "Sample ID"}: {evidence.vehicleRef}{evidence.stockNumber ? ` · Stock ${evidence.stockNumber}` : ""}</p>
+                                  <p>Price: {evidence.listedPrice === null ? "Not verified" : `Listed ${evidence.listedPrice.toLocaleString("en-US")}`}</p>
+                                  <p>Mileage: {evidence.mileage.state === "UNVERIFIED" || evidence.mileage.value === null ? "Not verified" : `${evidence.mileage.value.toLocaleString("en-US")} miles reported`}</p>
+                                  {evidence.equipment.length > 0 && <p>Listed equipment: {evidence.equipment.slice(0, 6).map((entry) => entry.label).join(" · ")}</p>}
+                                  <div className="rounded-lg border border-amber-300/15 bg-amber-300/[.04] p-2 text-amber-100/80">
+                                    <p className="font-bold">Still needs confirmation</p>
+                                    {evidence.unknowns.slice(0, 4).map((item) => <p key={item}>• {item}</p>)}
+                                  </div>
+                                </div>;
+                              })()}
+                            </details>
+                          )}
                           <Link href={vehicleHref} className="mt-3 inline-flex items-center gap-1 text-[11px] font-black text-amber-300 hover:text-amber-200">
                             View inventory <ExternalLink size={12} />
                           </Link>
@@ -296,4 +387,54 @@ export function TorqueChat() {
       />
     </>
   );
+}
+
+function TorqueBattleEvidence({
+  battle, busy, onQuestion,
+}: {
+  battle: NonNullable<TorqueResponse["battle"]>;
+  busy: boolean;
+  onQuestion: (question: string) => void;
+}) {
+  return <section className="mt-3 rounded-2xl border border-red-400/25 bg-red-400/[.045] p-3" aria-label="Garage Battle evidence">
+    <p className="text-[10px] font-black uppercase tracking-[.18em] text-red-300">Garage Battle · exact vehicle context</p>
+    <p className="mt-2 text-xs leading-5 text-slate-300">
+      {battle.basis === "named-catalog-examples"
+        ? "These are two catalog examples selected for the named models, not every year or trim."
+        : "These two exact VINs stay in the comparison until you exit."}
+    </p>
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      {battle.vins.map((vin, index) =>
+        /^[A-HJ-NPR-Z0-9]{17}$/i.test(vin) ? (
+          <Link key={vin} href={`/vehicles/${encodeURIComponent(vin)}`}
+            className="min-w-0 rounded-xl border border-white/10 bg-black/20 p-3 text-[11px] font-bold text-amber-200 hover:border-amber-300/40">
+            <span className="block text-[9px] uppercase text-slate-400">Vehicle {index + 1}</span>
+            <span className="mt-1 block break-all">{vin}</span>
+            <span className="mt-1 block text-[10px] text-slate-400">View listing</span>
+          </Link>
+        ) : <span key={index} className="text-xs text-amber-200">Vehicle identity not verified</span>
+      )}
+    </div>
+    <p className="mt-3 text-[11px] text-slate-400">
+      Current comparison focus: <span className="font-bold text-slate-200">{battle.priority}</span>
+    </p>
+    {battle.evidenceGaps && battle.evidenceGaps.length > 0 && (
+      <details className="mt-3 rounded-xl border border-amber-300/15 bg-amber-300/[.035] p-3">
+        <summary className="cursor-pointer text-[11px] font-bold text-amber-200">Evidence gaps ({battle.evidenceGaps.length})</summary>
+        {battle.evidenceGaps.slice(0, 6).map((gap, index) => (
+          <p key={index} className="mt-2 text-[11px] leading-5 text-amber-100/80">• {gap}</p>
+        ))}
+      </details>
+    )}
+    <p className="mt-3 text-[10px] font-black uppercase tracking-[.12em] text-slate-400">Compare another factor</p>
+    <div className="mt-2 flex flex-wrap gap-2">
+      {["Compare price", "Compare fuel economy", "Compare interior space", "Compare traction"].map(question => (
+        <button key={question} type="button" disabled={busy} onClick={() => onQuestion(question)}
+          className="rounded-full border border-white/15 bg-white/[.04] px-3 py-2 text-[11px] font-bold text-slate-200 hover:border-amber-300/40 disabled:opacity-40">
+          {question}
+        </button>
+      ))}
+    </div>
+    <p className="mt-2 text-[10px] leading-4 text-slate-500">Dealer records may change. Comparison does not guarantee stock, a quote, or a reservation.</p>
+  </section>;
 }
