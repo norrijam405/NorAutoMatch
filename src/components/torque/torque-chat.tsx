@@ -143,6 +143,13 @@ export function TorqueChat({ mode = "floating", initialPrompt = "" }: { mode?: "
     }
   }
 
+  // Reflect only the last search response from this local session. No inferred
+  // personal profile, persistence or unverified customer requirement claims.
+  const latestSearchTurn = [...turns].reverse().find(
+    (turn) => turn.role === "torque" && Array.isArray(turn.response?.customerRequirements),
+  );
+  const currentRequirements = latestSearchTurn?.response?.customerRequirements ?? [];
+
   if (!isWorkspace && pathname === "/ask-torque") return null;
 
   return (
@@ -202,6 +209,27 @@ export function TorqueChat({ mode = "floating", initialPrompt = "" }: { mode?: "
               ))}
             </div>
           </div>
+          {isWorkspace && currentRequirements.length > 0 && (
+            <section className="border-b border-emerald-300/15 bg-emerald-300/[.035] px-4 py-3" aria-label="Your current shopping brief">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[10px] font-black uppercase tracking-[.16em] text-emerald-200">
+                  Your current shopping brief
+                </p>
+                <button type="button" disabled={busy} onClick={() => setInput("I want to change my requirements: ")}
+                  className="rounded-lg border border-emerald-300/20 px-3 py-1.5 text-[11px] font-bold text-emerald-100 disabled:opacity-40">
+                  Change requirements
+                </button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {currentRequirements.map((item, index) => (
+                  <span key={`${index}-${item}`} className="rounded-full border border-emerald-300/15 bg-black/20 px-2.5 py-1 text-[11px] text-emerald-100">{item}</span>
+                ))}
+              </div>
+              <p className="mt-2 text-[10px] text-slate-500">
+                From the latest interpreted search, not a saved customer profile. Confirm missing preferences in chat.
+              </p>
+            </section>
+          )}
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5">
             {turns.map((turn, index) => (
               <div key={index} className={turn.role === "user" ? "ml-8" : "mr-4"}>
