@@ -57,11 +57,12 @@ type Turn = {
   response?: TorqueResponse;
 };
 
-export function TorqueChat({ mode = "floating" }: { mode?: "floating" | "workspace" }) {
+export function TorqueChat({ mode = "floating", initialPrompt = "" }: { mode?: "floating" | "workspace"; initialPrompt?: string }) {
   const pathname = usePathname();
   const isWorkspace = mode === "workspace";
   const [open, setOpen] = useState(mode === "workspace");
-  const [input, setInput] = useState("");
+  // A URL deep link fills the composer but NEVER sends a customer message automatically.
+  const [input, setInput] = useState(initialPrompt.slice(0, 1200));
   const [dealershipId, setDealershipId] = useState("orr-nissan-west");
   const [busy, setBusy] = useState(false);
   const [battleContext, setBattleContext] = useState<{vins: string[]; priority: string} | null>(null);
