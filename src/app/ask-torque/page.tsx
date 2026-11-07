@@ -8,7 +8,16 @@ export const metadata: Metadata = {
   description: "Talk through car choices, explore vehicle-listing evidence, and compare verified catalog examples.",
 };
 
-export default function AskTorquePage() {
+export default async function AskTorquePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ vin?: string }>;
+}) {
+  const params = await searchParams;
+  const vin = typeof params.vin === "string" && /^[A-HJ-NPR-Z0-9]{17}$/i.test(params.vin)
+    ? params.vin.toUpperCase()
+    : null;
+  const initialPrompt = vin ? `What can you verify about VIN ${vin}? Show what is in the checked dealer records and what still needs confirmation.` : "";
   return <div className="min-h-screen bg-[#070b10] text-white">
     <div className="shell max-w-6xl pb-12 pt-7 sm:pt-10">
       <Link href="/" className="inline-flex items-center gap-2 text-xs font-bold text-amber-300 hover:text-amber-200">
@@ -29,7 +38,7 @@ export default function AskTorquePage() {
         </div>
       </div>
       <div className="mt-8 grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <TorqueChat mode="workspace" />
+        <TorqueChat mode="workspace" initialPrompt={initialPrompt} />
         <aside className="flex flex-col gap-4">
           <section className="rounded-2xl border border-amber-300/20 bg-amber-300/[.035] p-5">
             <div className="flex items-center gap-2 text-sm font-black text-amber-200"><CarFront size={18} /> What Torque can check</div>
