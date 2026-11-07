@@ -83,12 +83,26 @@ export function combinedCustomerSpec(history: string[], latest: string): TorqueS
 }
 
 export function customerSpecSummary(spec: TorqueSalesInventorySpec): string[] {
+  // Summarize only explicitly retained constraints. Behavioral MatchDNA is
+  // deliberately excluded; preferred items are labeled as flexible.
+  const format = (requirement: { value: string | number; priority: string } | undefined, suffix = "") =>
+    requirement
+      ? (requirement.priority === "PREFERRED" ? "Prefer " : "") + requirement.value + suffix
+      : null;
   const items = [
-    spec.make?.value, spec.model?.value, spec.bodyTypeAlternatives ? "SUV or minivan" : spec.bodyType?.value,
-    spec.fuelType?.value ? `${spec.fuelType.value} fuel` : null,
-    spec.seatingCapacity?.value ? `${spec.seatingCapacity.value} seats required` : null,
-    spec.maxPrice?.value ? `up to $${spec.maxPrice.value.toLocaleString("en-US")}` : null,
-    spec.drivetrain?.value,
+    format(spec.make), format(spec.model),
+    spec.bodyTypeAlternatives
+      ? "SUV or minivan"
+      : format(spec.bodyType),
+    format(spec.condition),
+    format(spec.fuelType, " fuel"),
+    spec.seatingCapacity ? format(spec.seatingCapacity, " seats required") : null,
+    spec.maxPrice ? "up to $" + spec.maxPrice.value.toLocaleString("en-US") : null,
+    spec.maxMileage ? "under " + spec.maxMileage.value.toLocaleString("en-US") + " miles" : null,
+    format(spec.drivetrain),
+    format(spec.exteriorColor, " exterior"),
+    format(spec.interiorColor, " interior"),
+    ...spec.features.slice(0, 6).map(feature => format(feature)),
   ];
-  return items.filter((item): item is string => Boolean(item)).slice(0, 7);
+  return items.filter((item): item is string => Boolean(item)).slice(0, 16);
 }
