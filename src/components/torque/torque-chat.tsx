@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Bot, ChevronDown, ExternalLink, Loader2, Send, Sparkles, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { LeadModal } from "@/components/matcher/lead-modal";
@@ -56,8 +57,10 @@ type Turn = {
   response?: TorqueResponse;
 };
 
-export function TorqueChat() {
-  const [open, setOpen] = useState(false);
+export function TorqueChat({ mode = "floating" }: { mode?: "floating" | "workspace" }) {
+  const pathname = usePathname();
+  const isWorkspace = mode === "workspace";
+  const [open, setOpen] = useState(mode === "workspace");
   const [input, setInput] = useState("");
   const [dealershipId, setDealershipId] = useState("orr-nissan-west");
   const [busy, setBusy] = useState(false);
@@ -139,9 +142,11 @@ export function TorqueChat() {
     }
   }
 
+  if (!isWorkspace && pathname === "/ask-torque") return null;
+
   return (
     <>
-      {!open && (
+      {!open && !isWorkspace && (
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -154,8 +159,10 @@ export function TorqueChat() {
         </button>
       )}
 
-      {open && (
-        <section className="fixed inset-x-3 bottom-3 z-[80] flex max-h-[82vh] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#0a1119] shadow-2xl shadow-black/60 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[430px]">
+      {(open || isWorkspace) && (
+        <section className={isWorkspace
+          ? "relative flex h-[min(78vh,850px)] min-h-[540px] w-full flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#0a1119] shadow-2xl shadow-black/60"
+          : "fixed inset-x-3 bottom-3 z-[80] flex max-h-[82vh] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#0a1119] shadow-2xl shadow-black/60 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[430px]"}>
           <header className="flex items-center justify-between gap-4 border-b border-white/10 bg-[#0e1721] px-4 py-4">
             <div className="flex min-w-0 items-center gap-3">
               <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-amber-300 text-black"><Bot size={20} /></span>
@@ -171,7 +178,11 @@ export function TorqueChat() {
               }} disabled={busy} className="rounded-lg border border-white/15 px-2 py-2 text-[11px] font-bold text-slate-300 disabled:opacity-40">
                 New search
               </button>
-              <button type="button" onClick={() => setOpen(false)} className="grid size-9 place-items-center rounded-full border border-white/10 text-slate-400 hover:text-white" aria-label="Close Torque"><X size={18} /></button>
+              {isWorkspace ? (
+                <Link href="/" className="inline-flex min-h-9 items-center rounded-lg border border-white/10 px-3 text-xs font-bold text-slate-300 hover:text-white">Home</Link>
+              ) : (
+                <button type="button" onClick={() => setOpen(false)} className="grid size-9 place-items-center rounded-full border border-white/10 text-slate-400 hover:text-white" aria-label="Close Torque"><X size={18} /></button>
+              )}
             </div>
           </header>
 
@@ -190,7 +201,7 @@ export function TorqueChat() {
               ))}
             </div>
           </div>
-          <div className="flex-1 space-y-4 overflow-y-auto px-4 py-5">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5">
             {turns.map((turn, index) => (
               <div key={index} className={turn.role === "user" ? "ml-8" : "mr-4"}>
                 <div className={turn.role === "user"
