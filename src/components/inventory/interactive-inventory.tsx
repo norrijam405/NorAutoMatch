@@ -308,6 +308,12 @@ function InventoryPlayCard({ vehicle, match, shortlisted, battling, signedIn, on
       {vehicle.features && vehicle.features.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{vehicle.features.slice(0, 3).map((feature) => <span key={feature} className="rounded-full bg-white/[.04] px-2 py-1 text-[9px] font-bold text-slate-500">{feature}</span>)}</div>}
       <p className="mt-4 text-[10px] leading-5 text-slate-600">VIN {vehicle.id}</p>
       <Link href={`/vehicles/${vehicle.id}`} className="mt-4 inline-flex min-h-10 items-center text-sm font-bold text-amber-300 hover:underline">View photos, full details &amp; PriceCheck →</Link>
+      {/^[A-HJ-NPR-Z0-9]{17}$/i.test(vehicle.id) && (
+        <Link href={`/ask-torque?vin=${encodeURIComponent(vehicle.id)}`}
+          className="mt-1 inline-flex min-h-10 items-center gap-2 text-sm font-bold text-emerald-200 hover:underline">
+          Ask Torque about this VIN →
+        </Link>
+      )}
       <div className="mt-5 grid grid-cols-2 gap-2">
         <button onClick={onSwipe} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-600 text-xs font-black text-white"><Sparkles size={15} /> SwipeMatch</button>
         <button onClick={onShortlist} className={cn("inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border text-xs font-black", shortlisted ? "border-emerald-400/35 bg-emerald-400/10 text-emerald-200" : "border-white/10 text-slate-300")}><Heart size={15} /> {saveLabel}</button>
