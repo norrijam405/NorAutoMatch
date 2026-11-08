@@ -4,6 +4,7 @@ import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
 import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
 import { buildMatchDnaSummary } from "@/lib/match-dna";
 import { createClient } from "@/lib/supabase/server";
+import { isTorqueStandaloneDemo } from "@/lib/torque-standalone-demo";
 import { readJsonBodyWithByteLimit } from "@/lib/request-body-limit";
 import { answerTorqueInventory, type TorqueInventoryMode } from "@/lib/torque-inventory-assistant";
 import { buildGarageBattleStory } from "@/lib/garage-battle";
@@ -243,12 +244,16 @@ export async function POST(request: Request) {
     });
   }
 
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-  const userId = typeof data?.claims?.sub === "string" ? data.claims.sub : null;
+  let userId: string | null = null;
+  if (!isTorqueStandaloneDemo()) {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getClaims();
+    userId = typeof data?.claims?.sub === "string" ? data.claims.sub : null;
+  }
 
   let dna;
   if (userId) {
+    const supabase = await createClient();
     const { data: dnaEvents } = await supabase
       .from("match_dna_events")
       .select("action,make,body_type,drivetrain,condition,price,mileage")
