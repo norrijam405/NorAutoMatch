@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { combinedCustomerSpec, customerSpecSummary } from "../src/lib/torque-conversation-state";
 import { vehicleEvidenceForMatch } from "../src/lib/torque-vehicle-evidence";
+import { chooseTorqueBattlePair } from "../src/lib/torque-battle-candidates";
 import type { Vehicle } from "../src/lib/inventory";
 import type { TorqueVehicleMatch } from "../src/lib/torque-inventory-assistant";
 
@@ -41,4 +42,11 @@ assert(!contrasting.features.some(x => /heated seats/i.test(x.value)));
 assert(contrasting.features.some(x => /sunroof/i.test(x.value)));
 const replaced = combinedCustomerSpec(["I need an AWD Rogue"], "I want FWD instead");
 assert.equal(replaced.drivetrain?.value, "FWD");
+const secondVin = "1N4AL3AP0GC654321";
+assert.deepEqual(chooseTorqueBattlePair("verified-live", [{id: car.id}, {id: secondVin}]), [car.id, secondVin]);
+assert.deepEqual(chooseTorqueBattlePair("verified-cache", [{id: car.id.toLowerCase()}, {id: secondVin}]), [car.id, secondVin]);
+assert.equal(chooseTorqueBattlePair("representative-demo", [{id: car.id}, {id: secondVin}]), null);
+assert.equal(chooseTorqueBattlePair("verified-live", [{id: car.id}, {id: car.id.toLowerCase()}]), null);
+assert.equal(chooseTorqueBattlePair("verified-live", [{id: "rogue-demo"}, {id: car.id}]), null);
+assert.equal(chooseTorqueBattlePair("verified-live", [{id: car.id}]), null);
 process.stdout.write("Torque VIN evidence and customer corrections synthetic tests PASS\n");
