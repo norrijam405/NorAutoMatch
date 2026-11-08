@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Bot, ChevronDown, ExternalLink, Loader2, Send, Sparkles, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { LeadModal } from "@/components/matcher/lead-modal";
+import { chooseTorqueBattlePair } from "@/lib/torque-battle-candidates";
 
 type Match = {
   id: string;
@@ -103,6 +104,14 @@ export function TorqueChat({ mode = "floating", initialPrompt = "" }: { mode?: "
     );
     setOpen(false);
     setSourcingOpen(true);
+  }
+
+  function compareRecommendedVehicles(response: TorqueResponse) {
+    const pair = chooseTorqueBattlePair(response.mode, response.matches);
+    if (!pair || busy) return;
+    setBattleContext({ vins: pair, priority: "all" });
+    setInput("Compare these exact two vehicles for price, fuel economy, space and traction.");
+    setOpen(true);
   }
 
   async function submit(event: FormEvent) {
@@ -340,6 +349,15 @@ export function TorqueChat({ mode = "floating", initialPrompt = "" }: { mode?: "
                       );
                     })}
                   </div>
+                )}
+
+                {turn.role === "torque" && turn.response &&
+                  chooseTorqueBattlePair(turn.response.mode, turn.response.matches) && (
+                  <button type="button" disabled={busy}
+                    onClick={() => compareRecommendedVehicles(turn.response!)}
+                    className="mt-3 flex min-h-12 w-full items-center justify-center rounded-xl border border-red-400/30 bg-red-500/[.10] px-4 text-sm font-black text-red-100 hover:border-red-400/60 disabled:opacity-40">
+                    Compare these two VINs in Garage Battle
+                  </button>
                 )}
 
                 {turn.role === "torque" && turn.response?.handoff?.required && (
