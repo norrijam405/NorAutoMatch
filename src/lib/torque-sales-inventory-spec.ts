@@ -209,14 +209,17 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
   else if (/\bcpo|certified\b/i.test(text)) spec.condition = must("CPO");
   else if (/\b(?:used|pre[- ]?owned|preowned)\b/i.test(text)) spec.condition = must("USED");
 
-  if (/\bleather\b/i.test(text)) spec.interiorMaterial = preferred("Leather");
+  // Leather is represented by ONE equipment requirement, not both a
+  // preferred material and a second hard feature. A customer explicitly
+  // asking for leather needs evidence, not an inferred trim-level promise.
+  if (/\bleather\b/i.test(text)) spec.interiorMaterial = must("Leather");
 
   // Seat capacity is a hard requirement; do not infer it from model names.
   const seating = text.match(/\b(?:seat(?:s|ing)?\s*(?:for|of)?|family\s+of|fit(?:s|ting)?\s+(?:a\s+)?(?:family\s+of)?|room\s+for)\s*(\d{1,2})\b/i);
   if (seating) spec.seatingCapacity = must(Number(seating[1]));
 
   for (const [pattern, feature] of FEATURE_PATTERNS) {
-    if (pattern.test(text)) spec.features.push(must(feature));
+    if (pattern.test(text) && feature !== "leather seating") spec.features.push(must(feature));
   }
 
   const tow = text.match(/(?:tow|towing).*?(\d{4,5})\s*(?:lb|lbs|pounds)/i);
