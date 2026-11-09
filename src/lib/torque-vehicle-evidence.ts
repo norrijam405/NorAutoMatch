@@ -10,7 +10,7 @@ export type TorqueVehicleEvidence = {
   mileage: { value: number | null; state: "REPORTED" | "UNVERIFIED" };
   equipment: Array<{ label: string; state: "LISTED_IN_RECORD" }>;
   dealerDescription: string | null;
-  listedMpg: { city: number | null; highway: number | null; source: "DEALER_STRUCTURED" | "DEALER_DESCRIPTION" | "UNAVAILABLE" };
+  listedMpg: { city: number | null; highway: number | null; source: "DEALER_STRUCTURED" | "DEALER_DESCRIPTION" | "DEALER_DETAIL" | "UNAVAILABLE" };
   unknowns: string[];
   disclosure: string;
 };
