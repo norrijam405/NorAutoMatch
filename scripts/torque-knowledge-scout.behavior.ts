@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { parseListingMpg, resolveListingMpg, readPublicVehicleDescription } from "../src/lib/torque-dealer-description-scout";
 import { scoutEpaModel } from "../src/lib/torque-epa-knowledge-scout";
+import { parseExplicitEpaComparison } from "../src/lib/torque-cross-brand-query";
 
 assert.deepEqual(parseListingMpg("EPA estimated 28 city / 35 highway MPG"), {
   city: 28, highway: 35, basis: "DEALER_DESCRIPTION",
@@ -14,6 +15,11 @@ assert.deepEqual(resolveListingMpg({
 }), {city:29, highway:35, combined:undefined, basis:"DEALER_STRUCTURED"});
 assert.equal(resolveListingMpg({ description:"Moonroof, comfortable seats" }), null);
 
+assert.deepEqual(parseExplicitEpaComparison("Compare 2025 Nissan Rogue vs 2025 Toyota RAV4 MPG"), [
+  {year:2025,make:"Nissan",model:"Rogue"},
+  {year:2025,make:"Toyota",model:"RAV4"},
+]);
+assert.equal(parseExplicitEpaComparison("Does this VIN have good MPG?").length,0);
 // Synthetic mocked official responses; no real network or VIN assertions.
 const originalFetch = globalThis.fetch;
 const requested: string[] = [];
