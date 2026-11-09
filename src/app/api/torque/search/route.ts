@@ -80,6 +80,38 @@ export async function POST(request: Request) {
     }, 200);
   }
 
+  // External model research has no dependency on dealership inventory health.
+  // It never checks or implies that a non-Nissan vehicle is held by Orr.
+  const requestedCrossBrandResearch = parseExplicitEpaComparison(message);
+  if (requestedCrossBrandResearch.length === 2 && canUseTorquePreviewVerifiedCatalog()) {
+    const researchEvidence = await Promise.all(requestedCrossBrandResearch.map(scoutEpaModel));
+    return noStore({
+      protocol: "NORAUTO_TORQUE_MODEL_COMPARISON_V1",
+      truthState: "EXTERNAL_MODEL_RESEARCH_ONLY",
+      mode: "model-research",
+      researchEvidence, matches: [],
+      answer: "These are official EPA model-configuration estimates for comparison across makes. They are NOT proof of any specific dealer VIN, equipment, pricing or availability. Confirm matching powertrains before comparing fuel economy.",
+    });
+  }
+
+
+  const directResearch = message.match(/\\b(?:EPA\\s+)?(?:mpg|fuel economy|gas mileage)\\s*(?:for|of|on|:)?\\s*(20\\d{2})\\s+(Toyota|Honda|Nissan|Hyundai|Kia|Ford|Chevrolet|Mazda|Subaru|Jeep|Volkswagen|BMW|Lexus|Acura|GMC|Buick|Mitsubishi|Volvo)\\s+([a-z0-9][a-z0-9-]{1,19})\\b/i);
+  if (directResearch && canUseTorquePreviewVerifiedCatalog()) {
+    const epa = await scoutEpaModel({
+      year: Number(directResearch[1]), make: directResearch[2], model: directResearch[3],
+    });
+    return noStore({
+      protocol: "NORAUTO_TORQUE_MODEL_RESEARCH_V1",
+      truthState: "EXTERNAL_MODEL_RESEARCH_ONLY",
+      mode: "model-research",
+      researchEvidence: [epa], matches: [], needsMoreDetail: false,
+      answer: epa.status === "MODEL_VARIANTS"
+        ? "I located EPA fuel-economy configurations for that model. The options below are model research, not Orr inventory or proof that a listed VIN has the same engine, drivetrain, or MPG."
+        : "I could not retrieve authoritative MPG figures for that exact model request. I will not substitute another trim or invent a number.",
+    });
+  }
+
+
   // Explicit user selection on an isolated no-database demo service may fetch
   // the public dealer catalog read-only. This cannot enable live inventory
   // in other deployments or perform a customer/CRM action.
@@ -205,18 +237,6 @@ export async function POST(request: Request) {
     });
   }
 
-  const requestedCrossBrandResearch = parseExplicitEpaComparison(message);
-  if (requestedCrossBrandResearch.length === 2 && canUseTorquePreviewVerifiedCatalog()) {
-    const researchEvidence = await Promise.all(requestedCrossBrandResearch.map(scoutEpaModel));
-    return noStore({
-      protocol: "NORAUTO_TORQUE_MODEL_COMPARISON_V1",
-      truthState: "EXTERNAL_MODEL_RESEARCH_ONLY",
-      mode: "model-research",
-      researchEvidence, matches: [],
-      answer: "These are official EPA model-configuration estimates for comparison across makes. They are NOT proof of any specific dealer VIN, equipment, pricing or availability. Confirm matching powertrains before comparing fuel economy.",
-    });
-  }
-
   const recentMessages = readRecentCustomerMessages(
     typeof bodyRead.value === "object" && bodyRead.value !== null && "recentMessages" in bodyRead.value
       ? bodyRead.value.recentMessages : []
@@ -225,22 +245,6 @@ export async function POST(request: Request) {
   // The research scout is intentionally independent of dealership inventory:
   // a Honda, Toyota, or other make is a model comparison, NOT an Orr stock claim.
   // Only an explicit year/make/model research question triggers this endpoint.
-  const directResearch = message.match(/\\b(?:EPA\\s+)?(?:mpg|fuel economy|gas mileage)\\s*(?:for|of|on|:)?\\s*(20\\d{2})\\s+(Toyota|Honda|Nissan|Hyundai|Kia|Ford|Chevrolet|Mazda|Subaru|Jeep|Volkswagen|BMW|Lexus|Acura|GMC|Buick|Mitsubishi|Volvo)\\s+([a-z0-9][a-z0-9-]{1,19})\\b/i);
-  if (directResearch && canUseTorquePreviewVerifiedCatalog()) {
-    const epa = await scoutEpaModel({
-      year: Number(directResearch[1]), make: directResearch[2], model: directResearch[3],
-    });
-    return noStore({
-      protocol: "NORAUTO_TORQUE_MODEL_RESEARCH_V1",
-      truthState: "EXTERNAL_MODEL_RESEARCH_ONLY",
-      mode: "model-research",
-      researchEvidence: [epa], matches: [], needsMoreDetail: false,
-      answer: epa.status === "MODEL_VARIANTS"
-        ? "I located EPA fuel-economy configurations for that model. The options below are model research, not Orr inventory or proof that a listed VIN has the same engine, drivetrain, or MPG."
-        : "I could not retrieve authoritative MPG figures for that exact model request. I will not substitute another trim or invent a number.",
-    });
-  }
-
   if (spec.freeformNotes.some((note) => note.startsWith("Both Hyundai and Nissan were named."))) {
     return noStore({
       protocol: "NORAUTO_TORQUE_SEARCH_V1",
