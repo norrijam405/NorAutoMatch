@@ -56,6 +56,8 @@ export type LiveInventoryRecord = {
   fuelType?: string;
   cityMpg?: number;
   highwayMpg?: number;
+  description?: string;
+  mpgEvidenceBasis?: "DEALER_STRUCTURED" | "DEALER_DESCRIPTION";
   bodyType?: string;
   photos?: string[];
   features?: string[];
