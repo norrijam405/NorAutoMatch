@@ -41,7 +41,9 @@ export function parseListingMpg(description: string | undefined): ListedMpgEvide
   // Common dealer detail layout: "City MPG: 28" and "Highway MPG: 35".
   for (const match of description.matchAll(/\b(city|highway|hwy|combined)\s*mpg\s*[:=\-]?\s*(\d{1,3}(?:\.\d)?)\b/gi)) {
     const key = match[1].toLowerCase() === "hwy" ? "highway" : match[1].toLowerCase() as "city" | "highway" | "combined";
-    found[key] ??= mpg(match[2]);
+    // The explicit label "Highway MPG 37" overrides the overlapping,
+    // weaker "30 Highway MPG" interpretation from adjacent fields.
+    found[key] = mpg(match[2]);
   }
   const combinedLabelPair = description.match(/\bcity\s*\/\s*(?:hwy|highway)\s*(?:mpg)?\s*[:=\-]?\s*(\d{1,3})\s*\/\s*(\d{1,3})\s*mpg\b/i);
   if (combinedLabelPair) {
