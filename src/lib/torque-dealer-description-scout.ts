@@ -45,8 +45,10 @@ export function parseListingMpg(description: string | undefined): ListedMpgEvide
   }
   const combinedLabelPair = description.match(/\bcity\s*\/\s*(?:hwy|highway)\s*(?:mpg)?\s*[:=\-]?\s*(\d{1,3})\s*\/\s*(\d{1,3})\s*mpg\b/i);
   if (combinedLabelPair) {
-    found.city ??= mpg(combinedLabelPair[1]);
-    found.highway ??= mpg(combinedLabelPair[2]);
+    // A paired City/Highway label takes precedence. Otherwise the isolated
+    // "Highway MPG: 28" substring could mislabel the CITY number as highway.
+    found.city = mpg(combinedLabelPair[1]);
+    found.highway = mpg(combinedLabelPair[2]);
   }
   // Recognize "28 city / 35 highway MPG" only as a paired metric.
   const pair = description.match(/\b(\d{1,3})\s*city\s*(?:\/|and|,|\|)\s*(\d{1,3})\s*(?:highway|hwy)\s*mpg\b/i);
