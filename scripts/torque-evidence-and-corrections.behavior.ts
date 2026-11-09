@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { combinedCustomerSpec, customerSpecSummary } from "../src/lib/torque-conversation-state";
 import { vehicleEvidenceForMatch } from "../src/lib/torque-vehicle-evidence";
+import { parseTorqueSalesInventorySpec } from "../src/lib/torque-sales-inventory-spec";
+import { answerTorqueInventory } from "../src/lib/torque-inventory-assistant";
+import { inventory as sampleInventory } from "../src/lib/inventory";
 import { chooseTorqueBattlePair } from "../src/lib/torque-battle-candidates";
 import type { Vehicle } from "../src/lib/inventory";
 import type { TorqueVehicleMatch } from "../src/lib/torque-inventory-assistant";
@@ -49,4 +52,23 @@ assert.equal(chooseTorqueBattlePair("representative-demo", [{id: car.id}, {id: s
 assert.equal(chooseTorqueBattlePair("verified-live", [{id: car.id}, {id: car.id.toLowerCase()}]), null);
 assert.equal(chooseTorqueBattlePair("verified-live", [{id: "rogue-demo"}, {id: car.id}]), null);
 assert.equal(chooseTorqueBattlePair("verified-live", [{id: car.id}]), null);
+// Exact customer-style regression: source records must be referenced even if
+// leather, midsize category and MPG are unverified. No fake dealership VIN.
+const shopperMessage = "I want a mid-size SUV good on gas for less than $32,000 with leather seats";
+const shopperSpec = parseTorqueSalesInventorySpec(shopperMessage);
+assert.equal(shopperSpec.bodyType?.value, "SUV");
+assert.equal(shopperSpec.maxPrice?.value, 32000);
+assert.equal(shopperSpec.interiorMaterial?.value, "Leather");
+assert(!shopperSpec.features.some(x => /leather/i.test(x.value)), "do not double-count leather");
+assert(shopperSpec.freeformNotes.some(x => x.startsWith("Midsize SUV requested")));
+const shopperAnswer = answerTorqueInventory({
+  message: shopperMessage, vehicles: sampleInventory, mode: "representative-demo", spec: shopperSpec,
+});
+assert(shopperAnswer.matches.length > 0, "return visibly qualified sample SUV candidates");
+assert(shopperAnswer.matches.every(x => x.fit === "near"));
+assert(shopperAnswer.matches.every(x => x.price <= 32000 && x.type === "SUV"));
+assert(shopperAnswer.matches.some(x => x.compromises.some(y => /leather|interior material/i.test(y))));
+assert(shopperAnswer.matches.every(x => x.compromises.some(y => /fuel economy not established/i.test(y))));
+assert.match(shopperAnswer.answer, /SAMPLE|sample/);
+assert.match(shopperAnswer.answer, /midsize/i);
 process.stdout.write("Torque VIN evidence and customer corrections synthetic tests PASS\n");
