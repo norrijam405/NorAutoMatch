@@ -74,24 +74,49 @@ export function answerTorqueInventory(input: {
   spec?: TorqueSalesInventorySpec;
 }): TorqueInventoryAnswer {
   const request = interpret(input.message, input.vehicles);
+  const toMatch = (entry: ReturnType<typeof rankVehiclesForSalesSpec>[number]): TorqueVehicleMatch => ({
+    id: entry.vehicle.id,
+    label: [entry.vehicle.year, entry.vehicle.make, entry.vehicle.model, entry.vehicle.trim].filter(Boolean).join(" "),
+    price: entry.vehicle.price,
+    mileage: entry.vehicle.mileage,
+    mileageVerified: entry.vehicle.mileageVerified,
+    type: entry.vehicle.type,
+    drivetrain: entry.vehicle.drivetrain,
+    fit: entry.fit === "EXACT" ? "exact" : entry.fit === "STRONG" ? "strong" : "near",
+    reasons: entry.reasons,
+    compromises: entry.compromises,
+  });
   const evaluated = input.spec
-    ? rankVehiclesForSalesSpec({ requirements: input.spec, vehicles: input.vehicles, limit: 2_000, strictMustHaves: true }).map((entry) => ({
-        id: entry.vehicle.id,
-        label: [entry.vehicle.year, entry.vehicle.make, entry.vehicle.model, entry.vehicle.trim].filter(Boolean).join(" "),
-        price: entry.vehicle.price,
-        mileage: entry.vehicle.mileage,
-        mileageVerified: entry.vehicle.mileageVerified,
-        type: entry.vehicle.type,
-        drivetrain: entry.vehicle.drivetrain,
-        fit: entry.fit === "EXACT"
-          ? "exact" as const
-          : entry.fit === "STRONG"
-            ? "strong" as const
-            : "near" as const,
-        reasons: entry.reasons,
-        compromises: entry.compromises,
-      }))
+    ? rankVehiclesForSalesSpec({ requirements: input.spec, vehicles: input.vehicles, limit: 2_000, strictMustHaves: true }).map(toMatch)
     : input.vehicles.map((vehicle) => evaluateVehicle(vehicle, request));
+  // An empty strict result should not become a dead end. Separately show the
+  // closest *clearly labeled* vehicles, preserving price, body style, exact VIN,
+  // and other identity constraints; never classify these as fulfilling hard specs.
+  const alternativeCandidates: TorqueVehicleMatch[] =
+    input.spec && evaluated.length === 0
+      ? rankVehiclesForSalesSpec({
+          requirements: input.spec, vehicles: input.vehicles, limit: 50, strictMustHaves: false,
+        }).filter((entry) =>
+          (!input.spec?.maxPrice || entry.vehicle.price <= input.spec.maxPrice.value) &&
+          entry.hardMisses > 0
+        ).slice(0, 3).map((entry) => ({ ...toMatch(entry), fit: "near" }))
+      : [];
+  const wantsEfficiency = Boolean(input.spec?.freeformNotes.some(note => note.startsWith("Fuel efficiency preference")) ||
+    /\\b(?:good on gas|gas mileage|fuel econom|better mpg|best mpg|fuel efficient)\\b/i.test(input.message));
+  const withEfficiencyEvidence = (match: TorqueVehicleMatch): TorqueVehicleMatch => {
+    if (!wantsEfficiency) return match;
+    const vehicle = input.vehicles.find(item => item.id === match.id);
+    const highway = vehicle?.highwayMpg;
+    const city = vehicle?.cityMpg;
+    const mpgText = Number.isFinite(highway) && highway! > 0 && Number.isFinite(city) && city! > 0
+      ? `Source-reported fuel economy: ${city} city / ${highway} highway MPG`
+      : null;
+    return {
+      ...match,
+      reasons: mpgText ? [...match.reasons, mpgText] : match.reasons,
+      compromises: mpgText ? match.compromises : [...match.compromises, "fuel economy not established by this vehicle record"],
+    };
+  };
   // MatchDNA only breaks ties among vehicles in the same fit class and with
   // the same number of compromises. It must never override a MUST_HAVE
   // requirement, VIN identity, or inventory-source eligibility.
@@ -112,11 +137,18 @@ export function answerTorqueInventory(input: {
   const exact = evaluated.filter((item) => item.fit === "exact").sort(compareMatch);
   const strong = evaluated.filter((item) => item.fit === "strong").sort(compareMatch);
   const near = evaluated.filter((item) => item.fit === "near").sort(compareMatch).slice(0, 5);
-  const matches = exact.length > 0
+  const closest = alternativeCandidates.filter(candidate =>
+    !exact.some(x => x.id === candidate.id) &&
+    !strong.some(x => x.id === candidate.id) &&
+    !near.some(x => x.id === candidate.id)
+  );
+  const matches = (exact.length > 0
     ? exact.slice(0, 5)
     : strong.length > 0
       ? strong.slice(0, 5)
-      : near;
+      : near.length > 0
+        ? near
+        : closest).map(withEfficiencyEvidence);
   // State the specific evidence behind the FIRST eligible recommendation.
   // A match is not a promise of current availability or financing.
   const leading = matches[0];
@@ -165,10 +197,14 @@ export function answerTorqueInventory(input: {
       " close " +
       (near.length === 1 ? "option" : "options") +
       ", but I'm calling out the must-have compromises instead of pretending they're exact.";
+  } else if (closest.length > 0) {
+    answer = input.mode === "representative-demo"
+      ? "I cannot verify the full specification in these SAMPLE vehicles, which are not dealer listings. Here are the closest SUV examples within your budget; leather and fuel efficiency remain unverified where the sample has no data. These are NOT confirmed Orr Nissan West units."
+      : "I didn't establish a complete match in the checked dealer catalog, but here are source-listed vehicles within your price ceiling with explicit equipment or MPG evidence gaps. These are NEAR matches, not proof that leather or fuel economy meets your request. A salesperson should check the exact VIN.";
   } else {
     answer = input.mode === "representative-demo"
-      ? "I couldn't find that specification in the sample vehicles. This is a demonstration catalog, NOT Orr Nissan West's live inventory, so I cannot tell you whether the dealership has it. A salesperson must check the real stock or confirm the VIN."
-      : "I couldn't find that specification in " + sourcePhrase +
+      ? "No suitable comparison was established in the SAMPLE catalog, which is not live dealer inventory. That does not mean Orr Nissan West has none; a salesperson must check actual stock."
+      : "I couldn't establish a suitable vehicle in " + sourcePhrase +
         ". That only describes this checked catalog and does not prove the dealership has no such vehicle. Ask a salesperson to verify the specific stock or VIN.";
   }
 
@@ -191,7 +227,7 @@ export function answerTorqueInventory(input: {
     answer,
     mode: input.mode,
     exactCount: exact.length,
-    nearCount: strong.length + near.length,
+    nearCount: strong.length + near.length + closest.length,
     matches,
     handoff: handoffRequired
       ? {
