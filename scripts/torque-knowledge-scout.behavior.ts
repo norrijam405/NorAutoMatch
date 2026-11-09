@@ -10,6 +10,15 @@ assert.deepEqual(parseListingMpg("EPA estimated 28 city / 35 highway MPG"), {
 });
 assert.equal(parseListingMpg("28 horsepower and 35,000 miles"), null);
 assert.equal(parseListingMpg("28 city 35 highway"), null);
+assert.deepEqual(parseListingMpg("City MPG: 28, Highway MPG: 35"),{
+  city:28,highway:35,basis:"DEALER_DESCRIPTION",
+});
+assert.deepEqual(parseListingMpg("City/Highway MPG: 28/35 MPG"),{
+  city:28,highway:35,basis:"DEALER_DESCRIPTION",
+});
+assert.deepEqual(resolveListingMpg({mpg_city:"28",mpg_highway:"35"}), {
+  city:28,highway:35,combined:undefined,basis:"DEALER_STRUCTURED",
+});
 assert.equal(readPublicVehicleDescription({vehicle_description: "<p>Dealer says <b>28 city / 35 highway MPG</b></p>"}),
   "Dealer says 28 city / 35 highway MPG");
 assert.deepEqual(resolveListingMpg({
