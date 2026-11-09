@@ -19,6 +19,8 @@ import { explainTorqueNoMatch } from "@/lib/torque-no-match";
 import { scoutEpaModel } from "@/lib/torque-epa-knowledge-scout";
 import { parseExplicitEpaComparison } from "@/lib/torque-cross-brand-query";
 import { observeTorqueDealerCatalog, type TorqueDealerScoutReceipt } from "@/lib/torque-dealer-change-scout";
+import { scoutOrrPublicVinDetails } from "@/lib/torque-orr-vin-detail-scout";
+import { isSuvCandidate } from "@/lib/torque-suv-model-knowledge";
 import { BATTLE_PRIORITIES, isBattlePriority, resolveBattlePriority, battleFollowupType } from "@/lib/torque-battle-followup";
 import { dealerInventorySearchAvailable, resolveDealershipScope } from "@/lib/dealership-scope";
 
@@ -331,6 +333,24 @@ export async function POST(request: Request) {
     dna = buildMatchDnaSummary(dnaEvents ?? []);
   }
 
+  // Only the isolated read-only preview inspects exact public Orr detail
+  // pages. Bound the candidate count; a verified VIN + matching page title is
+  // required before any MPG or equipment values may enrich the vehicle.
+  const needsDealerDetailScout = previewVerified && mode === "verified-live" &&
+    (spec.interiorMaterial !== undefined || spec.features.length > 0 ||
+      /\\b(?:mpg|fuel econom|good on gas|gas mileage|fuel efficient)\\b/i.test(message));
+  if (needsDealerDetailScout) {
+    const relevant = vehicles.filter(v =>
+      (!spec.maxPrice || v.price <= spec.maxPrice.value) &&
+      (!spec.maxMileage || !v.mileageVerified || v.mileage <= spec.maxMileage.value) &&
+      (!spec.make || v.make.toLowerCase() === spec.make.value.toLowerCase()) &&
+      (!spec.model || v.model.toLowerCase() === spec.model.value.toLowerCase()) &&
+      (!spec.bodyType || spec.bodyType.value !== "SUV" || isSuvCandidate(v))
+    ).sort((a,b) => a.price-b.price).slice(0, 6);
+    const inspected = await Promise.all(relevant.map(scoutOrrPublicVinDetails));
+    const byVin = new Map(inspected.map(v => [v.id, v]));
+    vehicles = vehicles.map(v => byVin.get(v.id) ?? v);
+  }
   const result = answerTorqueInventory({ message, vehicles, mode, dna, spec });
   if (recentMessages.length > 0) {
     const focusedAnswer = scopedTorqueFollowup(message, result.matches, vehicles, mode);
