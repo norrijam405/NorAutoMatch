@@ -92,7 +92,7 @@ function evaluateVehicle(
   compareText(result, spec.condition, vehicle.condition ?? "", "condition");
   if (spec.bodyTypeAlternatives) {
     const type = vehicle.type.toLowerCase();
-    if (/suv|crossover|minivan|mini-van|van/.test(type)) {
+    if (/suv|crossover|cross-over|sport\s*utility|minivan|mini-van|van/.test(type)) {
       result.reasons.push("customer accepts SUV or minivan");
     } else {
       priorityMiss(result, spec.bodyTypeAlternatives.priority, "neither SUV nor minivan");
@@ -103,7 +103,7 @@ function evaluateVehicle(
     const match = spec.bodyType.value === "TRUCK" ? /truck|pickup/.test(type)
       : spec.bodyType.value === "SEDAN" ? /sedan/.test(type)
       : spec.bodyType.value === "MINIVAN" ? /minivan|mini-van|van/.test(type)
-      : /suv|crossover/.test(type);
+      : /suv|crossover|cross-over|sport\s*utility/.test(type);
     if (match) result.reasons.push("body style: " + spec.bodyType.value.toLowerCase());
     else priorityMiss(result, spec.bodyType.priority, "body style mismatch");
   }
@@ -258,14 +258,14 @@ function identityRequirementsMatch(spec: TorqueSalesInventorySpec, vehicle: Vehi
   if (spec.model?.priority === "MUST_HAVE" && normalize(String(spec.model.value)) !== normalize(vehicle.model)) return false;
   // Hard identity and capacity constraints cannot be loosened into random near-fit cars.
   if (spec.bodyTypeAlternatives?.priority === "MUST_HAVE") {
-    if (!/suv|crossover|minivan|mini-van|van/.test(vehicle.type.toLowerCase())) return false;
+    if (!/suv|crossover|cross-over|sport\s*utility|minivan|mini-van|van/.test(vehicle.type.toLowerCase())) return false;
   }
   if (spec.bodyType?.priority === "MUST_HAVE") {
     const type = vehicle.type.toLowerCase();
     const matches = spec.bodyType.value === "TRUCK" ? /truck|pickup/.test(type)
       : spec.bodyType.value === "SEDAN" ? /sedan/.test(type)
       : spec.bodyType.value === "MINIVAN" ? /minivan|mini-van|van/.test(type)
-      : /suv|crossover/.test(type);
+      : /suv|crossover|cross-over|sport\s*utility/.test(type);
     if (!matches) return false;
   }
   if (spec.fuelType?.priority === "MUST_HAVE") {
