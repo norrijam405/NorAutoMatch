@@ -86,9 +86,14 @@ export function answerTorqueInventory(input: {
     reasons: entry.reasons,
     compromises: entry.compromises,
   });
-  const evaluated = input.spec
+  const midsizeRequested = Boolean(input.spec?.freeformNotes.some(note => note.startsWith("Midsize SUV requested")));
+  const evaluated = (input.spec
     ? rankVehiclesForSalesSpec({ requirements: input.spec, vehicles: input.vehicles, limit: 2_000, strictMustHaves: true }).map(toMatch)
-    : input.vehicles.map((vehicle) => evaluateVehicle(vehicle, request));
+    : input.vehicles.map((vehicle) => evaluateVehicle(vehicle, request)))
+    .map((match) => midsizeRequested
+      ? { ...match, fit: "near" as const,
+          compromises: [...match.compromises, "midsize classification not verified by this catalog"] }
+      : match);
   // An empty strict result should not become a dead end. Separately show the
   // closest *clearly labeled* vehicles, preserving price, body style, exact VIN,
   // and other identity constraints; never classify these as fulfilling hard specs.
@@ -209,6 +214,9 @@ export function answerTorqueInventory(input: {
   }
 
   if (leading) answer += matchExplanation;
+  if (midsizeRequested) {
+    answer += " Your midsize-SUV requirement is retained, but the current catalog only says SUV; it does not certify compact versus midsize. I will not label an SUV a verified midsize match.";
+  }
 
   if (input.dna && input.dna.signalCount > 0) {
     answer += " Your MatchDNA currently says: " + input.dna.label.replace(/^Learning:\s*/i, "") + ".";
