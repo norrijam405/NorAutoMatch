@@ -3,6 +3,8 @@ import { parseListingMpg, resolveListingMpg, readPublicVehicleDescription } from
 import { scoutEpaModel } from "../src/lib/torque-epa-knowledge-scout";
 import { parseExplicitEpaComparison } from "../src/lib/torque-cross-brand-query";
 import { observeTorqueDealerCatalog } from "../src/lib/torque-dealer-change-scout";
+import { scoutOrrPublicVinDetails } from "../src/lib/torque-orr-vin-detail-scout";
+import { isSuvCandidate } from "../src/lib/torque-suv-model-knowledge";
 import type { Vehicle } from "../src/lib/inventory";
 
 assert.deepEqual(parseListingMpg("EPA estimated 28 city / 35 highway MPG"), {
@@ -46,6 +48,10 @@ assert(later.changes.some(x=>x.kind==="PRICE_CHANGE" && x.before==="30500" && x.
 assert(later.changes.some(x=>x.kind==="STOCK_STATUS_CHANGE"));
 assert.equal(observeTorqueDealerCatalog([], "2026-11-09T00:10:00Z").changes.length,0);
 assert.equal(observeTorqueDealerCatalog([{...listing,price:29500,sourceStockStatus:"Pending"}],"2026-11-09T00:15:00Z").state,"UNCHANGED");
+const stationWagonRogue: Vehicle = {...listing, type:"Station Wagon", condition:"Used"};
+assert.equal(isSuvCandidate(stationWagonRogue),true,"Rogue can be categorized Station Wagon in the public dealer feed");
+assert.equal(isSuvCandidate({...stationWagonRogue,make:"Volvo",model:"V60"}),false);
+
 
 // Synthetic mocked official responses; no real network or VIN assertions.
 const originalFetch = globalThis.fetch;
@@ -78,6 +84,28 @@ async function run() {
     const invalid = await scoutEpaModel({year:2026,make:"https://evil.test",model:"RAV4"});
     assert.equal(invalid.status,"NOT_FOUND");
     assert.equal(requested.length,priorCount,"bad make cannot fetch arbitrary URLs");
+    // Realistic but synthetic Orr vehicle page. Same VIN and matching title
+    // are mandatory before MPG or equipment become VIN-scoped evidence.
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url=String(input);
+      assert(url.startsWith("https://orrnissanwest.com/inventory/Used-2025-Nissan-Rogue-SV-"));
+      return new Response("<html><head><title>2025 Nissan Rogue SV at Orr Nissan West</title></head><body>" +
+        "VIN: JN8BT3BA7SW011511 Vehicle Specification City MPG 30 Highway MPG 37 " +
+        "Features Leather Seats Apple CarPlay Hours Monday 9am</body></html>", {
+        status:200,headers:{"Content-Type":"text/html"},
+      });
+    }) as typeof fetch;
+    const detailed = await scoutOrrPublicVinDetails({
+      ...stationWagonRogue,id:"JN8BT3BA7SW011511",price:23455,
+    });
+    assert.equal(detailed.cityMpg,30);
+    assert.equal(detailed.highwayMpg,37);
+    assert.equal(detailed.mpgEvidenceBasis,"DEALER_DETAIL");
+    assert(detailed.features?.includes("Leather Seats"));
+    const missingIdentity = await scoutOrrPublicVinDetails({
+      ...stationWagonRogue,id:"JN8BT3BA7SW022222",price:23455,
+    });
+    assert.equal(missingIdentity.cityMpg,undefined,"mismatched page VIN must not enrich a listing");
     process.stdout.write("Torque dealer descriptions and multi-brand EPA knowledge scout PASS\n");
   } finally {
     globalThis.fetch = originalFetch;
