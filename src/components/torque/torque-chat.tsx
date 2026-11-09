@@ -31,6 +31,10 @@ type TorqueResponse = {
   handoff?: { required?: boolean; reason?: string; summary?: string };
   matchDna?: { signalCount: number; label: string } | null;
   battle?: { vins: string[]; priority: string; signals?: unknown[]; evidenceGaps?: string[]; basis?: "named-catalog-examples" | "exact-vins" };
+  dealerScoutUpdates?: {
+    observedAt: string; disclaimer: string;
+    changes: Array<{vin:string;kind:"PRICE_CHANGE"|"MILEAGE_CHANGE"|"STOCK_STATUS_CHANGE";before:string;after:string}>;
+  } | null;
   researchEvidence?: Array<{
     source: "EPA_FUELECONOMY_GOV";
     status: "MODEL_VARIANTS" | "NOT_FOUND" | "UNAVAILABLE";
@@ -222,6 +226,8 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                 "Find a family SUV under $30,000",
                 "I need a used AWD Rogue",
                 "Compare Rogue versus Kicks",
+                "MPG for 2025 Toyota RAV4",
+                "Compare 2025 Nissan Rogue vs 2025 Toyota RAV4 MPG",
               ].map((prompt) => (
                 <button key={prompt} type="button" disabled={busy} onClick={() => setInput(prompt)}
                   className="shrink-0 rounded-full border border-white/15 bg-white/[.045] px-3 py-2 text-[11px] font-bold text-slate-200 transition hover:border-amber-300/50 disabled:opacity-40">
@@ -332,6 +338,19 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                   <div className="mt-2 rounded-xl border border-red-400/15 bg-red-400/[.04] px-3 py-2 text-[11px] text-red-100/75">
                     MatchDNA · {turn.response.matchDna.label}
                   </div>
+                )}
+
+                {turn.role === "torque" && turn.response?.dealerScoutUpdates?.changes &&
+                  turn.response.dealerScoutUpdates.changes.length > 0 && (
+                  <section className="mt-3 rounded-xl border border-amber-300/25 bg-amber-300/[.04] p-3" aria-label="Dealer inventory updates">
+                    <p className="text-[11px] font-bold uppercase text-amber-200">Dealer Watch Scout · observed listing changes</p>
+                    {turn.response.dealerScoutUpdates.changes.map((event,i) => (
+                      <p key={event.vin + event.kind + i} className="mt-1 text-xs text-slate-200">
+                        {event.vin} · {event.kind.replaceAll("_"," ").toLowerCase()}: {event.before} → {event.after}
+                      </p>
+                    ))}
+                    <p className="mt-2 text-[10px] leading-4 text-slate-400">{turn.response.dealerScoutUpdates.disclaimer}</p>
+                  </section>
                 )}
 
                 {turn.role === "torque" && turn.response?.researchEvidence &&
