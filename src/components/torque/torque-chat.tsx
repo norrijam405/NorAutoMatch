@@ -46,6 +46,8 @@ type TorqueResponse = {
     listedPrice: number | null;
     mileage: { value: number | null; state: "REPORTED" | "UNVERIFIED" };
     equipment: Array<{ label: string; state: "LISTED_IN_RECORD" }>;
+    dealerDescription: string | null;
+    listedMpg: { city: number | null; highway: number | null; source: "DEALER_STRUCTURED" | "DEALER_DESCRIPTION" | "UNAVAILABLE" };
     unknowns: string[];
     disclosure: string;
   }>;
@@ -394,6 +396,18 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                                   <p>Price: {evidence.listedPrice === null ? "Not verified" : `Listed ${evidence.listedPrice.toLocaleString("en-US")}`}</p>
                                   <p>Mileage: {evidence.mileage.state === "UNVERIFIED" || evidence.mileage.value === null ? "Not verified" : `${evidence.mileage.value.toLocaleString("en-US")} miles reported`}</p>
                                   {evidence.equipment.length > 0 && <p>Listed equipment: {evidence.equipment.slice(0, 6).map((entry) => entry.label).join(" · ")}</p>}
+                                  {evidence.listedMpg.source !== "UNAVAILABLE" && (
+                                    <p>Dealer MPG ({evidence.listedMpg.source === "DEALER_DESCRIPTION" ? "description" : "structured listing"}):{" "}
+                                      {evidence.listedMpg.city === null ? "city unknown" : evidence.listedMpg.city + " city"} ·{" "}
+                                      {evidence.listedMpg.highway === null ? "highway unknown" : evidence.listedMpg.highway + " highway"}
+                                    </p>
+                                  )}
+                                  {evidence.dealerDescription && (
+                                    <p className="rounded-lg border border-white/10 bg-white/[.02] p-2">
+                                      <span className="font-bold">Dealer's published description (not independently confirmed): </span>
+                                      {evidence.dealerDescription}
+                                    </p>
+                                  )}
                                   <div className="rounded-lg border border-amber-300/15 bg-amber-300/[.04] p-2 text-amber-100/80">
                                     <p className="font-bold">Still needs confirmation</p>
                                     {evidence.unknowns.slice(0, 4).map((item) => <p key={item}>• {item}</p>)}
