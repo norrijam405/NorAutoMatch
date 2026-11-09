@@ -36,7 +36,7 @@ assert.equal(later.state,"CHANGES");
 assert(later.changes.some(x=>x.kind==="PRICE_CHANGE" && x.before==="30500" && x.after==="29500"));
 assert(later.changes.some(x=>x.kind==="STOCK_STATUS_CHANGE"));
 assert.equal(observeTorqueDealerCatalog([], "2026-11-09T00:10:00Z").changes.length,0);
-assert.equal(observeTorqueDealerCatalog([{...listing,price:29500}],"2026-11-09T00:15:00Z").state,"UNCHANGED");
+assert.equal(observeTorqueDealerCatalog([{...listing,price:29500,sourceStockStatus:"Pending"}],"2026-11-09T00:15:00Z").state,"UNCHANGED");
 
 // Synthetic mocked official responses; no real network or VIN assertions.
 const originalFetch = globalThis.fetch;
