@@ -16,6 +16,7 @@ import { planTorqueNextAction } from "@/lib/torque-conversation-action-plan";
 import { vehicleEvidenceForMatch } from "@/lib/torque-vehicle-evidence";
 import { torqueNextQuestion } from "@/lib/torque-next-question";
 import { explainTorqueNoMatch } from "@/lib/torque-no-match";
+import { scoutEpaModel } from "@/lib/torque-epa-knowledge-scout";
 import { BATTLE_PRIORITIES, isBattlePriority, resolveBattlePriority, battleFollowupType } from "@/lib/torque-battle-followup";
 import { dealerInventorySearchAvailable, resolveDealershipScope } from "@/lib/dealership-scope";
 
@@ -205,6 +206,25 @@ export async function POST(request: Request) {
       ? bodyRead.value.recentMessages : []
   );
   const spec = combinedCustomerSpec(recentMessages, message);
+  // The research scout is intentionally independent of dealership inventory:
+  // a Honda, Toyota, or other make is a model comparison, NOT an Orr stock claim.
+  // Only an explicit year/make/model research question triggers this endpoint.
+  const directResearch = message.match(/\\b(?:EPA\\s+)?(?:mpg|fuel economy|gas mileage)\\s*(?:for|of|on|:)?\\s*(20\\d{2})\\s+(Toyota|Honda|Nissan|Hyundai|Kia|Ford|Chevrolet|Mazda|Subaru|Jeep|Volkswagen|BMW|Lexus|Acura|GMC|Buick|Mitsubishi|Volvo)\\s+([a-z0-9][a-z0-9-]{1,19})\\b/i);
+  if (directResearch && canUseTorquePreviewVerifiedCatalog()) {
+    const epa = await scoutEpaModel({
+      year: Number(directResearch[1]), make: directResearch[2], model: directResearch[3],
+    });
+    return noStore({
+      protocol: "NORAUTO_TORQUE_MODEL_RESEARCH_V1",
+      truthState: "EXTERNAL_MODEL_RESEARCH_ONLY",
+      mode: "model-research",
+      researchEvidence: [epa], matches: [], needsMoreDetail: false,
+      answer: epa.status === "MODEL_VARIANTS"
+        ? "I located EPA fuel-economy configurations for that model. The options below are model research, not Orr inventory or proof that a listed VIN has the same engine, drivetrain, or MPG."
+        : "I could not retrieve authoritative MPG figures for that exact model request. I will not substitute another trim or invent a number.",
+    });
+  }
+
   if (spec.freeformNotes.some((note) => note.startsWith("Both Hyundai and Nissan were named."))) {
     return noStore({
       protocol: "NORAUTO_TORQUE_SEARCH_V1",
@@ -302,6 +322,19 @@ export async function POST(request: Request) {
       result.answer += "\n\n" + focusedAnswer;
     }
   }
+  // Consult EPA only when MPG is relevant and a dealer candidate lacks BOTH
+  // numeric dealer MPG values. This is model context, not a claimed VIN rating.
+  const asksMpg = /\\b(?:mpg|gas mileage|good on gas|fuel econom|fuel efficient|miles per gallon)\\b/i.test(message) ||
+    spec.freeformNotes.some(note => note.startsWith("Fuel efficiency preference"));
+  const dealerCandidatesMissingMpg = result.matches.filter(match => {
+    const listing = vehicles.find(v => v.id === match.id);
+    return listing && !(Number.isFinite(listing.cityMpg) && Number.isFinite(listing.highwayMpg));
+  });
+  const scoutVehicle = asksMpg && mode !== "representative-demo" && dealerCandidatesMissingMpg.length
+    ? vehicles.find(v => v.id === dealerCandidatesMissingMpg[0].id) : undefined;
+  const researchEvidence = scoutVehicle
+    ? [await scoutEpaModel({year: scoutVehicle.year, make: scoutVehicle.make, model: scoutVehicle.model})]
+    : [];
   const customerRequirements = customerSpecSummary(spec);
   // A no-match response must name the retained, explicit customer constraints.
   // Behavioral MatchDNA does not turn into customer MUST_HAVE requirements.
@@ -327,5 +360,6 @@ export async function POST(request: Request) {
     matchDna: dna ?? null,
     nextAction: planTorqueNextAction({ spec, result }),
     vehicleEvidence: result.matches.slice(0, 3).map((match) => vehicleEvidenceForMatch(match, vehicles, mode)).filter((item) => item !== null),
+    researchEvidence,
   });
 }
