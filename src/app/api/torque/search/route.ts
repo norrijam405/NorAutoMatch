@@ -108,7 +108,7 @@ export async function POST(request: Request) {
       // Temporary nonproduction source health telemetry. Only aggregate counts
       // and source type; never log queries, VINs, customer identities or keys.
       if (previewVerified) {
-        const suvLikeCount = vehicles.filter(v => /\\b(?:suv|crossover|cross-over|sport\\s*utility)\\b/i.test(v.type)).length;
+        const suvLikeCount = vehicles.filter(v => /\b(?:suv|crossover|cross-over|sport\s*utility)\b/i.test(v.type)).length;
         console.info("NORAUTO_TORQUE_PREVIEW_CATALOG_HEALTH", JSON.stringify({
           source: catalog.source,
           eligibleVehicles: vehicles.length,
