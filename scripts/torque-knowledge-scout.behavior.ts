@@ -5,6 +5,8 @@ import { parseExplicitEpaComparison } from "../src/lib/torque-cross-brand-query"
 import { observeTorqueDealerCatalog } from "../src/lib/torque-dealer-change-scout";
 import { scoutOrrPublicVinDetails } from "../src/lib/torque-orr-vin-detail-scout";
 import { isSuvCandidate } from "../src/lib/torque-suv-model-knowledge";
+import { rankVehiclesForSalesSpec } from "../src/lib/vehicle-hunt-inventory-matcher";
+import { parseTorqueSalesInventorySpec } from "../src/lib/torque-sales-inventory-spec";
 import type { Vehicle } from "../src/lib/inventory";
 
 assert.deepEqual(parseListingMpg("EPA estimated 28 city / 35 highway MPG"), {
@@ -51,6 +53,13 @@ assert.equal(observeTorqueDealerCatalog([{...listing,price:29500,sourceStockStat
 const stationWagonRogue: Vehicle = {...listing, type:"Station Wagon", condition:"Used"};
 assert.equal(isSuvCandidate(stationWagonRogue),true,"Rogue can be categorized Station Wagon in the public dealer feed");
 assert.equal(isSuvCandidate({...stationWagonRogue,make:"Volvo",model:"V60"}),false);
+const suvFromStationWagon = rankVehiclesForSalesSpec({
+  requirements:parseTorqueSalesInventorySpec("I need a Nissan Rogue SUV under $32,000"),
+  vehicles:[stationWagonRogue],strictMustHaves:true,
+});
+assert.equal(suvFromStationWagon.length,1,"SUV family should pass hard SUV identity gate even when dealer says Station Wagon");
+assert(suvFromStationWagon[0].reasons.some(x=>/known SUV model family/i.test(x)));
+
 
 
 // Synthetic mocked official responses; no real network or VIN assertions.
