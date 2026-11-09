@@ -38,6 +38,16 @@ export function parseListingMpg(description: string | undefined): ListedMpgEvide
     const key = name === "hwy" ? "highway" : name as "city" | "highway" | "combined";
     found[key] ??= value;
   }
+  // Common dealer detail layout: "City MPG: 28" and "Highway MPG: 35".
+  for (const match of description.matchAll(/\b(city|highway|hwy|combined)\s*mpg\s*[:=\-]?\s*(\d{1,3}(?:\.\d)?)\b/gi)) {
+    const key = match[1].toLowerCase() === "hwy" ? "highway" : match[1].toLowerCase() as "city" | "highway" | "combined";
+    found[key] ??= mpg(match[2]);
+  }
+  const combinedLabelPair = description.match(/\bcity\s*\/\s*(?:hwy|highway)\s*(?:mpg)?\s*[:=\-]?\s*(\d{1,3})\s*\/\s*(\d{1,3})\s*mpg\b/i);
+  if (combinedLabelPair) {
+    found.city ??= mpg(combinedLabelPair[1]);
+    found.highway ??= mpg(combinedLabelPair[2]);
+  }
   // Recognize "28 city / 35 highway MPG" only as a paired metric.
   const pair = description.match(/\b(\d{1,3})\s*city\s*(?:\/|and|,|\|)\s*(\d{1,3})\s*(?:highway|hwy)\s*mpg\b/i);
   if (pair) {
@@ -49,9 +59,9 @@ export function parseListingMpg(description: string | undefined): ListedMpgEvide
 }
 
 export function resolveListingMpg(hit: Record<string, unknown>): ListedMpgEvidence | null {
-  const structuredCity = mpg(hit.city_mpg);
-  const structuredHighway = mpg(hit.highway_mpg);
-  const structuredCombined = mpg(hit.combined_mpg);
+  const structuredCity = mpg(hit.city_mpg) ?? mpg(hit.mpg_city) ?? mpg(hit.fuel_economy_city) ?? mpg(hit.cityMPG);
+  const structuredHighway = mpg(hit.highway_mpg) ?? mpg(hit.mpg_highway) ?? mpg(hit.fuel_economy_highway) ?? mpg(hit.highwayMPG);
+  const structuredCombined = mpg(hit.combined_mpg) ?? mpg(hit.mpg_combined);
   const fromDescription = parseListingMpg(readPublicVehicleDescription(hit));
   if (structuredCity === undefined && structuredHighway === undefined && structuredCombined === undefined) return fromDescription;
   return {
