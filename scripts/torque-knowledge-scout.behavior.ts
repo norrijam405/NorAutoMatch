@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { parseListingMpg, resolveListingMpg, readPublicVehicleDescription } from "../src/lib/torque-dealer-description-scout";
 import { scoutEpaModel } from "../src/lib/torque-epa-knowledge-scout";
 import { parseExplicitEpaComparison } from "../src/lib/torque-cross-brand-query";
+import { observeTorqueDealerCatalog } from "../src/lib/torque-dealer-change-scout";
+import type { Vehicle } from "../src/lib/inventory";
 
 assert.deepEqual(parseListingMpg("EPA estimated 28 city / 35 highway MPG"), {
   city: 28, highway: 35, basis: "DEALER_DESCRIPTION",
@@ -20,6 +22,22 @@ assert.deepEqual(parseExplicitEpaComparison("Compare 2025 Nissan Rogue vs 2025 T
   {year:2025,make:"Toyota",model:"RAV4"},
 ]);
 assert.equal(parseExplicitEpaComparison("Does this VIN have good MPG?").length,0);
+// Read-only update scout compares complete snapshots, not user requests.
+const listing: Vehicle = {
+  id:"1N4AL3AP0GC123456",year:2025,make:"Nissan",model:"Rogue",trim:"SV",
+  type:"Sport Utility",price:30500,mileage:12000,mileageVerified:true,
+  drivetrain:"FWD",image:"",accent:"",sourceStockStatus:"Active",
+};
+const baseline = observeTorqueDealerCatalog([listing], "2026-11-09T00:00:00Z");
+assert.equal(baseline.state,"BASELINE");
+const later = observeTorqueDealerCatalog([{...listing,price:29500,sourceStockStatus:"Pending"}],
+  "2026-11-09T00:05:00Z");
+assert.equal(later.state,"CHANGES");
+assert(later.changes.some(x=>x.kind==="PRICE_CHANGE" && x.before==="30500" && x.after==="29500"));
+assert(later.changes.some(x=>x.kind==="STOCK_STATUS_CHANGE"));
+assert.equal(observeTorqueDealerCatalog([], "2026-11-09T00:10:00Z").changes.length,0);
+assert.equal(observeTorqueDealerCatalog([{...listing,price:29500}],"2026-11-09T00:15:00Z").state,"UNCHANGED");
+
 // Synthetic mocked official responses; no real network or VIN assertions.
 const originalFetch = globalThis.fetch;
 const requested: string[] = [];
