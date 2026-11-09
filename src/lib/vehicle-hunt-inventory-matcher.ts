@@ -1,6 +1,7 @@
 import type { Vehicle } from "./inventory";
 import type { TorqueRequirementPriority, TorqueSalesInventorySpec } from "./torque-sales-inventory-spec";
 import type { VehicleHuntCandidate } from "./vehicle-hunt";
+import { isSuvCandidate, suvCategoryEvidence } from "./torque-suv-model-knowledge";
 
 export type SalesSpecVehicleEvaluation = {
   vehicle: Vehicle;
@@ -103,8 +104,8 @@ function evaluateVehicle(
     const match = spec.bodyType.value === "TRUCK" ? /truck|pickup/.test(type)
       : spec.bodyType.value === "SEDAN" ? /sedan/.test(type)
       : spec.bodyType.value === "MINIVAN" ? /minivan|mini-van|van/.test(type)
-      : /suv|crossover|cross-over|sport\s*utility/.test(type);
-    if (match) result.reasons.push("body style: " + spec.bodyType.value.toLowerCase());
+      : isSuvCandidate(vehicle);
+    if (match) result.reasons.push(spec.bodyType.value === "SUV" ? suvCategoryEvidence(vehicle) : "body style: " + spec.bodyType.value.toLowerCase());
     else priorityMiss(result, spec.bodyType.priority, "body style mismatch");
   }
   compareMax(result, spec.maxPrice, vehicle.price, "price");
@@ -265,7 +266,7 @@ function identityRequirementsMatch(spec: TorqueSalesInventorySpec, vehicle: Vehi
     const matches = spec.bodyType.value === "TRUCK" ? /truck|pickup/.test(type)
       : spec.bodyType.value === "SEDAN" ? /sedan/.test(type)
       : spec.bodyType.value === "MINIVAN" ? /minivan|mini-van|van/.test(type)
-      : /suv|crossover|cross-over|sport\s*utility/.test(type);
+      : isSuvCandidate(vehicle);
     if (!matches) return false;
   }
   if (spec.fuelType?.priority === "MUST_HAVE") {
