@@ -86,8 +86,8 @@ export async function POST(request: Request) {
   const inventoryConfig = previewVerified
     ? { mode: "live-enabled", liveActivation: LIVE_INVENTORY_ACTIVATION_VALUE }
     : {
-        mode: inventoryConfig.mode,
-        liveActivation: inventoryConfig.liveActivation,
+        mode: process.env.NORAUTO_INVENTORY_MODE,
+        liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
       };
   const runtimeDecision = resolveInventoryRuntime(inventoryConfig);
 
@@ -97,8 +97,8 @@ export async function POST(request: Request) {
   if (runtimeDecision.effectiveMode === "live-enabled") {
     try {
       const catalog = await loadOrrResilientCustomerCatalog({
-        mode: process.env.NORAUTO_INVENTORY_MODE,
-        liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
+        mode: inventoryConfig.mode,
+        liveActivation: inventoryConfig.liveActivation,
       });
       if (!catalog.customerVisibleLiveInventory || catalog.source === "demo") {
         return noStore({ truthState: "VERIFIED_SOURCE_UNAVAILABLE", message: "Dealer inventory cannot be verified right now.", matches: [] }, 503);
