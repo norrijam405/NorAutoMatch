@@ -9,6 +9,8 @@ export type TorqueVehicleEvidence = {
   listedPrice: number | null;
   mileage: { value: number | null; state: "REPORTED" | "UNVERIFIED" };
   equipment: Array<{ label: string; state: "LISTED_IN_RECORD" }>;
+  dealerDescription: string | null;
+  listedMpg: { city: number | null; highway: number | null; source: "DEALER_STRUCTURED" | "DEALER_DESCRIPTION" | "UNAVAILABLE" };
   unknowns: string[];
   disclosure: string;
 };
@@ -43,6 +45,12 @@ export function vehicleEvidenceForMatch(
       state: v.mileageVerified === false || !Number.isFinite(v.mileage) ? "UNVERIFIED" : "REPORTED",
     },
     equipment,
+    dealerDescription: v.description?.slice(0, 700) ?? null,
+    listedMpg: {
+      city: Number.isFinite(v.cityMpg) ? v.cityMpg! : null,
+      highway: Number.isFinite(v.highwayMpg) ? v.highwayMpg! : null,
+      source: v.mpgEvidenceBasis ?? "UNAVAILABLE",
+    },
     unknowns: [
       "Current sale availability is not guaranteed",
       "Seating capacity is not certified by this listing",
