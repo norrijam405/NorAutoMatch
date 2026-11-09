@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ArrowLeftRight, BadgeCheck, CarFront, MessageCircle } from "lucide-react";
 import { TorqueChat } from "@/components/torque/torque-chat";
+import { canUseTorquePreviewVerifiedCatalog } from "@/lib/torque-standalone-demo";
 
 export const metadata: Metadata = {
   title: "Ask Torque | NorAutoMatch",
@@ -38,7 +39,7 @@ export default async function AskTorquePage({
         </div>
       </div>
       <div className="mt-8 grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <TorqueChat mode="workspace" initialPrompt={initialPrompt} />
+        <TorqueChat mode="workspace" initialPrompt={initialPrompt} allowVerifiedPreview={canUseTorquePreviewVerifiedCatalog()} />
         <aside className="flex flex-col gap-4">
           <section className="rounded-2xl border border-amber-300/20 bg-amber-300/[.035] p-5">
             <div className="flex items-center gap-2 text-sm font-black text-amber-200"><CarFront size={18} /> What Torque can check</div>
