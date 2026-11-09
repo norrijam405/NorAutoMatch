@@ -39,6 +39,9 @@ jobs:
       - name: Check VIN evidence and customer correction behavior
         run: node .tmp-torque-trained-runtime-bridge/scripts/torque-evidence-and-corrections.behavior.js
 
+      - name: Check dealer description and independent EPA knowledge scout
+        run: node .tmp-torque-trained-runtime-bridge/scripts/torque-knowledge-scout.behavior.js
+
       - name: Typecheck customer application
         run: npm run typecheck
 
