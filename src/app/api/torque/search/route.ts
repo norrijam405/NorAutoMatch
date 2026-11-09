@@ -4,7 +4,8 @@ import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
 import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
 import { buildMatchDnaSummary } from "@/lib/match-dna";
 import { createClient } from "@/lib/supabase/server";
-import { isTorqueStandaloneDemo } from "@/lib/torque-standalone-demo";
+import { isTorqueStandaloneDemo, canUseTorquePreviewVerifiedCatalog } from "@/lib/torque-standalone-demo";
+import { LIVE_INVENTORY_ACTIVATION_VALUE } from "@/lib/inventory-runtime";
 import { readJsonBodyWithByteLimit } from "@/lib/request-body-limit";
 import { answerTorqueInventory, type TorqueInventoryMode } from "@/lib/torque-inventory-assistant";
 import { buildGarageBattleStory } from "@/lib/garage-battle";
@@ -76,10 +77,19 @@ export async function POST(request: Request) {
     }, 200);
   }
 
-  const runtimeDecision = resolveInventoryRuntime({
-    mode: process.env.NORAUTO_INVENTORY_MODE,
-    liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
-  });
+  // Explicit user selection on an isolated no-database demo service may fetch
+  // the public dealer catalog read-only. This cannot enable live inventory
+  // in other deployments or perform a customer/CRM action.
+  const previewVerified = canUseTorquePreviewVerifiedCatalog() &&
+    typeof bodyRead.value === "object" && bodyRead.value !== null &&
+    "catalogScope" in bodyRead.value && bodyRead.value.catalogScope === "verified";
+  const inventoryConfig = previewVerified
+    ? { mode: "live-enabled", liveActivation: LIVE_INVENTORY_ACTIVATION_VALUE }
+    : {
+        mode: inventoryConfig.mode,
+        liveActivation: inventoryConfig.liveActivation,
+      };
+  const runtimeDecision = resolveInventoryRuntime(inventoryConfig);
 
   let vehicles = inventory;
   let mode: TorqueInventoryMode = "representative-demo";
