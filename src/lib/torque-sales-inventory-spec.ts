@@ -143,12 +143,24 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
   const year = text.match(/\b(20\d{2})\b/);
   if (year) spec.modelYear = must(Number(year[1]));
 
-  const maxPrice = text.match(/(?:under|below|max(?:imum)?|up to|less than|no more than|not more than)\s*\$?\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?)\s*(k|thousand)?/i);
-  if (maxPrice) {
-    const raw = Number(maxPrice[1].replace(/,/g, ""));
-    if (Number.isFinite(raw) && raw > 0) {
-      spec.maxPrice = must(maxPrice[2] || raw < 1000 ? Math.round(raw * 1000) : Math.round(raw));
-    }
+  // Price and mileage numbers can occur in the SAME sentence. Never read
+  // "less than 40,000 miles" as "$40,000". Prefer an explicitly priced
+  // ceiling, otherwise accept only numbers with no mileage unit.
+  const priceCeilings = [...text.matchAll(
+    /(?:under|below|max(?:imum)?|up to|less than|no more than|not more than)\s*(\$?\s*(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?)\s*(k|thousand)?/gi,
+  )].map(match => {
+    const after = text.slice((match.index ?? 0) + match[0].length);
+    if (/^\s*(?:miles?|mi\b|kilomet(?:er|re)s?|km\b)/i.test(after)) return null;
+    const priceRaw = match[1].trim();
+    const value = Number(priceRaw.replace(/[$,\s]/g, ""));
+    if (!Number.isFinite(value) || value <= 0) return null;
+    const scaled = match[2] || value < 1000 ? Math.round(value * 1000) : Math.round(value);
+    return { value: scaled, explicitCurrency: priceRaw.includes("$") };
+  }).filter((entry): entry is { value: number; explicitCurrency: boolean } => entry !== null);
+  if (priceCeilings.length) {
+    // If a customer supplied multiple ceilings, honor the lowest rather than
+    // silently weakening their budget; explicit $ is preferred for ambiguity.
+    spec.maxPrice = must(Math.min(...priceCeilings.map(item => item.value)));
   }
 
   const maxMileage = text.match(/(?:under|below|max(?:imum)?|less than)\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?)\s*(k|thousand)?\s*(?:miles?|mi)\b/i);
