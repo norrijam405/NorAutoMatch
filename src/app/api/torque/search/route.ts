@@ -17,6 +17,7 @@ import { vehicleEvidenceForMatch } from "@/lib/torque-vehicle-evidence";
 import { torqueNextQuestion } from "@/lib/torque-next-question";
 import { explainTorqueNoMatch } from "@/lib/torque-no-match";
 import { scoutEpaModel } from "@/lib/torque-epa-knowledge-scout";
+import { parseExplicitEpaComparison } from "@/lib/torque-cross-brand-query";
 import { BATTLE_PRIORITIES, isBattlePriority, resolveBattlePriority, battleFollowupType } from "@/lib/torque-battle-followup";
 import { dealerInventorySearchAvailable, resolveDealershipScope } from "@/lib/dealership-scope";
 
@@ -198,6 +199,18 @@ export async function POST(request: Request) {
       answer: mode === "representative-demo"
         ? "I can discuss what matters in a comparison, but I cannot verify two dealer vehicles from demonstration inventory. Tell me the two models and your priorities; a salesperson can confirm actual listings."
         : "I can compare models directly, without you saving cars first. I couldn't verify both named models in this dealer catalog. Which two exact models or model years do you mean? I won't silently compare an unrelated vehicle.",
+    });
+  }
+
+  const requestedCrossBrandResearch = parseExplicitEpaComparison(message);
+  if (requestedCrossBrandResearch.length === 2 && canUseTorquePreviewVerifiedCatalog()) {
+    const researchEvidence = await Promise.all(requestedCrossBrandResearch.map(scoutEpaModel));
+    return noStore({
+      protocol: "NORAUTO_TORQUE_MODEL_COMPARISON_V1",
+      truthState: "EXTERNAL_MODEL_RESEARCH_ONLY",
+      mode: "model-research",
+      researchEvidence, matches: [],
+      answer: "These are official EPA model-configuration estimates for comparison across makes. They are NOT proof of any specific dealer VIN, equipment, pricing or availability. Confirm matching powertrains before comparing fuel economy.",
     });
   }
 
