@@ -107,7 +107,7 @@ export function answerTorqueInventory(input: {
         ).slice(0, 3).map((entry) => ({ ...toMatch(entry), fit: "near" }))
       : [];
   const wantsEfficiency = Boolean(input.spec?.freeformNotes.some(note => note.startsWith("Fuel efficiency preference")) ||
-    /\\b(?:good on gas|gas mileage|fuel econom|better mpg|best mpg|fuel efficient)\\b/i.test(input.message));
+    /\b(?:good on gas|gas mileage|fuel econom|better mpg|best mpg|fuel efficient)\b/i.test(input.message));
   const withEfficiencyEvidence = (match: TorqueVehicleMatch): TorqueVehicleMatch => {
     if (!wantsEfficiency) return match;
     const vehicle = input.vehicles.find(item => item.id === match.id);
