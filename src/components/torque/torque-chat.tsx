@@ -31,6 +31,13 @@ type TorqueResponse = {
   handoff?: { required?: boolean; reason?: string; summary?: string };
   matchDna?: { signalCount: number; label: string } | null;
   battle?: { vins: string[]; priority: string; signals?: unknown[]; evidenceGaps?: string[]; basis?: "named-catalog-examples" | "exact-vins" };
+  researchEvidence?: Array<{
+    source: "EPA_FUELECONOMY_GOV";
+    status: "MODEL_VARIANTS" | "NOT_FOUND" | "UNAVAILABLE";
+    year: number; make: string; model: string; checkedAt: string; note: string;
+    variants: Array<{ label: string; cityMpg: number | null; highwayMpg: number | null;
+      combinedMpg: number | null; sourceUrl: string }>;
+  }>;
   vehicleEvidence?: Array<{
     scope: "REPRESENTATIVE_DEMO" | "DEALER_CATALOG" | "VERIFIED_CACHED_CATALOG";
     vehicleRef: string;
@@ -323,6 +330,32 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                   <div className="mt-2 rounded-xl border border-red-400/15 bg-red-400/[.04] px-3 py-2 text-[11px] text-red-100/75">
                     MatchDNA · {turn.response.matchDna.label}
                   </div>
+                )}
+
+                {turn.role === "torque" && turn.response?.researchEvidence &&
+                  turn.response.researchEvidence.length > 0 && (
+                  <section className="mt-3 rounded-xl border border-blue-400/25 bg-blue-400/[.05] p-3" aria-label="Independent MPG research">
+                    <p className="text-[11px] font-black uppercase tracking-[.12em] text-blue-200">Vehicle Knowledge Scout · EPA fuel economy</p>
+                    {turn.response.researchEvidence.map((report) => (
+                      <div key={report.year + report.make + report.model} className="mt-2 space-y-2">
+                        <p className="text-xs font-bold text-slate-100">{report.year} {report.make} {report.model}</p>
+                        {report.variants.map((variant) => (
+                          <div key={variant.sourceUrl} className="rounded-lg bg-black/20 p-2 text-xs text-slate-300">
+                            <p className="font-semibold text-white">{variant.label}</p>
+                            <p className="mt-1">
+                              {variant.cityMpg === null ? "City unknown" : variant.cityMpg + " city MPG"} ·{" "}
+                              {variant.highwayMpg === null ? "Highway unknown" : variant.highwayMpg + " highway MPG"} ·{" "}
+                              {variant.combinedMpg === null ? "Combined unknown" : variant.combinedMpg + " combined MPG"}
+                            </p>
+                            <a href={variant.sourceUrl} target="_blank" rel="noopener noreferrer"
+                              className="mt-1 inline-flex text-blue-200 underline hover:text-white">View official EPA source</a>
+                          </div>
+                        ))}
+                        {report.status !== "MODEL_VARIANTS" && <p className="text-xs text-amber-200">Research source unavailable or model not found. No MPG estimated.</p>}
+                        <p className="text-[10px] leading-4 text-slate-400">{report.note}</p>
+                      </div>
+                    ))}
+                  </section>
                 )}
 
                 {turn.role === "torque" && turn.response?.matches && turn.response.matches.length > 0 && (
