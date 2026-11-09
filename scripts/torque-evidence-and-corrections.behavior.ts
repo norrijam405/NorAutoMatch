@@ -4,6 +4,7 @@ import { vehicleEvidenceForMatch } from "../src/lib/torque-vehicle-evidence";
 import { parseTorqueSalesInventorySpec } from "../src/lib/torque-sales-inventory-spec";
 import { answerTorqueInventory } from "../src/lib/torque-inventory-assistant";
 import { inventory as sampleInventory } from "../src/lib/inventory";
+import { canUseTorquePreviewVerifiedCatalog } from "../src/lib/torque-standalone-demo";
 import { chooseTorqueBattlePair } from "../src/lib/torque-battle-candidates";
 import type { Vehicle } from "../src/lib/inventory";
 import type { TorqueVehicleMatch } from "../src/lib/torque-inventory-assistant";
@@ -71,4 +72,30 @@ assert(shopperAnswer.matches.some(x => x.compromises.some(y => /leather|interior
 assert(shopperAnswer.matches.every(x => x.compromises.some(y => /fuel economy not established/i.test(y))));
 assert.match(shopperAnswer.answer, /SAMPLE|sample/);
 assert.match(shopperAnswer.answer, /midsize/i);
+// Read-only source option must never activate from a single switch. All
+// preview safety gates must be present simultaneously.
+const envKeys = ["NORAUTO_TORQUE_STANDALONE_DEMO", "NORAUTO_INVENTORY_MODE",
+  "NORAUTO_SKIP_CRM_MIGRATIONS", "NORAUTO_TORQUE_PREVIEW_VERIFIED_READ_ONLY"] as const;
+const priorEnv = envKeys.map(key => process.env[key]);
+try {
+  process.env.NORAUTO_TORQUE_STANDALONE_DEMO = "1";
+  process.env.NORAUTO_INVENTORY_MODE = "demo";
+  process.env.NORAUTO_SKIP_CRM_MIGRATIONS = "1";
+  process.env.NORAUTO_TORQUE_PREVIEW_VERIFIED_READ_ONLY = "1";
+  assert.equal(canUseTorquePreviewVerifiedCatalog(), true);
+  process.env.NORAUTO_INVENTORY_MODE = "live-enabled";
+  assert.equal(canUseTorquePreviewVerifiedCatalog(), false);
+  process.env.NORAUTO_INVENTORY_MODE = "demo";
+  process.env.NORAUTO_SKIP_CRM_MIGRATIONS = "0";
+  assert.equal(canUseTorquePreviewVerifiedCatalog(), false);
+  process.env.NORAUTO_SKIP_CRM_MIGRATIONS = "1";
+  process.env.NORAUTO_TORQUE_PREVIEW_VERIFIED_READ_ONLY = "0";
+  assert.equal(canUseTorquePreviewVerifiedCatalog(), false);
+} finally {
+  envKeys.forEach((key, index) => {
+    const previous = priorEnv[index];
+    if (previous === undefined) delete process.env[key];
+    else process.env[key] = previous;
+  });
+}
 process.stdout.write("Torque VIN evidence and customer corrections synthetic tests PASS\n");
