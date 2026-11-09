@@ -29,7 +29,7 @@ export function parseListingMpg(description: string | undefined): ListedMpgEvide
   if (!description) return null;
   // Require explicit MPG units and their city/highway descriptors, never
   // infer MPG from horsepower, odometer, or an EPA rating of another trim.
-  const tokens = description.matchAll(/\b(\d{1,3}(?:\.\d)?)\s*(?:mpg\s*)?(city|highway|hwy|combined)\s*(?:mpg)?\b|\b(city|highway|hwy|combined)\s*[:=\-]?\s*(\d{1,3}(?:\.\d)?)\s*mpg\b/gi);
+  const tokens = description.matchAll(/\b(\d{1,3}(?:\.\d)?)\s*(?:mpg\s*)?(city|highway|hwy|combined)\s*mpg\b|\b(city|highway|hwy|combined)\s*[:=\-]?\s*(\d{1,3}(?:\.\d)?)\s*mpg\b/gi);
   const found: { city?: number; highway?: number; combined?: number } = {};
   for (const item of tokens) {
     const name = (item[2] ?? item[3] ?? "").toLowerCase();
