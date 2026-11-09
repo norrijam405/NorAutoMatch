@@ -205,6 +205,10 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
   if (/\b(?:good\s+on\s+gas|gas mileage|fuel econom|better mpg|best mpg|fuel efficient)\b/i.test(text)) {
     spec.freeformNotes.push("Fuel efficiency preference stated; compare reported MPG only, do not invent figures.");
   }
+  if (/\b(?:mid[- ]?size|midsized|medium[- ]?size)\b/i.test(text) &&
+      /\b(?:suv|crossover)\b/i.test(text)) {
+    spec.freeformNotes.push("Midsize SUV requested; body-segment classification is unverified by this catalog.");
+  }
   if (/\bnew\b/i.test(text)) spec.condition = must("NEW");
   else if (/\bcpo|certified\b/i.test(text)) spec.condition = must("CPO");
   else if (/\b(?:used|pre[- ]?owned|preowned)\b/i.test(text)) spec.condition = must("USED");
