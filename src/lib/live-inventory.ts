@@ -57,7 +57,7 @@ export type LiveInventoryRecord = {
   cityMpg?: number;
   highwayMpg?: number;
   description?: string;
-  mpgEvidenceBasis?: "DEALER_STRUCTURED" | "DEALER_DESCRIPTION";
+  mpgEvidenceBasis?: "DEALER_STRUCTURED" | "DEALER_DESCRIPTION" | "DEALER_DETAIL";
   bodyType?: string;
   photos?: string[];
   features?: string[];
