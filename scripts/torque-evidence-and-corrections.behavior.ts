@@ -53,6 +53,27 @@ assert.equal(chooseTorqueBattlePair("representative-demo", [{id: car.id}, {id: s
 assert.equal(chooseTorqueBattlePair("verified-live", [{id: car.id}, {id: car.id.toLowerCase()}]), null);
 assert.equal(chooseTorqueBattlePair("verified-live", [{id: "rogue-demo"}, {id: car.id}]), null);
 assert.equal(chooseTorqueBattlePair("verified-live", [{id: car.id}]), null);
+// Video regression: a mileage threshold must not overwrite a price cap.
+const recordedQuestion = "I need a midsize SUV with less than 40,000 miles and no more than $32,000";
+const recordedSpec = parseTorqueSalesInventorySpec(recordedQuestion);
+assert.equal(recordedSpec.maxMileage?.value, 40000, "40,000 is a mileage ceiling");
+assert.equal(recordedSpec.maxPrice?.value, 32000, "$32,000 is the price ceiling");
+assert.equal(parseTorqueSalesInventorySpec("Looking for an SUV less than 40,000 miles").maxPrice, undefined);
+assert.equal(parseTorqueSalesInventorySpec("SUV under $32,000 with leather seats").maxPrice?.value, 32000);
+assert.equal(parseTorqueSalesInventorySpec("SUV less than 35,000 miles and below $31,000").maxPrice?.value, 31000);
+// The public dealer feed may describe SUVs as "Sport Utility", not "SUV".
+const sourceStyleSUV: Vehicle = { ...car, id: "1N4AL3AP0GC012345", type: "Sport Utility", mileage: 3000,
+  mileageVerified: true, price: 30533, features: [], };
+const sourceAnswer = answerTorqueInventory({
+  message: recordedQuestion, vehicles: [sourceStyleSUV],
+  mode: "verified-live", spec: recordedSpec,
+});
+assert.equal(sourceAnswer.matches.length, 1, "source-labeled SUV must remain eligible");
+assert.equal(sourceAnswer.matches[0].id, sourceStyleSUV.id);
+assert(sourceAnswer.matches[0].price <= 32000);
+assert(sourceAnswer.matches[0].mileage <= 40000);
+assert.equal(sourceAnswer.matches[0].fit, "near", "midsize must not be inferred");
+
 // Exact customer-style regression: source records must be referenced even if
 // leather, midsize category and MPG are unverified. No fake dealership VIN.
 const shopperMessage = "I want a mid-size SUV good on gas for less than $32,000 with leather seats";
