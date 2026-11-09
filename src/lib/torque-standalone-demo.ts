@@ -8,3 +8,13 @@ export function isTorqueStandaloneDemo(): boolean {
     process.env.NORAUTO_INVENTORY_MODE === "demo" &&
     process.env.NORAUTO_SKIP_CRM_MIGRATIONS === "1";
 }
+
+/**
+ * Preview-only, read-only access to Orr Nissan West's PUBLIC catalog.
+ * No CRM, Supabase, customer writes, provider secrets, or production switching.
+ * Source failures must fail closed instead of substituting sample vehicles.
+ */
+export function canUseTorquePreviewVerifiedCatalog(): boolean {
+  return isTorqueStandaloneDemo() &&
+    process.env.NORAUTO_TORQUE_PREVIEW_VERIFIED_READ_ONLY === "1";
+}
