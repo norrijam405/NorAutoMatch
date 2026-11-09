@@ -18,6 +18,7 @@ import { torqueNextQuestion } from "@/lib/torque-next-question";
 import { explainTorqueNoMatch } from "@/lib/torque-no-match";
 import { scoutEpaModel } from "@/lib/torque-epa-knowledge-scout";
 import { parseExplicitEpaComparison } from "@/lib/torque-cross-brand-query";
+import { observeTorqueDealerCatalog, type TorqueDealerScoutReceipt } from "@/lib/torque-dealer-change-scout";
 import { BATTLE_PRIORITIES, isBattlePriority, resolveBattlePriority, battleFollowupType } from "@/lib/torque-battle-followup";
 import { dealerInventorySearchAvailable, resolveDealershipScope } from "@/lib/dealership-scope";
 
@@ -95,6 +96,7 @@ export async function POST(request: Request) {
 
   let vehicles = inventory;
   let mode: TorqueInventoryMode = "representative-demo";
+  let dealerScoutReceipt: TorqueDealerScoutReceipt | null = null;
 
   if (runtimeDecision.effectiveMode === "live-enabled") {
     try {
@@ -107,6 +109,7 @@ export async function POST(request: Request) {
       }
       vehicles = catalog.vehicles;
       mode = catalog.source === "provider-cache" ? "verified-cache" : "verified-live";
+      if (previewVerified && catalog.source === "orr-live") dealerScoutReceipt = observeTorqueDealerCatalog(vehicles);
       // Temporary nonproduction source health telemetry. Only aggregate counts
       // and source type; never log queries, VINs, customer identities or keys.
       if (previewVerified) {
@@ -374,5 +377,12 @@ export async function POST(request: Request) {
     nextAction: planTorqueNextAction({ spec, result }),
     vehicleEvidence: result.matches.slice(0, 3).map((match) => vehicleEvidenceForMatch(match, vehicles, mode)).filter((item) => item !== null),
     researchEvidence,
+    dealerScoutUpdates: dealerScoutReceipt && dealerScoutReceipt.state === "CHANGES"
+      ? {
+          observedAt: dealerScoutReceipt.observedAt,
+          disclaimer: dealerScoutReceipt.disclaimer,
+          changes: dealerScoutReceipt.changes.filter(change => result.matches.some(match => match.id.toUpperCase() === change.vin)),
+        }
+      : null,
   });
 }
