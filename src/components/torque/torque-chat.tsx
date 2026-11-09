@@ -58,13 +58,16 @@ type Turn = {
   response?: TorqueResponse;
 };
 
-export function TorqueChat({ mode = "floating", initialPrompt = "" }: { mode?: "floating" | "workspace"; initialPrompt?: string }) {
+export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifiedPreview = false }: {
+  mode?: "floating" | "workspace"; initialPrompt?: string; allowVerifiedPreview?: boolean;
+}) {
   const pathname = usePathname();
   const isWorkspace = mode === "workspace";
   const [open, setOpen] = useState(mode === "workspace");
   // A URL deep link fills the composer but NEVER sends a customer message automatically.
   const [input, setInput] = useState(initialPrompt.slice(0, 1200));
   const [dealershipId, setDealershipId] = useState("orr-nissan-west");
+  const [catalogScope, setCatalogScope] = useState<"verified" | "sample">(allowVerifiedPreview ? "verified" : "sample");
   const [busy, setBusy] = useState(false);
   const [battleContext, setBattleContext] = useState<{vins: string[]; priority: string} | null>(null);
   useEffect(() => {
@@ -128,7 +131,7 @@ export function TorqueChat({ mode = "floating", initialPrompt = "" }: { mode?: "
       const response = await fetch("/api/torque/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, dealershipId, ...(battleContext ? { battle: battleContext } : { recentMessages }) }),
+        body: JSON.stringify({ message, dealershipId, ...(allowVerifiedPreview ? { catalogScope } : {}), ...(battleContext ? { battle: battleContext } : { recentMessages }) }),
       });
       const body = (await response.json().catch(() => ({}))) as TorqueResponse;
       if (body.battle?.vins?.length === 2 && typeof body.battle.priority === "string") {
@@ -218,6 +221,30 @@ export function TorqueChat({ mode = "floating", initialPrompt = "" }: { mode?: "
               ))}
             </div>
           </div>
+          {isWorkspace && allowVerifiedPreview && (
+            <section className="border-b border-white/10 bg-[#111b27] px-4 py-3">
+              <label htmlFor="torque-inventory-source" className="block text-[10px] font-black uppercase tracking-[.16em] text-amber-200">
+                Choose which catalog to search
+              </label>
+              <select id="torque-inventory-source" value={catalogScope} disabled={busy}
+                onChange={(event) => {
+                  const next = event.target.value === "verified" ? "verified" : "sample";
+                  setCatalogScope(next); setBattleContext(null);
+                  setTurns([{ role: "torque", text: next === "verified"
+                    ? "I will check the public Orr Nissan West dealer catalog, read-only. Listings may change, and missing equipment or fuel economy stays unverified."
+                    : "This is fictional demonstration inventory, not actual dealership stock." }]);
+                }}
+                className="mt-2 w-full rounded-lg border border-white/15 bg-[#0a1119] px-3 py-2 text-sm font-semibold text-white">
+                <option value="verified">Orr Nissan West public inventory (read-only)</option>
+                <option value="sample">Fictional sample inventory (demo)</option>
+              </select>
+              <p className="mt-2 text-[10px] leading-4 text-slate-400">
+                {catalogScope === "verified"
+                  ? "Reads a source-checked public dealer catalog. No stock hold or availability promise; if the source fails, results stop instead of falling back to fake listings."
+                  : "Only six sample records; these cannot establish dealership stock or VINs."}
+              </p>
+            </section>
+          )}
           {isWorkspace && currentRequirements.length > 0 && (
             <section className="border-b border-emerald-300/15 bg-emerald-300/[.035] px-4 py-3" aria-label="Your current shopping brief">
               <div className="flex flex-wrap items-center justify-between gap-2">
