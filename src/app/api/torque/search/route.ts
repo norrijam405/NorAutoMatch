@@ -105,7 +105,25 @@ export async function POST(request: Request) {
       }
       vehicles = catalog.vehicles;
       mode = catalog.source === "provider-cache" ? "verified-cache" : "verified-live";
-    } catch {
+      // Temporary nonproduction source health telemetry. Only aggregate counts
+      // and source type; never log queries, VINs, customer identities or keys.
+      if (previewVerified) {
+        const suvLikeCount = vehicles.filter(v => /\\b(?:suv|crossover|cross-over|sport\\s*utility)\\b/i.test(v.type)).length;
+        console.info("NORAUTO_TORQUE_PREVIEW_CATALOG_HEALTH", JSON.stringify({
+          source: catalog.source,
+          eligibleVehicles: vehicles.length,
+          suvLikeCount,
+          hasMileage: vehicles.filter(v => v.mileageVerified).length,
+          hasMpg: vehicles.filter(v => (v.highwayMpg ?? 0) > 0).length,
+          hasFeatureEvidence: vehicles.filter(v => (v.features?.length ?? 0) > 0).length,
+        }));
+      }
+    } catch (error) {
+      if (previewVerified) {
+        const code = error && typeof error === "object" && "code" in error &&
+          typeof error.code === "string" ? error.code : "SOURCE_CHECK_FAILED";
+        console.warn("NORAUTO_TORQUE_PREVIEW_SOURCE_FAILED", code);
+      }
       return noStore({
         protocol: "NORAUTO_TORQUE_SEARCH_V1",
         truthState: "VERIFIED_SOURCE_UNAVAILABLE",
