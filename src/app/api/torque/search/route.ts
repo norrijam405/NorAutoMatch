@@ -132,6 +132,11 @@ export async function POST(request: Request) {
   let vehicles = inventory;
   let mode: TorqueInventoryMode = "representative-demo";
   let dealerScoutReceipt: TorqueDealerScoutReceipt | null = null;
+  // Customer-visible truth receipt for read-only source coverage. Never include
+  // raw customer search, credentials, arbitrary URLs, or unverified VIN claims.
+  let detailsAttempted = 0;
+  let detailsAddedMpg = 0;
+  let detailsAddedEquipment = 0;
 
   if (runtimeDecision.effectiveMode === "live-enabled") {
     try {
@@ -348,7 +353,13 @@ export async function POST(request: Request) {
       (!spec.model || v.model.toLowerCase() === spec.model.value.toLowerCase()) &&
       (!spec.bodyType || spec.bodyType.value !== "SUV" || isSuvCandidate(v))
     ).sort((a,b) => a.price-b.price).slice(0, 6);
+    detailsAttempted = relevant.length;
     const inspected = await Promise.all(relevant.map(scoutOrrPublicVinDetails));
+    detailsAddedMpg = inspected.filter((v, i) =>
+      (v.cityMpg !== relevant[i].cityMpg || v.highwayMpg !== relevant[i].highwayMpg) &&
+      v.mpgEvidenceBasis === "DEALER_DETAIL").length;
+    detailsAddedEquipment = inspected.filter((v,i) =>
+      (v.features?.length ?? 0) > (relevant[i].features?.length ?? 0)).length;
     const byVin = new Map(inspected.map(v => [v.id, v]));
     vehicles = vehicles.map(v => byVin.get(v.id) ?? v);
   }
@@ -402,6 +413,16 @@ export async function POST(request: Request) {
     nextAction: planTorqueNextAction({ spec, result }),
     vehicleEvidence: result.matches.slice(0, 3).map((match) => vehicleEvidenceForMatch(match, vehicles, mode)).filter((item) => item !== null),
     researchEvidence,
+    scoutCoverage: previewVerified ? {
+      catalogScope: mode,
+      eligibleVehicles: vehicles.length,
+      vehiclesWithDealerMpg: vehicles.filter(v=>Number.isFinite(v.cityMpg)&&Number.isFinite(v.highwayMpg)).length,
+      detailPagesAttempted: detailsAttempted,
+      detailPagesAddedMpg: detailsAddedMpg,
+      detailPagesAddedEquipment: detailsAddedEquipment,
+      independentEpaState: researchEvidence.length ? researchEvidence[0].status : "NOT_REQUESTED",
+      note: "Coverage is for this read-only search only. An attempted page is not a verified match. EPA model ratings never certify a VIN."
+    } : null,
     dealerScoutUpdates: dealerScoutReceipt && dealerScoutReceipt.state === "CHANGES"
       ? {
           observedAt: dealerScoutReceipt.observedAt,
