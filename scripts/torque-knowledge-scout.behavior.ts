@@ -82,6 +82,7 @@ assert(suvFromStationWagon[0].reasons.some(x=>/known SUV model family/i.test(x))
 // Synthetic mocked official responses; no real network or VIN assertions.
 const originalFetch = globalThis.fetch;
 const requested: string[] = [];
+let partialEpaFailure = false;
 globalThis.fetch = (async (input: RequestInfo | URL) => {
   const url = String(input);
   requested.push(url);
@@ -91,7 +92,7 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
     {text:"4WD 4 cyl, 2.5 L, Automatic", value:"12346"},
   ]}), {status:200,headers:{"Content-Type":"application/json"}});
   if (url.endsWith("/12345")) return new Response(JSON.stringify({city08:29,highway08:35,comb08:32}),{status:200});
-  if (url.endsWith("/12346")) return new Response(JSON.stringify({city08:27,highway08:33,comb08:30}),{status:200});
+  if (url.endsWith("/12346")) { if(partialEpaFailure) throw new Error("EPA variation unavailable"); return new Response(JSON.stringify({city08:27,highway08:33,comb08:30}),{status:200}); }
   throw new Error("unexpected official URL " + url);
 }) as typeof fetch;
 async function run() {
@@ -107,6 +108,12 @@ async function run() {
     const again = await scoutEpaModel({year:2026,make:"Toyota",model:"RAV4"});
     assert.equal(again.variants.length,2);
     assert.equal(requested.length,priorCount,"cache prevents repeated EPA requests");
+    partialEpaFailure = true;
+    const partial = await scoutEpaModel({year:2025,make:"Honda",model:"CR-V"});
+    assert.equal(partial.status,"MODEL_VARIANTS","one missing EPA option must not erase a verified option");
+    assert.equal(partial.variants.length,1);
+    assert.match(partial.note,/could not be retrieved/);
+    partialEpaFailure = false;
     const invalid = await scoutEpaModel({year:2026,make:"https://evil.test",model:"RAV4"});
     assert.equal(invalid.status,"NOT_FOUND");
     assert.equal(requested.length,priorCount,"bad make cannot fetch arbitrary URLs");
