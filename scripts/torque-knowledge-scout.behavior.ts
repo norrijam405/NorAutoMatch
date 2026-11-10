@@ -4,6 +4,7 @@ import { scoutEpaModel } from "../src/lib/torque-epa-knowledge-scout";
 import { parseExplicitEpaComparison } from "../src/lib/torque-cross-brand-query";
 import { observeTorqueDealerCatalog } from "../src/lib/torque-dealer-change-scout";
 import { scoutOrrPublicVinDetails } from "../src/lib/torque-orr-vin-detail-scout";
+import { parseTorqueExplicitMpgResearch, customerAskedAboutMpg } from "../src/lib/torque-mpg-intent";
 import { isSuvCandidate } from "../src/lib/torque-suv-model-knowledge";
 import { rankVehiclesForSalesSpec } from "../src/lib/vehicle-hunt-inventory-matcher";
 import { parseTorqueSalesInventorySpec } from "../src/lib/torque-sales-inventory-spec";
@@ -35,6 +36,22 @@ assert.deepEqual(parseExplicitEpaComparison("Compare 2025 Nissan Rogue vs 2025 T
   {year:2025,make:"Toyota",model:"RAV4"},
 ]);
 assert.equal(parseExplicitEpaComparison("Does this VIN have good MPG?").length,0);
+// Customer's actual research phrasing must reach the independent EPA scout.
+assert.deepEqual(parseTorqueExplicitMpgResearch("MPG for 2025 Toyota RAV4"),{
+  year:2025,make:"Toyota",model:"RAV4",
+});
+assert.deepEqual(parseTorqueExplicitMpgResearch("fuel economy on 2025 Nissan Rogue"),{
+  year:2025,make:"Nissan",model:"Rogue",
+});
+assert.deepEqual(parseTorqueExplicitMpgResearch("gas mileage for 2025 Honda CR-V"),{
+  year:2025,make:"Honda",model:"CR-V",
+});
+assert.equal(parseTorqueExplicitMpgResearch("What is the MPG on this VIN?"),null);
+for (const prompt of ["What's the MPG?", "good on gas","fuel economy","gas mileage","miles per gallon"]) {
+  assert(customerAskedAboutMpg(prompt), "missing MPG intent for "+prompt);
+}
+assert.equal(customerAskedAboutMpg("Leather seats under $32,000"),false);
+
 // Read-only update scout compares complete snapshots, not user requests.
 const listing: Vehicle = {
   id:"1N4AL3AP0GC123456",year:2025,make:"Nissan",model:"Rogue",trim:"SV",
