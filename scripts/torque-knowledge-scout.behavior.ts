@@ -114,9 +114,10 @@ async function run() {
     assert.equal(partial.variants.length,1);
     assert.match(partial.note,/could not be retrieved/);
     partialEpaFailure = false;
+    const countBeforeInvalid = requested.length;
     const invalid = await scoutEpaModel({year:2026,make:"https://evil.test",model:"RAV4"});
     assert.equal(invalid.status,"NOT_FOUND");
-    assert.equal(requested.length,priorCount,"bad make cannot fetch arbitrary URLs");
+    assert.equal(requested.length,countBeforeInvalid,"bad make cannot fetch arbitrary URLs");
     // Realistic but synthetic Orr vehicle page. Same VIN and matching title
     // are mandatory before MPG or equipment become VIN-scoped evidence.
     globalThis.fetch = (async (input: RequestInfo | URL) => {
