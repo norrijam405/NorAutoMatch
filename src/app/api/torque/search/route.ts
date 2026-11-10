@@ -17,6 +17,7 @@ import { vehicleEvidenceForMatch } from "@/lib/torque-vehicle-evidence";
 import { torqueNextQuestion } from "@/lib/torque-next-question";
 import { explainTorqueNoMatch } from "@/lib/torque-no-match";
 import { scoutEpaModel } from "@/lib/torque-epa-knowledge-scout";
+import { parseTorqueExplicitMpgResearch, customerAskedAboutMpg } from "@/lib/torque-mpg-intent";
 import { parseExplicitEpaComparison } from "@/lib/torque-cross-brand-query";
 import { observeTorqueDealerCatalog, type TorqueDealerScoutReceipt } from "@/lib/torque-dealer-change-scout";
 import { scoutOrrPublicVinDetails } from "@/lib/torque-orr-vin-detail-scout";
@@ -97,10 +98,10 @@ export async function POST(request: Request) {
   }
 
 
-  const directResearch = message.match(/\\b(?:EPA\\s+)?(?:mpg|fuel economy|gas mileage)\\s*(?:for|of|on|:)?\\s*(20\\d{2})\\s+(Toyota|Honda|Nissan|Hyundai|Kia|Ford|Chevrolet|Mazda|Subaru|Jeep|Volkswagen|BMW|Lexus|Acura|GMC|Buick|Mitsubishi|Volvo)\\s+([a-z0-9][a-z0-9-]{1,19})\\b/i);
+  const directResearch = parseTorqueExplicitMpgResearch(message);
   if (directResearch && canUseTorquePreviewVerifiedCatalog()) {
     const epa = await scoutEpaModel({
-      year: Number(directResearch[1]), make: directResearch[2], model: directResearch[3],
+      year: directResearch.year, make: directResearch.make, model: directResearch.model,
     });
     return noStore({
       protocol: "NORAUTO_TORQUE_MODEL_RESEARCH_V1",
@@ -338,7 +339,7 @@ export async function POST(request: Request) {
   // required before any MPG or equipment values may enrich the vehicle.
   const needsDealerDetailScout = previewVerified && mode === "verified-live" &&
     (spec.interiorMaterial !== undefined || spec.features.length > 0 ||
-      /\\b(?:mpg|fuel econom|good on gas|gas mileage|fuel efficient)\\b/i.test(message));
+      customerAskedAboutMpg(message));
   if (needsDealerDetailScout) {
     const relevant = vehicles.filter(v =>
       (!spec.maxPrice || v.price <= spec.maxPrice.value) &&
@@ -364,7 +365,7 @@ export async function POST(request: Request) {
   }
   // Consult EPA only when MPG is relevant and a dealer candidate lacks BOTH
   // numeric dealer MPG values. This is model context, not a claimed VIN rating.
-  const asksMpg = /\\b(?:mpg|gas mileage|good on gas|fuel econom|fuel efficient|miles per gallon)\\b/i.test(message) ||
+  const asksMpg = customerAskedAboutMpg(message) ||
     spec.freeformNotes.some(note => note.startsWith("Fuel efficiency preference"));
   const dealerCandidatesMissingMpg = result.matches.filter(match => {
     const listing = vehicles.find(v => v.id === match.id);
