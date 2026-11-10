@@ -77,21 +77,25 @@ export async function scoutEpaModel(input: {year: number; make: string; model: s
     const options = await officialJson(
       "/vehicle/menu/options?year=" + year + "&make=" + encodeURIComponent(make) + "&model=" + encodeURIComponent(model));
     const list = itemsFrom(options.menuItem);
-    const variants: EpaModelVariant[] = [];
-    // Only inspect up to four clearly distinguished EPA configurations per
-    // request, and state when the model has more unexamined options.
-    for (const option of list.slice(0, 4)) {
-      if (!/^\d{1,8}$/.test(option.value)) continue;
+    // Query at most four EPA options concurrently instead of waiting up to
+    // four separate 4-second timeouts. Retain successful options if one
+    // unavailable EPA record fails, and never substitute data across IDs.
+    const inspected = list.slice(0,4).filter(option => /^\\d{1,8}$/.test(option.value));
+    const lookups = await Promise.allSettled(inspected.map(async option => {
       const data = await officialJson("/vehicle/" + option.value);
-      variants.push({
-        label: option.text, cityMpg: mpg(data.city08), highwayMpg: mpg(data.highway08),
+      return {
+        label: option.text,
+        cityMpg: mpg(data.city08),
+        highwayMpg: mpg(data.highway08),
         combinedMpg: mpg(data.comb08),
         sourceUrl: "https://www.fueleconomy.gov/feg/noframes/" + option.value + ".shtml",
-      });
-    }
+      } satisfies EpaModelVariant;
+    }));
+    const variants = lookups.flatMap(item => item.status === "fulfilled" ? [item.value] : []);
+    const partial = lookups.some(item => item.status === "rejected");
     report = {
       ...baseReport, status: variants.length ? "MODEL_VARIANTS" : "NOT_FOUND",
-      variants, note: note + (list.length > 4 ? " Only the first four of " + list.length + " EPA configurations were inspected." : ""),
+      variants, note: note + (list.length > 4 ? " Only the first four of " + list.length + " EPA configurations were inspected." : "") + (partial ? " Some EPA configurations could not be retrieved and were omitted." : ""),
     };
   } catch {
     report = {...baseReport, status: "UNAVAILABLE", variants: [],
