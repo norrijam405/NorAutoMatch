@@ -91,6 +91,10 @@ export default async function FindMyCarPage({
           <p className="mt-2 text-lg font-black text-amber-300">${vehicle.price.toLocaleString("en-US")}</p>
           <p className="mt-1 text-xs text-slate-400">VIN {vehicle.id}{mpg !== null ? ` · Approx. ${mpg} combined MPG from source city/highway figures` : " · MPG not verified"}</p>
           <Link href={`/vehicles/${vehicle.id}`} className="mt-4 inline-flex rounded-full bg-amber-300 px-5 py-2.5 text-sm font-black text-black">Check photos and vehicle details →</Link>
+          <Link href={/^[A-HJ-NPR-Z0-9]{17}$/i.test(vehicle.id) ? `/ask-torque?vin=${encodeURIComponent(vehicle.id)}` : "/ask-torque"}
+            className="ml-2 mt-3 inline-flex rounded-full border border-amber-300/45 px-4 py-2.5 text-sm font-bold text-amber-200">
+            Ask Torque to verify this vehicle →
+          </Link>
         </article>)}
       </div>
     </section>}
@@ -113,6 +117,10 @@ export default async function FindMyCarPage({
           <p className="mt-3 text-sm text-slate-300">{verifiedReasons.join(" · ") || "Details require confirmation"}</p>
           {preferenceCompromises.length > 0 && <p className="mt-2 text-sm text-amber-200">Differences: {preferenceCompromises.join(" · ")}</p>}
           <Link href={`/vehicles/${vehicle.id}`} className="mt-4 inline-flex rounded-full bg-amber-300 px-5 py-2.5 text-sm font-black text-black">View vehicle photos and details →</Link>
+          <Link href={/^[A-HJ-NPR-Z0-9]{17}$/i.test(vehicle.id) ? `/ask-torque?vin=${encodeURIComponent(vehicle.id)}` : "/ask-torque"}
+            className="ml-2 mt-3 inline-flex rounded-full border border-amber-300/45 px-4 py-2.5 text-sm font-bold text-amber-200">
+            Ask Torque about VIN →
+          </Link>
           <p className="mt-3 text-xs text-slate-500">A Garage save does not reserve or hold the vehicle. Cars can sell before confirmation.</p>
         </article>)}
       </div>
