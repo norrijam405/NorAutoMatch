@@ -6,6 +6,7 @@ import { Bot, ChevronDown, ExternalLink, Loader2, Send, Sparkles, X } from "luci
 import { FormEvent, useEffect, useState } from "react";
 import { LeadModal } from "@/components/matcher/lead-modal";
 import { chooseTorqueBattlePair } from "@/lib/torque-battle-candidates";
+import { buildPortableTorqueBrief } from "@/lib/torque-shopping-brief";
 
 type Match = {
   id: string;
@@ -316,6 +317,26 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
 
                 {turn.role === "torque" && turn.response?.battle && turn.response.battle.vins.length === 2 && (
                   <TorqueBattleEvidence battle={turn.response.battle} busy={busy} onQuestion={setInput} />
+                )}
+
+                {isWorkspace && turn.role === "torque" && turn.response?.nextAction && (
+                  <button type="button" disabled={busy} onClick={() => {
+                    const brief = buildPortableTorqueBrief({
+                      requirements: turn.response?.customerRequirements ?? [],
+                      matches: turn.response?.matches ?? [],
+                      mode: turn.response?.mode,
+                    });
+                    // Explicit customer action only; a brief is NOT a submitted lead.
+                    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+                      void navigator.clipboard.writeText(brief).then(
+                        () => setTurns(previous => [...previous, {role: "torque",text: "Shopping brief copied. You can choose whether to share it with a salesperson; nothing was submitted automatically."}]),
+                        () => setTurns(previous => [...previous, {role: "torque",text: "Copy was blocked by your browser. No information was submitted."}]),
+                      );
+                    }
+                  }}
+                  className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-emerald-300/25 bg-emerald-300/[.045] px-4 text-xs font-black text-emerald-200 hover:border-emerald-300/60 disabled:opacity-40">
+                    Copy my shopping brief for a salesperson (manual)
+                  </button>
                 )}
 
                 {turn.role === "torque" && turn.response?.nextAction && (
