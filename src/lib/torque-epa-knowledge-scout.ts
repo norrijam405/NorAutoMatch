@@ -80,7 +80,7 @@ export async function scoutEpaModel(input: {year: number; make: string; model: s
     // Query at most four EPA options concurrently instead of waiting up to
     // four separate 4-second timeouts. Retain successful options if one
     // unavailable EPA record fails, and never substitute data across IDs.
-    const inspected = list.slice(0,4).filter(option => /^\\d{1,8}$/.test(option.value));
+    const inspected = list.slice(0,4).filter(option => /^\d{1,8}$/.test(option.value));
     const lookups = await Promise.allSettled(inspected.map(async option => {
       const data = await officialJson("/vehicle/" + option.value);
       return {
