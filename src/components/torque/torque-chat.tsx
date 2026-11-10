@@ -31,6 +31,12 @@ type TorqueResponse = {
   handoff?: { required?: boolean; reason?: string; summary?: string };
   matchDna?: { signalCount: number; label: string } | null;
   battle?: { vins: string[]; priority: string; signals?: unknown[]; evidenceGaps?: string[]; basis?: "named-catalog-examples" | "exact-vins" };
+  scoutCoverage?: {
+    catalogScope: string; eligibleVehicles: number; vehiclesWithDealerMpg: number;
+    detailPagesAttempted: number; detailPagesAddedMpg: number;
+    detailPagesAddedEquipment: number;
+    independentEpaState: string; note: string;
+  } | null;
   dealerScoutUpdates?: {
     observedAt: string; disclaimer: string;
     changes: Array<{vin:string;kind:"PRICE_CHANGE"|"MILEAGE_CHANGE"|"STOCK_STATUS_CHANGE";before:string;after:string}>;
@@ -338,6 +344,21 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                   <div className="mt-2 rounded-xl border border-red-400/15 bg-red-400/[.04] px-3 py-2 text-[11px] text-red-100/75">
                     MatchDNA · {turn.response.matchDna.label}
                   </div>
+                )}
+
+                {turn.role === "torque" && turn.response?.scoutCoverage && (
+                  <details className="mt-3 rounded-xl border border-white/10 bg-white/[.025] p-3">
+                    <summary className="cursor-pointer text-[11px] font-black text-blue-200">What did the Knowledge Scouts actually check?</summary>
+                    <div className="mt-2 space-y-1 text-[11px] leading-5 text-slate-300">
+                      <p>Catalog: {turn.response.scoutCoverage.catalogScope} · {turn.response.scoutCoverage.eligibleVehicles} eligible records</p>
+                      <p>Catalog VIN records with city and highway MPG: {turn.response.scoutCoverage.vehiclesWithDealerMpg}</p>
+                      <p>Public VIN pages inspected: {turn.response.scoutCoverage.detailPagesAttempted}</p>
+                      <p>VIN pages that added MPG: {turn.response.scoutCoverage.detailPagesAddedMpg}</p>
+                      <p>VIN pages that added equipment: {turn.response.scoutCoverage.detailPagesAddedEquipment}</p>
+                      <p>EPA research: {turn.response.scoutCoverage.independentEpaState.replaceAll("_", " ").toLowerCase()}</p>
+                      <p className="text-slate-500">{turn.response.scoutCoverage.note}</p>
+                    </div>
+                  </details>
                 )}
 
                 {turn.role === "torque" && turn.response?.dealerScoutUpdates?.changes &&
