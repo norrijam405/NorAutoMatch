@@ -43,7 +43,7 @@ assert.equal(mwmmVehicleResearchUrl("JN8BT3BA7SW011511"),"/ask-torque?vin=JN8BT3
 assert.equal(mwmmVehicleResearchUrl("jn8bt3ba7sw011511"),"/ask-torque?vin=JN8BT3BA7SW011511");
 for (const value of [
   "not-a-vin", "john@example.com", "JN8BT3BA7SW011511&email=private@example.com",
-  "JN8BT3BA7SW011511?utm_source=some-brand", "1234567890abcdefg", null,
+  "JN8BT3BA7SW011511?utm_source=some-brand", "1234567890abcdefi", null,
 ]) {
   assert.equal(mwmmVehicleResearchUrl(value),"/ask-torque","invalid or personal data passed through");
 }
