@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Bot, Search, ShieldCheck, Video } from "lucide-react";
+import { mwmmVehicleResearchUrl } from "@/lib/mwmm-handoff";
 
 export const metadata = {
   title: "From MWMM to NorAutoMatch | Explore Your Vehicle Options",
@@ -11,7 +12,13 @@ export const metadata = {
  * An intentional handoff, not a second media-brand site or a lead capture.
  * No campaign parameters, personal data or tracking cookies are collected.
  */
-export default function MwmmHandoffPage() {
+export default async function MwmmHandoffPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ vin?: string }>;
+}) {
+  const params = await searchParams;
+  const torqueHref = mwmmVehicleResearchUrl(params.vin);
   return (
     <main className="min-h-[72vh] bg-[#070b10] text-white">
       <section className="shell mx-auto max-w-4xl py-12 sm:py-20">
@@ -24,10 +31,10 @@ export default function MwmmHandoffPage() {
           <p className="text-xs font-black uppercase tracking-[.16em] text-red-300">Saw the story? Now check the fit.</p>
           <h1 className="mt-3 max-w-3xl text-3xl font-black tracking-tight sm:text-5xl">From the video to the vehicle that fits you.</h1>
           <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300">
-            MWMM brings you the stories, demonstrations and car content. NorAutoMatch helps you research real vehicles, compare equipment, and understand the tradeoffs before deciding what to see in person.
+            MWMM brings you the stories, demonstrations and car content. NorAutoMatch helps you research real vehicles, compare equipment, and understand the tradeoffs before deciding what to see in person. If you arrived with a valid vehicle VIN, Torque will prefill your question without submitting it.
           </p>
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
-            <Link href="/ask-torque" className="flex min-h-14 items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 py-3 text-sm font-black text-black hover:bg-amber-200">
+            <Link href={torqueHref} className="flex min-h-14 items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 py-3 text-sm font-black text-black hover:bg-amber-200">
               <Bot size={19}/> Ask Torque about the vehicle <ArrowRight size={17}/>
             </Link>
             <Link href="/find-my-car" className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-white/20 px-5 py-3 text-sm font-black text-white hover:bg-white/10">
