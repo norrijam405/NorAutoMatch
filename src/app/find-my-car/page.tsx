@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { VehicleMediaSearch } from "@/components/manager/vehicle-media-search";
 import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
+import { LIVE_INVENTORY_ACTIVATION_VALUE } from "@/lib/inventory-runtime";
+import { canUseTorquePreviewVerifiedCatalog } from "@/lib/torque-standalone-demo";
 import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
 import { parseTorqueSalesInventorySpec } from "@/lib/torque-sales-inventory-spec";
 import { buildSaveTheSaleResult } from "@/lib/save-the-sale";
@@ -21,10 +23,14 @@ export default async function FindMyCarPage({
 }) {
   const params = await searchParams;
   const request = typeof params.request === "string" ? params.request.trim().slice(0, 1200) : "";
-  const runtime = resolveInventoryRuntime({
-    mode: process.env.NORAUTO_INVENTORY_MODE,
-    liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
-  });
+  // Preview-only opt-in to Orr's public read-only catalog, matching the Torque
+  // workspace. Do not change production runtime configuration or claim source
+  // availability when the upstream public catalog fails.
+  const publicPreview = canUseTorquePreviewVerifiedCatalog();
+  const inventoryConfig = publicPreview
+    ? { mode: "live-enabled", liveActivation: LIVE_INVENTORY_ACTIVATION_VALUE }
+    : { mode: process.env.NORAUTO_INVENTORY_MODE, liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION };
+  const runtime = resolveInventoryRuntime(inventoryConfig);
   let result: ReturnType<typeof buildSaveTheSaleResult> | null = null;
   let source: string | undefined;
   let fetchedAt: string | undefined;
@@ -38,8 +44,8 @@ export default async function FindMyCarPage({
     } else {
       try {
         const catalog = await loadOrrResilientCustomerCatalog({
-          mode: process.env.NORAUTO_INVENTORY_MODE,
-          liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
+          mode: inventoryConfig.mode,
+          liveActivation: inventoryConfig.liveActivation,
         });
         if (!catalog.customerVisibleLiveInventory || catalog.source === "demo") throw new Error("NOT_VERIFIED");
         if (lifestyleIntent) {
