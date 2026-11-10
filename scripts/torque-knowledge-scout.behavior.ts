@@ -6,6 +6,7 @@ import { observeTorqueDealerCatalog } from "../src/lib/torque-dealer-change-scou
 import { scoutOrrPublicVinDetails } from "../src/lib/torque-orr-vin-detail-scout";
 import { parseTorqueExplicitMpgResearch, customerAskedAboutMpg } from "../src/lib/torque-mpg-intent";
 import { mwmmVehicleResearchUrl } from "../src/lib/mwmm-handoff";
+import { buildPortableTorqueBrief } from "../src/lib/torque-shopping-brief";
 import { isSuvCandidate } from "../src/lib/torque-suv-model-knowledge";
 import { rankVehiclesForSalesSpec } from "../src/lib/vehicle-hunt-inventory-matcher";
 import { parseTorqueSalesInventorySpec } from "../src/lib/torque-sales-inventory-spec";
@@ -37,6 +38,24 @@ assert.deepEqual(parseExplicitEpaComparison("Compare 2025 Nissan Rogue vs 2025 T
   {year:2025,make:"Toyota",model:"RAV4"},
 ]);
 assert.equal(parseExplicitEpaComparison("Does this VIN have good MPG?").length,0);
+// Original sales roadmap: retain a checkable shortlist for a human without
+// silently creating a CRM record or leaking a fictional sample as real stock.
+const verifiedBrief = buildPortableTorqueBrief({
+  mode:"verified-live",
+  requirements:["SUV","up to $32,000","under 40,000 miles"],
+  matches:[{id:"JN8BT3BA7SW011511",label:"2025 Nissan Rogue",price:30500,fit:"near",
+    compromises:["Leather equipment needs VIN check"]}],
+});
+assert.match(verifiedBrief,/VIN JN8BT3BA7SW011511/);
+assert.match(verifiedBrief,/\$30,500/);
+assert.match(verifiedBrief,/Nothing was submitted|No hold, quote, appointment/);
+const demoBrief = buildPortableTorqueBrief({
+  mode:"representative-demo",requirements:["SUV"],
+  matches:[{id:"JN8BT3BA7SW011511",label:"Sample Rogue",price:30500,fit:"near",compromises:[]}],
+});
+assert.doesNotMatch(demoBrief,/VIN JN8BT3BA7SW011511/);
+assert.match(demoBrief,/No verified VIN shortlisted/);
+
 // Content creator -> sales research handoff accepts only 17-char VINs.
 // It must not forward marketing strings, free-text, or customer information.
 assert.equal(mwmmVehicleResearchUrl("JN8BT3BA7SW011511"),"/ask-torque?vin=JN8BT3BA7SW011511");
