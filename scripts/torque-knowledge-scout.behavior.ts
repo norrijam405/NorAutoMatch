@@ -5,6 +5,7 @@ import { parseExplicitEpaComparison } from "../src/lib/torque-cross-brand-query"
 import { observeTorqueDealerCatalog } from "../src/lib/torque-dealer-change-scout";
 import { scoutOrrPublicVinDetails } from "../src/lib/torque-orr-vin-detail-scout";
 import { parseTorqueExplicitMpgResearch, customerAskedAboutMpg } from "../src/lib/torque-mpg-intent";
+import { mwmmVehicleResearchUrl } from "../src/lib/mwmm-handoff";
 import { isSuvCandidate } from "../src/lib/torque-suv-model-knowledge";
 import { rankVehiclesForSalesSpec } from "../src/lib/vehicle-hunt-inventory-matcher";
 import { parseTorqueSalesInventorySpec } from "../src/lib/torque-sales-inventory-spec";
@@ -36,6 +37,16 @@ assert.deepEqual(parseExplicitEpaComparison("Compare 2025 Nissan Rogue vs 2025 T
   {year:2025,make:"Toyota",model:"RAV4"},
 ]);
 assert.equal(parseExplicitEpaComparison("Does this VIN have good MPG?").length,0);
+// Content creator -> sales research handoff accepts only 17-char VINs.
+// It must not forward marketing strings, free-text, or customer information.
+assert.equal(mwmmVehicleResearchUrl("JN8BT3BA7SW011511"),"/ask-torque?vin=JN8BT3BA7SW011511");
+assert.equal(mwmmVehicleResearchUrl("jn8bt3ba7sw011511"),"/ask-torque?vin=JN8BT3BA7SW011511");
+for (const value of [
+  "not-a-vin", "john@example.com", "JN8BT3BA7SW011511&email=private@example.com",
+  "JN8BT3BA7SW011511?utm_source=some-brand", "1234567890abcdefg", null,
+]) {
+  assert.equal(mwmmVehicleResearchUrl(value),"/ask-torque","invalid or personal data passed through");
+}
 // Customer's actual research phrasing must reach the independent EPA scout.
 assert.deepEqual(parseTorqueExplicitMpgResearch("MPG for 2025 Toyota RAV4"),{
   year:2025,make:"Toyota",model:"RAV4",
