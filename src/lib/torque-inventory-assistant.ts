@@ -90,6 +90,7 @@ export function answerTorqueInventory(input: {
   const sizeRequested = input.requestedSuvSize !== undefined
     ? input.requestedSuvSize !== null
     : Boolean(input.spec?.freeformNotes.some(note => note.startsWith("Midsize SUV requested")));
+  const sizeLabel = input.requestedSuvSize === "FULL_SIZE" ? "full-size" : "midsize";
   const evaluated = (input.spec
     ? rankVehiclesForSalesSpec({ requirements: input.spec, vehicles: input.vehicles, limit: 2_000, strictMustHaves: true }).map(toMatch)
     : input.vehicles.map((vehicle) => evaluateVehicle(vehicle, request)))
@@ -218,7 +219,7 @@ export function answerTorqueInventory(input: {
 
   if (leading) answer += matchExplanation;
   if (sizeRequested) {
-    answer += " Your requested SUV size is retained. Recognized model families can narrow the shortlist, but the dealer listing alone does not certify the exact VIN's dimensions or equipment.";
+    answer += " Your " + sizeLabel + " SUV requirement is retained. Recognized model families can narrow the shortlist, but the dealer listing alone does not certify the exact VIN's dimensions or equipment.";
   }
 
   if (input.dna && input.dna.signalCount > 0) {
