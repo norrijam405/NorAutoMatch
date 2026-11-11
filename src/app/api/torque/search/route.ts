@@ -22,6 +22,7 @@ import { parseExplicitEpaComparison } from "@/lib/torque-cross-brand-query";
 import { observeTorqueDealerCatalog, type TorqueDealerScoutReceipt } from "@/lib/torque-dealer-change-scout";
 import { scoutOrrPublicVinDetails } from "@/lib/torque-orr-vin-detail-scout";
 import { isSuvCandidate } from "@/lib/torque-suv-model-knowledge";
+import { conversationalRequestedSuvSize, filterSuvSizeModelCandidates } from "@/lib/torque-suv-size-screen";
 import { BATTLE_PRIORITIES, isBattlePriority, resolveBattlePriority, battleFollowupType } from "@/lib/torque-battle-followup";
 import { dealerInventorySearchAvailable, resolveDealershipScope } from "@/lib/dealership-scope";
 
@@ -250,6 +251,13 @@ export async function POST(request: Request) {
       ? bodyRead.value.recentMessages : []
   );
   const spec = combinedCustomerSpec(recentMessages, message);
+  // The customer can refine size later without losing a prior explicit size
+  // or accidentally carrying it into a new/compact-SUV search.
+  const requestedSize = conversationalRequestedSuvSize(recentMessages, message);
+  const sizeScreen = requestedSize && mode !== "representative-demo"
+    ? filterSuvSizeModelCandidates(vehicles, requestedSize)
+    : null;
+  if (sizeScreen) vehicles = sizeScreen.candidates;
   // The research scout is intentionally independent of dealership inventory:
   // a Honda, Toyota, or other make is a model comparison, NOT an Orr stock claim.
   // Only an explicit year/make/model research question triggers this endpoint.
@@ -363,7 +371,11 @@ export async function POST(request: Request) {
     const byVin = new Map(inspected.map(v => [v.id, v]));
     vehicles = vehicles.map(v => byVin.get(v.id) ?? v);
   }
-  const result = answerTorqueInventory({ message, vehicles, mode, dna, spec });
+  const result = answerTorqueInventory({ message, vehicles, mode, dna, spec, requestedSuvSize: requestedSize });
+  if (sizeScreen) {
+    const sizeNote = `I only considered known ${requestedSize === "MIDSIZE" ? "midsize" : "full-size"} SUV model families: ${sizeScreen.smallerExcluded} different-size records and ${sizeScreen.unknownExcluded} unclassified records were not offered as matches. Model-family size is guidance, not verified dimensions on the exact VIN. `;
+    result.answer = sizeNote + result.answer;
+  }
   if (recentMessages.length > 0) {
     const focusedAnswer = scopedTorqueFollowup(message, result.matches, vehicles, mode);
     // Follow-up facts supplement, never overwrite, the fit assessment. In particular,
@@ -394,7 +406,8 @@ export async function POST(request: Request) {
     result.answer = `I heard your requirement for ${spec.seatingCapacity.value} seats. The current vehicle records do not carry enough verified seating-capacity evidence for me to certify a match. I won't recommend a vehicle as meeting that requirement without proof. A salesperson should verify the exact VIN and seating configuration.`;
   }
   if (result.matches.length === 0 && !spec.seatingCapacity) {
-    result.answer = explainTorqueNoMatch(spec, mode);
+    result.answer = (sizeScreen ? `No confirmed ${requestedSize === "MIDSIZE" ? "midsize" : "full-size"} SUV match from recognized model families. ` : "") +
+      explainTorqueNoMatch(spec, mode);
   }
   if (result.exactCount === 0 && result.nearCount === 0 && customerRequirements.length > 0) {
     result.answer += " Your stated requirements I kept: " + customerRequirements.join(", ") + ".";
