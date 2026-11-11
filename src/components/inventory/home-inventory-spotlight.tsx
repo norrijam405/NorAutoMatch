@@ -1,21 +1,24 @@
 import Link from "next/link";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { HomeHeroSwipe } from "@/components/inventory/home-hero-swipe";
-import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
+import { resolveInventoryRuntime, LIVE_INVENTORY_ACTIVATION_VALUE } from "@/lib/inventory-runtime";
+import { canUseTorquePreviewVerifiedCatalog } from "@/lib/torque-standalone-demo";
 import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
 
 export async function HomeInventorySpotlight() {
-  const runtime = resolveInventoryRuntime({
-    mode: process.env.NORAUTO_INVENTORY_MODE,
-    liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
-  });
+  // Free, isolated public-catalog preview only. Production stays gated.
+  const preview = canUseTorquePreviewVerifiedCatalog();
+  const sourceConfig = preview
+    ? { mode: "live-enabled", liveActivation: LIVE_INVENTORY_ACTIVATION_VALUE }
+    : { mode: process.env.NORAUTO_INVENTORY_MODE, liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION };
+  const runtime = resolveInventoryRuntime(sourceConfig);
 
   if (runtime.effectiveMode !== "live-enabled") return <InventoryUnavailable />;
 
   try {
     const catalog = await loadOrrResilientCustomerCatalog({
-      mode: process.env.NORAUTO_INVENTORY_MODE,
-      liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
+      mode: sourceConfig.mode,
+      liveActivation: sourceConfig.liveActivation,
     });
 
     if (!catalog.customerVisibleLiveInventory || catalog.source === "demo" || catalog.vehicles.length === 0) {
@@ -32,11 +35,11 @@ export async function HomeInventorySpotlight() {
               <ShieldCheck size={15} /> {sourceLabel}
             </p>
             <h2 className="mt-4 text-4xl font-black tracking-[-.055em] text-white sm:text-6xl">
-              SWIPE YOUR WAY <span className="text-red-500">TO THE ONE.</span>
+              MEET THE CARS. <span className="text-red-500">KEEP YOUR FAVORITES.</span>
             </h2>
             <p className="mt-4 text-sm leading-6 text-slate-400 sm:text-base">
-              Keep what you love. Pass on what you don't. Hit Mix for something different.
-              Open any car's details before deciding.
+              Browse checked dealer listings. Keep what catches your eye and inspect full details.
+              Sign-in may be required to save across devices.
             </p>
           </div>
           <div className="mt-9 flex justify-center">
@@ -47,8 +50,8 @@ export async function HomeInventorySpotlight() {
             />
           </div>
           <div className="mt-7 flex justify-center">
-            <Link href="/inventory" className="inline-flex min-h-12 items-center gap-2 rounded-full border border-white/20 px-6 text-sm font-bold text-white hover:border-amber-300/50">
-              Prefer to browse? View all inventory <ArrowRight size={16} />
+            <Link href="/find-my-car" className="inline-flex min-h-12 items-center gap-2 rounded-full border border-white/20 px-6 text-sm font-bold text-white hover:border-amber-300/50">
+              Want more control? Search with filters <ArrowRight size={16} />
             </Link>
           </div>
         </div>
@@ -67,9 +70,9 @@ function InventoryUnavailable() {
         <p className="text-xs font-black uppercase tracking-[.2em] text-red-400">SwipeMatch</p>
         <h2 className="mt-3 text-3xl font-black text-white">Fresh cars are being verified.</h2>
         <p className="mt-3 text-sm text-slate-400">
-          SwipeMatch will return when verified inventory is available. We won't show made-up cars.
+          The deck uses source-checked dealer records only. We won't display fictional stock if the source is unavailable.
         </p>
-        <Link href="/inventory" className="mt-5 inline-flex min-h-12 items-center gap-2 rounded-full border border-white/20 px-5 text-sm font-bold text-white">
+        <Link href="/find-my-car" className="mt-5 inline-flex min-h-12 items-center gap-2 rounded-full border border-white/20 px-5 text-sm font-bold text-white">
           Check inventory <ArrowRight size={16} />
         </Link>
       </div>
