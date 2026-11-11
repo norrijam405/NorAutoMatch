@@ -55,3 +55,27 @@ export function filterSuvSizeModelCandidates(
   });
   return {candidates,smallerExcluded,unknownExcluded};
 }
+
+/**
+ * Resolve a customer-requested SUV size across a bounded in-session conversation.
+ * The latest explicit request wins. Explicit small/compact withdrawals and
+ * "start over" clear prior size without silently resurrecting an old constraint.
+ */
+export function conversationalRequestedSuvSize(history: string[], latest: string): RequestedSuvSize | null {
+  let result: RequestedSuvSize | null = null;
+  for (const message of [...history.slice(-10), latest]) {
+    if (/\b(?:start over|new search|forget (?:all|everything)|reset my search)\b/i.test(message)) {
+      result = null;
+    }
+    const explicit = requestedSuvSize(message);
+    if (explicit) {
+      result = explicit;
+    } else if (/\b(?:compact|small|subcompact)[- ]?(?:suv|crossover)\b/i.test(message) &&
+      /\b(?:instead|actually|now|change|want|need|looking for)\b/i.test(message)) {
+      result = null;
+    } else if (/\b(?:no longer|don'?t|do not)\s+(?:need|want|require)\s+(?:a\s+)?(?:mid[- ]?size(?:d)?|full[- ]?size(?:d)?)\b/i.test(message)) {
+      result = null;
+    }
+  }
+  return result;
+}
