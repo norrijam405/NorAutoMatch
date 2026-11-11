@@ -14,6 +14,7 @@ import { combinedCustomerSpec, readRecentCustomerMessages, customerSpecSummary }
 import { scopedTorqueFollowup } from "@/lib/torque-followup-answer";
 import { planTorqueNextAction } from "@/lib/torque-conversation-action-plan";
 import { vehicleEvidenceForMatch } from "@/lib/torque-vehicle-evidence";
+import { buildTorqueChoiceGuide } from "@/lib/torque-choice-explainer";
 import { torqueNextQuestion } from "@/lib/torque-next-question";
 import { explainTorqueNoMatch } from "@/lib/torque-no-match";
 import { scoutEpaModel } from "@/lib/torque-epa-knowledge-scout";
@@ -424,6 +425,7 @@ export async function POST(request: Request) {
     dealershipLabel: dealership.label,
     matchDna: dna ?? null,
     nextAction: planTorqueNextAction({ spec, result }),
+    choiceGuide: buildTorqueChoiceGuide({ matches: result.matches, vehicles, mode }),
     vehicleEvidence: result.matches.slice(0, 3).map((match) => vehicleEvidenceForMatch(match, vehicles, mode)).filter((item) => item !== null),
     researchEvidence,
     scoutCoverage: previewVerified ? {
