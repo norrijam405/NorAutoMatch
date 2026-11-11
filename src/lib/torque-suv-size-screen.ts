@@ -67,14 +67,15 @@ export function conversationalRequestedSuvSize(history: string[], latest: string
     if (/\b(?:start over|new search|forget (?:all|everything)|reset my search)\b/i.test(message)) {
       result = null;
     }
-    const explicit = requestedSuvSize(message);
-    if (explicit) {
-      result = explicit;
+    // Check negation BEFORE recognizing the same size word as a new request.
+    if (/\b(?:no longer|don'?t|do not)\s+(?:need|want|require)\s+(?:a\s+)?(?:mid[- ]?size(?:d)?|full[- ]?size(?:d)?)\b/i.test(message)) {
+      result = null;
     } else if (/\b(?:compact|small|subcompact)[- ]?(?:suv|crossover)\b/i.test(message) &&
       /\b(?:instead|actually|now|change|want|need|looking for)\b/i.test(message)) {
       result = null;
-    } else if (/\b(?:no longer|don'?t|do not)\s+(?:need|want|require)\s+(?:a\s+)?(?:mid[- ]?size(?:d)?|full[- ]?size(?:d)?)\b/i.test(message)) {
-      result = null;
+    } else {
+      const explicit = requestedSuvSize(message);
+      if (explicit) result = explicit;
     }
   }
   return result;
