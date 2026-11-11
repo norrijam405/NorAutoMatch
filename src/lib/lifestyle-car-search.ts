@@ -49,7 +49,7 @@ export function shouldUseStrictVehicleSearch(query: string): boolean {
     spec.engine || spec.transmission || spec.features.length ||
     spec.packages.length || spec.exclusions.length ||
     spec.towingMinimumLbs || spec.payloadMinimumLbs ||
-    /\\b(?:mid[- ]?size(?:d)?|full[- ]?size(?:d)?|subcompact|leather(?:ette)?|under\\s+\\d+\\s*miles?)\\b/i.test(query)
+    /\b(?:mid[- ]?size(?:d)?|full[- ]?size(?:d)?|subcompact|leather(?:ette)?|under\s+\d+\s*miles?)\b/i.test(query)
   );
 }
 
