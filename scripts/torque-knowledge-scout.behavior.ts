@@ -72,6 +72,7 @@ const recordedSearch = "Search for a midsize SUV, good on gas, under $28,000, wi
 assert(interpretLifestyleSearch(recordedSearch)?.economy, "regression first reaches lifestyle detector");
 assert(shouldUseStrictVehicleSearch(recordedSearch), "specific constraints must use the strict match engine");
 assert.equal(parseTorqueSalesInventorySpec(recordedSearch).maxPrice?.value,28000);
+assert.equal(parseTorqueSalesInventorySpec(recordedSearch).maxMileage?.value,35000);
 assert.equal(parseTorqueSalesInventorySpec(recordedSearch).features.some(f=>f.value==="leather seating"),true);
 assert.equal(shouldUseStrictVehicleSearch("Looking for an affordable SUV that is good on gas"),false);
 assert.equal(shouldUseStrictVehicleSearch("SUV with AWD and leather seats"),true);
