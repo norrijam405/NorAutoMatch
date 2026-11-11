@@ -163,7 +163,7 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
     spec.maxPrice = must(Math.min(...priceCeilings.map(item => item.value)));
   }
 
-  const maxMileage = text.match(/(?:under|below|max(?:imum)?|less than)\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?)\s*(k|thousand)?\s*(?:miles?|mi)\b/i);
+  const maxMileage = text.match(/(?:under|below|max(?:imum)?|less than|fewer than|no more than|not more than)\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?)\s*(k|thousand)?\s*(?:miles?|mi)\b/i);
   if (maxMileage) {
     const raw = Number(maxMileage[1].replace(/,/g, ""));
     if (Number.isFinite(raw) && raw >= 0) {
