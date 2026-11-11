@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { VehicleMediaSearch } from "@/components/manager/vehicle-media-search";
+import { ShopJourneyNav } from "@/components/site/shop-journey-nav";
 import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
 import { LIVE_INVENTORY_ACTIVATION_VALUE } from "@/lib/inventory-runtime";
 import { canUseTorquePreviewVerifiedCatalog } from "@/lib/torque-standalone-demo";
@@ -73,7 +74,8 @@ export default async function FindMyCarPage({
 
   return <main className="min-h-screen bg-[#070b10] py-10 text-white"><div className="shell max-w-5xl">
     <Link href="/" className="text-sm font-bold text-amber-300">← NorAutoMatch Home</Link>
-    <p className="mt-8 text-xs font-black uppercase tracking-widest text-emerald-300">No account required</p>
+    <div className="mt-8"><ShopJourneyNav current="find" /></div>
+    <p className="mt-8 text-xs font-black uppercase tracking-widest text-emerald-300">START HERE · NO ACCOUNT REQUIRED</p>
     <h1 className="mt-3 text-5xl font-black tracking-tight">FIND YOUR CAR</h1>
     <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">
       Describe the car you want, then explore real inventory when our dealer feed is verified. Search freely without joining or signing in.
