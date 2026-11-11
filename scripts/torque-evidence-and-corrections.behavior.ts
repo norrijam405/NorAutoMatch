@@ -3,6 +3,8 @@ import { combinedCustomerSpec, customerSpecSummary } from "../src/lib/torque-con
 import { vehicleEvidenceForMatch } from "../src/lib/torque-vehicle-evidence";
 import { parseTorqueSalesInventorySpec } from "../src/lib/torque-sales-inventory-spec";
 import { answerTorqueInventory } from "../src/lib/torque-inventory-assistant";
+import { rankVehiclesForSalesSpec } from "../src/lib/vehicle-hunt-inventory-matcher";
+import { buildTorqueChoiceGuide } from "../src/lib/torque-choice-explainer";
 import { inventory as sampleInventory } from "../src/lib/inventory";
 import { canUseTorquePreviewVerifiedCatalog } from "../src/lib/torque-standalone-demo";
 import { chooseTorqueBattlePair } from "../src/lib/torque-battle-candidates";
@@ -53,6 +55,72 @@ assert.equal(chooseTorqueBattlePair("representative-demo", [{id: car.id}, {id: s
 assert.equal(chooseTorqueBattlePair("verified-live", [{id: car.id}, {id: car.id.toLowerCase()}]), null);
 assert.equal(chooseTorqueBattlePair("verified-live", [{id: "rogue-demo"}, {id: car.id}]), null);
 assert.equal(chooseTorqueBattlePair("verified-live", [{id: car.id}]), null);
+// Equipment truth: a trim name, ambiguous leatherette, or freeform text
+// never certifies genuine leather seats or any fitted equipment.
+const leatherNeed = parseTorqueSalesInventorySpec("Used SUV under $30,000 with leather seats");
+const fakeLeatherTrim: Vehicle = {
+  ...car, id: "1N4AL3AP0GC567890", trim: "Leather Edition",
+  mileage: 5000, mileageVerified: true, price: 24900, features: ["heated seats"],
+};
+const syntheticLeather: Vehicle = {
+  ...car, id: "1N4AL3AP0GC456789", trim: "SL",
+  mileage: 5000, mileageVerified: true, price: 25900, features: ["leatherette seats"],
+};
+const dealerListedLeather: Vehicle = {
+  ...car, id: "1N4AL3AP0GC345678", trim: "SV",
+  mileage: 4500, mileageVerified: true, price: 26900,
+  features: ["genuine leather seating", "heated seats", "panoramic roof"],
+};
+const strictLeather = rankVehiclesForSalesSpec({
+  requirements: leatherNeed, vehicles: [fakeLeatherTrim, syntheticLeather, dealerListedLeather],
+  strictMustHaves: true,
+});
+assert.deepEqual(strictLeather.map(x => x.vehicle.id), [dealerListedLeather.id],
+  "trim and synthetic leather must not satisfy genuine leather seating");
+const nearLeather = rankVehiclesForSalesSpec({
+  requirements: leatherNeed, vehicles: [fakeLeatherTrim, syntheticLeather],
+  strictMustHaves: false,
+});
+assert(nearLeather.every(x => x.hardMisses > 0));
+assert(nearLeather.every(x => x.compromises.some(y => /VIN-listed equipment evidence/.test(y))));
+const firstMatch: TorqueVehicleMatch = {
+  ...match, id: dealerListedLeather.id, label: "2025 Nissan Rogue SV",
+  price: dealerListedLeather.price, mileage: dealerListedLeather.mileage,
+  mileageVerified: true,
+  reasons: ["dealer-listed interior material: Leather"], compromises: [],
+};
+const secondMatch: TorqueVehicleMatch = {
+  ...match, id: fakeLeatherTrim.id, label: "2025 Nissan Rogue Leather Edition",
+  price: fakeLeatherTrim.price, mileage: fakeLeatherTrim.mileage,
+  mileageVerified: true,
+  reasons: ["price within limit"], compromises: ["leather unverified"],
+};
+const choices = buildTorqueChoiceGuide({
+  matches: [firstMatch, secondMatch],
+  vehicles: [dealerListedLeather, fakeLeatherTrim],
+  mode: "verified-live",
+});
+assert(choices);
+assert.equal(choices.vehicles.length, 2);
+assert(choices.comparisons.some(line => /lower listed price/.test(line)));
+assert(choices.comparisons.some(line => /fewer source-reported miles/.test(line)));
+assert(choices.comparisons.some(line => /MPG pair is unavailable/.test(line)));
+assert(choices.vehicles[1].gaps.some(x => /leather unverified/.test(x)));
+assert.equal(buildTorqueChoiceGuide({
+  matches: [firstMatch, secondMatch], vehicles: [dealerListedLeather, fakeLeatherTrim],
+  mode: "representative-demo",
+}), null);
+assert.equal(buildTorqueChoiceGuide({
+  matches: [firstMatch, secondMatch], vehicles: [dealerListedLeather],
+  mode: "verified-live",
+}), null);
+const unverifiedMileageChoice = buildTorqueChoiceGuide({
+  matches: [firstMatch, {...secondMatch, mileageVerified:false}],
+  vehicles: [dealerListedLeather, {...fakeLeatherTrim, mileageVerified:false}],
+  mode: "verified-live",
+});
+assert(unverifiedMileageChoice?.comparisons.some(line=>/mileage comparison is not available/.test(line)));
+
 // Video regression: a mileage threshold must not overwrite a price cap.
 const recordedQuestion = "I need a midsize SUV with less than 40,000 miles and no more than $32,000";
 const recordedSpec = parseTorqueSalesInventorySpec(recordedQuestion);
