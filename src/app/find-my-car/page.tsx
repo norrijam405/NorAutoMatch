@@ -7,7 +7,7 @@ import { canUseTorquePreviewVerifiedCatalog } from "@/lib/torque-standalone-demo
 import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
 import { parseTorqueSalesInventorySpec } from "@/lib/torque-sales-inventory-spec";
 import { buildSaveTheSaleResult } from "@/lib/save-the-sale";
-import { interpretLifestyleSearch, lifestyleCandidates } from "@/lib/lifestyle-car-search";
+import { interpretLifestyleSearch, lifestyleCandidates, shouldUseStrictVehicleSearch } from "@/lib/lifestyle-car-search";
 import type { Vehicle } from "@/lib/inventory";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +37,8 @@ export default async function FindMyCarPage({
   let reason: string | undefined;
   let lifestyleResults: Array<{ vehicle: Vehicle; compact: boolean; mpg: number | null; score: number }> | null = null;
   const lifestyleIntent = interpretLifestyleSearch(request);
+  const strictIntent = shouldUseStrictVehicleSearch(request);
+  const sizeUnverified = /\b(?:mid[- ]?size(?:d)?|full[- ]?size(?:d)?)\b/i.test(request);
 
   if (request.length >= 4) {
     if (runtime.effectiveMode !== "live-enabled") {
@@ -48,7 +50,7 @@ export default async function FindMyCarPage({
           liveActivation: inventoryConfig.liveActivation,
         });
         if (!catalog.customerVisibleLiveInventory || catalog.source === "demo") throw new Error("NOT_VERIFIED");
-        if (lifestyleIntent) {
+        if (lifestyleIntent && !strictIntent) {
           lifestyleResults = lifestyleCandidates(catalog.vehicles, lifestyleIntent);
         } else {
           result = buildSaveTheSaleResult({
@@ -100,15 +102,16 @@ export default async function FindMyCarPage({
     </section>}
     {result && <section className="mt-8">
       <div className="rounded-2xl border border-white/15 bg-white/5 p-5">
-        <h2 className="text-2xl font-black">{result.localOptions.length ? "Matching local vehicles" : "No confirmed local match yet"}</h2>
-        <p className="mt-2 text-sm text-slate-300">{result.eligibleVehicleCount} vehicles checked · {result.exactCount} exact matches · {result.strongCount} close matches</p>
+        <h2 className="text-2xl font-black">{sizeUnverified ? "Candidates requiring SUV size verification" : result.localOptions.length ? "Matching local vehicles" : "No confirmed local match yet"}</h2>
+        <p className="mt-2 text-sm text-slate-300">{result.eligibleVehicleCount} vehicles checked · {sizeUnverified ? "SUV size classification not source-confirmed" : `${result.exactCount} exact matches · ${result.strongCount} close matches`}</p>
         <p className="mt-2 text-xs text-slate-400">Source: {source} · Checked: {fetchedAt ?? "time unavailable"}. Availability and final price require dealer confirmation.</p>
+        {sizeUnverified && <p className="mt-3 text-sm text-amber-200">The catalog does not verify whether a particular SUV meets your requested size class. No vehicle here is claimed to be a confirmed midsize/full-size fit; ask the salesperson to verify dimensions and trim.</p>}
         {!result.localOptions.length && <p className="mt-3 text-sm text-amber-200">We don't have a verified match for that request. Try changing a preference or contact the dealership for a wider search.</p>}
       </div>
       <div className="mt-5 grid gap-4">
         {result.localOptions.map(({vehicle,fit,verifiedReasons,preferenceCompromises}) => <article key={vehicle.id} className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div><p className="text-xs font-black uppercase text-emerald-300">{fit === "EXACT" ? "Meets stated requirements" : "Close fit"}</p>
+            <div><p className="text-xs font-black uppercase text-emerald-300">{sizeUnverified ? "Size class requires confirmation" : fit === "EXACT" ? "Meets stated requirements" : "Close fit"}</p>
               <h3 className="mt-2 text-xl font-black">{vehicle.year} {vehicle.make} {vehicle.model} {vehicle.trim}</h3>
               <p className="mt-1 text-xs text-slate-400">VIN {vehicle.id} · Stock {vehicle.stockNumber ?? "not supplied"}</p>
             </div>
