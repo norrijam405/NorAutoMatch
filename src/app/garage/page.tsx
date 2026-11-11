@@ -5,6 +5,7 @@ import { buildMatchDnaSummary } from "@/lib/match-dna";
 import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
 import type { Vehicle } from "@/lib/inventory";
 import { SavedGarageBattle } from "@/components/garage/saved-garage-battle";
+import { ShopJourneyNav } from "@/components/site/shop-journey-nav";
 import { garageFitNote } from "@/lib/garage-fit-note";
 import type { Json } from "@/lib/supabase/database.types";
 
@@ -47,6 +48,7 @@ export default async function GaragePage() {
   return (
     <section className="min-h-[72vh] border-b border-white/5 bg-slate-950/35 py-12 sm:py-16">
       <div className="shell">
+        <div className="mb-8"><ShopJourneyNav current="garage" /></div>
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="eyebrow">Protected garage</p>
