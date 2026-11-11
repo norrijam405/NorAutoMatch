@@ -59,15 +59,15 @@ assert.equal(chooseTorqueBattlePair("verified-live", [{id: car.id}]), null);
 // never certifies genuine leather seats or any fitted equipment.
 const leatherNeed = parseTorqueSalesInventorySpec("Used SUV under $30,000 with leather seats");
 const fakeLeatherTrim: Vehicle = {
-  ...car, id: "1N4AL3AP0GC567890", trim: "Leather Edition",
+  ...car, id: "1N4AL3AP0GC567890", trim: "Leather Edition", condition: "USED",
   mileage: 5000, mileageVerified: true, price: 24900, features: ["heated seats"],
 };
 const syntheticLeather: Vehicle = {
-  ...car, id: "1N4AL3AP0GC456789", trim: "SL",
+  ...car, id: "1N4AL3AP0GC456789", trim: "SL", condition: "USED",
   mileage: 5000, mileageVerified: true, price: 25900, features: ["leatherette seats"],
 };
 const dealerListedLeather: Vehicle = {
-  ...car, id: "1N4AL3AP0GC345678", trim: "SV",
+  ...car, id: "1N4AL3AP0GC345678", trim: "SV", condition: "USED",
   mileage: 4500, mileageVerified: true, price: 26900,
   features: ["genuine leather seating", "heated seats", "panoramic roof"],
 };
