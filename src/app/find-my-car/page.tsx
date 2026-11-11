@@ -8,6 +8,7 @@ import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-ca
 import { parseTorqueSalesInventorySpec } from "@/lib/torque-sales-inventory-spec";
 import { buildSaveTheSaleResult } from "@/lib/save-the-sale";
 import { interpretLifestyleSearch, lifestyleCandidates, shouldUseStrictVehicleSearch } from "@/lib/lifestyle-car-search";
+import { requestedSuvSize, filterSuvSizeModelCandidates } from "@/lib/torque-suv-size-screen";
 import type { Vehicle } from "@/lib/inventory";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +39,9 @@ export default async function FindMyCarPage({
   let lifestyleResults: Array<{ vehicle: Vehicle; compact: boolean; mpg: number | null; score: number }> | null = null;
   const lifestyleIntent = interpretLifestyleSearch(request);
   const strictIntent = shouldUseStrictVehicleSearch(request);
-  const sizeUnverified = /\b(?:mid[- ]?size(?:d)?|full[- ]?size(?:d)?)\b/i.test(request);
+  const requestedSize = requestedSuvSize(request);
+  const sizeUnverified = requestedSize !== null;
+  let sizeScreen: { smallerExcluded:number; unknownExcluded:number; candidates:Vehicle[] } | null = null;
 
   if (request.length >= 4) {
     if (runtime.effectiveMode !== "live-enabled") {
@@ -53,9 +56,11 @@ export default async function FindMyCarPage({
         if (lifestyleIntent && !strictIntent) {
           lifestyleResults = lifestyleCandidates(catalog.vehicles, lifestyleIntent);
         } else {
+          // Model-family screen is advisory, not VIN dimensional evidence.
+          sizeScreen = requestedSize ? filterSuvSizeModelCandidates(catalog.vehicles, requestedSize) : null;
           result = buildSaveTheSaleResult({
             requirements: parseTorqueSalesInventorySpec(request),
-            vehicles: catalog.vehicles,
+            vehicles: sizeScreen ? sizeScreen.candidates : catalog.vehicles,
           });
         }
         source = catalog.source === "provider-cache" ? "verified inventory cache" : "verified dealer feed";
@@ -102,10 +107,14 @@ export default async function FindMyCarPage({
     </section>}
     {result && <section className="mt-8">
       <div className="rounded-2xl border border-white/15 bg-white/5 p-5">
-        <h2 className="text-2xl font-black">{sizeUnverified ? "Candidates requiring SUV size verification" : result.localOptions.length ? "Matching local vehicles" : "No confirmed local match yet"}</h2>
+        <h2 className="text-2xl font-black">{sizeUnverified ? "Requested-size SUV model candidates" : result.localOptions.length ? "Matching local vehicles" : "No confirmed local match yet"}</h2>
         <p className="mt-2 text-sm text-slate-300">{result.eligibleVehicleCount} vehicles checked · {sizeUnverified ? "SUV size classification not source-confirmed" : `${result.exactCount} exact matches · ${result.strongCount} close matches`}</p>
         <p className="mt-2 text-xs text-slate-400">Source: {source} · Checked: {fetchedAt ?? "time unavailable"}. Availability and final price require dealer confirmation.</p>
-        {sizeUnverified && <p className="mt-3 text-sm text-amber-200">The catalog does not verify whether a particular SUV meets your requested size class. No vehicle here is claimed to be a confirmed midsize/full-size fit; ask the salesperson to verify dimensions and trim.</p>}
+        {sizeUnverified && <p className="mt-3 text-sm text-amber-200">
+          Only recognized {requestedSize === "MIDSIZE" ? "midsize" : "full-size"} SUV model families appear in this shortlist. This is a model-family screening guide, NOT confirmed VIN-specific dimensions.
+          {sizeScreen && ` ${sizeScreen.smallerExcluded} different-size models and ${sizeScreen.unknownExcluded} unclassified records were excluded rather than shown as matches.`}
+          {" "}A salesperson should confirm the vehicle's dimensions and specific equipment.
+        </p>}
         {!result.localOptions.length && <p className="mt-3 text-sm text-amber-200">We don't have a verified match for that request. Try changing a preference or contact the dealership for a wider search.</p>}
       </div>
       <div className="mt-5 grid gap-4">
