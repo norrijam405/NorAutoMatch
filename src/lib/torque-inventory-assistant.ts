@@ -87,7 +87,9 @@ export function answerTorqueInventory(input: {
     reasons: entry.reasons,
     compromises: entry.compromises,
   });
-  const sizeRequested = Boolean(input.requestedSuvSize || input.spec?.freeformNotes.some(note => note.startsWith("Midsize SUV requested")));
+  const sizeRequested = input.requestedSuvSize !== undefined
+    ? input.requestedSuvSize !== null
+    : Boolean(input.spec?.freeformNotes.some(note => note.startsWith("Midsize SUV requested")));
   const evaluated = (input.spec
     ? rankVehiclesForSalesSpec({ requirements: input.spec, vehicles: input.vehicles, limit: 2_000, strictMustHaves: true }).map(toMatch)
     : input.vehicles.map((vehicle) => evaluateVehicle(vehicle, request)))
