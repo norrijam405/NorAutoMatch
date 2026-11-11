@@ -11,7 +11,8 @@ import { isSuvCandidate } from "../src/lib/torque-suv-model-knowledge";
 import { rankVehiclesForSalesSpec } from "../src/lib/vehicle-hunt-inventory-matcher";
 import { parseTorqueSalesInventorySpec } from "../src/lib/torque-sales-inventory-spec";
 import { interpretLifestyleSearch, shouldUseStrictVehicleSearch } from "../src/lib/lifestyle-car-search";
-import { requestedSuvSize, modelFamilySuvSize, filterSuvSizeModelCandidates } from "../src/lib/torque-suv-size-screen";
+import { requestedSuvSize, modelFamilySuvSize, filterSuvSizeModelCandidates, conversationalRequestedSuvSize } from "../src/lib/torque-suv-size-screen";
+import { answerTorqueInventory } from "../src/lib/torque-inventory-assistant";
 import type { Vehicle } from "../src/lib/inventory";
 
 assert.deepEqual(parseListingMpg("EPA estimated 28 city / 35 highway MPG"), {
@@ -93,6 +94,21 @@ assert.equal(classified.smallerExcluded,3);
 assert.equal(classified.unknownExcluded,1);
 assert.equal(modelFamilySuvSize({make:"Nissan",model:"Murano"}),"MIDSIZE");
 assert.equal(modelFamilySuvSize({make:"Nissan",model:"Kicks"}),"SMALLER");
+assert.equal(conversationalRequestedSuvSize([],"Find a midsize SUV under $28k"),"MIDSIZE");
+assert.equal(conversationalRequestedSuvSize(["I need a midsize SUV"],"also under 30k"),"MIDSIZE");
+assert.equal(conversationalRequestedSuvSize(["I need a midsize SUV"],"Actually I need a compact SUV"),null);
+assert.equal(conversationalRequestedSuvSize(["I need a midsize SUV"],"new search, full-size SUV"),"FULL_SIZE");
+assert.equal(conversationalRequestedSuvSize(["I need a midsize SUV"],"I no longer need a midsize SUV"),null);
+const sizeFilteredAnswer = answerTorqueInventory({
+  message: "Find me a midsize SUV",
+  vehicles: classified.candidates,
+  mode:"verified-live",
+  requestedSuvSize:"MIDSIZE",
+  spec:parseTorqueSalesInventorySpec("midsize SUV"),
+});
+assert(sizeFilteredAnswer.matches.every(match=>!["Kicks","Encore GX","Rogue"].some(model=>match.label.includes(model))));
+assert(sizeFilteredAnswer.matches.every(match=>match.fit==="near"),"model size must not count as VIN-verified exact fit");
+
 
 
 // Customer's actual research phrasing must reach the independent EPA scout.
