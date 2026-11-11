@@ -217,8 +217,8 @@ export function answerTorqueInventory(input: {
   }
 
   if (leading) answer += matchExplanation;
-  if (midsizeRequested) {
-    answer += " Your midsize-SUV requirement is retained, but the current catalog only says SUV; it does not certify compact versus midsize. I will not label an SUV a verified midsize match.";
+  if (sizeRequested) {
+    answer += " Your requested SUV size is retained. Recognized model families can narrow the shortlist, but the dealer listing alone does not certify the exact VIN's dimensions or equipment.";
   }
 
   if (input.dna && input.dna.signalCount > 0) {
