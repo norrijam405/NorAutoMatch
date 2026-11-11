@@ -72,6 +72,7 @@ export function answerTorqueInventory(input: {
   mode: TorqueInventoryMode;
   dna?: MatchDnaSummary;
   spec?: TorqueSalesInventorySpec;
+  requestedSuvSize?: "MIDSIZE" | "FULL_SIZE" | null;
 }): TorqueInventoryAnswer {
   const request = interpret(input.message, input.vehicles);
   const toMatch = (entry: ReturnType<typeof rankVehiclesForSalesSpec>[number]): TorqueVehicleMatch => ({
@@ -86,13 +87,13 @@ export function answerTorqueInventory(input: {
     reasons: entry.reasons,
     compromises: entry.compromises,
   });
-  const midsizeRequested = Boolean(input.spec?.freeformNotes.some(note => note.startsWith("Midsize SUV requested")));
+  const sizeRequested = Boolean(input.requestedSuvSize || input.spec?.freeformNotes.some(note => note.startsWith("Midsize SUV requested")));
   const evaluated = (input.spec
     ? rankVehiclesForSalesSpec({ requirements: input.spec, vehicles: input.vehicles, limit: 2_000, strictMustHaves: true }).map(toMatch)
     : input.vehicles.map((vehicle) => evaluateVehicle(vehicle, request)))
-    .map((match) => midsizeRequested
+    .map((match) => sizeRequested
       ? { ...match, fit: "near" as const,
-          compromises: [...match.compromises, "midsize classification not verified by this catalog"] }
+          compromises: [...match.compromises, "requested SUV size is model-family guidance; exact-VIN dimensions are not verified"] }
       : match);
   // An empty strict result should not become a dead end. Separately show the
   // closest *clearly labeled* vehicles, preserving price, body style, exact VIN,
