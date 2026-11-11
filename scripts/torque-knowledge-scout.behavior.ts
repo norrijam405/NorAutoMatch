@@ -73,7 +73,7 @@ assert(interpretLifestyleSearch(recordedSearch)?.economy, "regression first reac
 assert(shouldUseStrictVehicleSearch(recordedSearch), "specific constraints must use the strict match engine");
 assert.equal(parseTorqueSalesInventorySpec(recordedSearch).maxPrice?.value,28000);
 assert.equal(parseTorqueSalesInventorySpec(recordedSearch).maxMileage?.value,35000);
-assert.equal(parseTorqueSalesInventorySpec(recordedSearch).features.some(f=>f.value==="leather seating"),true);
+assert.equal(parseTorqueSalesInventorySpec(recordedSearch).interiorMaterial?.value,"Leather");
 assert.equal(shouldUseStrictVehicleSearch("Looking for an affordable SUV that is good on gas"),false);
 assert.equal(shouldUseStrictVehicleSearch("SUV with AWD and leather seats"),true);
 
