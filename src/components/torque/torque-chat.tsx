@@ -243,6 +243,16 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
               ))}
             </div>
           </div>
+          {!isWorkspace && allowVerifiedPreview && (
+            <div role="status" className="flex items-center justify-between gap-3 border-b border-emerald-300/15 bg-emerald-300/[.045] px-4 py-2">
+              <span className="text-[10px] font-bold leading-4 text-emerald-200">
+                {catalogScope === "verified" ? "Orr public inventory · read-only" : "Fictional sample inventory"}
+              </span>
+              <Link href="/ask-torque" onClick={() => setOpen(false)} className="shrink-0 text-[10px] font-black text-amber-200 hover:text-white">
+                Full Torque workspace →
+              </Link>
+            </div>
+          )}
           {isWorkspace && allowVerifiedPreview && (
             <section className="border-b border-white/10 bg-[#111b27] px-4 py-3">
               <label htmlFor="torque-inventory-source" className="block text-[10px] font-black uppercase tracking-[.16em] text-amber-200">
