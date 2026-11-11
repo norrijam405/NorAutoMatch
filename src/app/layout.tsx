@@ -5,7 +5,7 @@ import { Header } from "@/components/site/header";
 import { Footer } from "@/components/site/footer";
 import { TorqueChat } from "@/components/torque/torque-chat";
 import { createClient } from "@/lib/supabase/server";
-import { isTorqueStandaloneDemo } from "@/lib/torque-standalone-demo";
+import { isTorqueStandaloneDemo, canUseTorquePreviewVerifiedCatalog } from "@/lib/torque-standalone-demo";
 
 export const metadata: Metadata = {
   metadataBase: new URL(brand.baseUrl),
@@ -61,7 +61,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <Header isAuthenticated={isAuthenticated} />
         <main>{children}</main>
         <Footer />
-        <TorqueChat />
+        <TorqueChat allowVerifiedPreview={canUseTorquePreviewVerifiedCatalog()} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       </body>
     </html>
