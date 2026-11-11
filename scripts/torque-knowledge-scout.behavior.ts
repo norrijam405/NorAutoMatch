@@ -10,6 +10,7 @@ import { buildPortableTorqueBrief } from "../src/lib/torque-shopping-brief";
 import { isSuvCandidate } from "../src/lib/torque-suv-model-knowledge";
 import { rankVehiclesForSalesSpec } from "../src/lib/vehicle-hunt-inventory-matcher";
 import { parseTorqueSalesInventorySpec } from "../src/lib/torque-sales-inventory-spec";
+import { interpretLifestyleSearch, shouldUseStrictVehicleSearch } from "../src/lib/lifestyle-car-search";
 import type { Vehicle } from "../src/lib/inventory";
 
 assert.deepEqual(parseListingMpg("EPA estimated 28 city / 35 highway MPG"), {
@@ -66,6 +67,15 @@ for (const value of [
 ]) {
   assert.equal(mwmmVehicleResearchUrl(value),"/ask-torque","invalid or personal data passed through");
 }
+// The customer video: lifestyle fuel preference must NEVER hijack leather and mileage hard rules.
+const recordedSearch = "Search for a midsize SUV, good on gas, under $28,000, with leather seats and fewer than 35,000 miles.";
+assert(interpretLifestyleSearch(recordedSearch)?.economy, "regression first reaches lifestyle detector");
+assert(shouldUseStrictVehicleSearch(recordedSearch), "specific constraints must use the strict match engine");
+assert.equal(parseTorqueSalesInventorySpec(recordedSearch).maxPrice?.value,28000);
+assert.equal(parseTorqueSalesInventorySpec(recordedSearch).features.some(f=>f.value==="leather seating"),true);
+assert.equal(shouldUseStrictVehicleSearch("Looking for an affordable SUV that is good on gas"),false);
+assert.equal(shouldUseStrictVehicleSearch("SUV with AWD and leather seats"),true);
+
 // Customer's actual research phrasing must reach the independent EPA scout.
 assert.deepEqual(parseTorqueExplicitMpgResearch("MPG for 2025 Toyota RAV4"),{
   year:2025,make:"Toyota",model:"RAV4",
