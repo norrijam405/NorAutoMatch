@@ -11,6 +11,7 @@ import { isSuvCandidate } from "../src/lib/torque-suv-model-knowledge";
 import { rankVehiclesForSalesSpec } from "../src/lib/vehicle-hunt-inventory-matcher";
 import { parseTorqueSalesInventorySpec } from "../src/lib/torque-sales-inventory-spec";
 import { interpretLifestyleSearch, shouldUseStrictVehicleSearch } from "../src/lib/lifestyle-car-search";
+import { requestedSuvSize, modelFamilySuvSize, filterSuvSizeModelCandidates } from "../src/lib/torque-suv-size-screen";
 import type { Vehicle } from "../src/lib/inventory";
 
 assert.deepEqual(parseListingMpg("EPA estimated 28 city / 35 highway MPG"), {
@@ -76,6 +77,23 @@ assert.equal(parseTorqueSalesInventorySpec(recordedSearch).maxMileage?.value,350
 assert.equal(parseTorqueSalesInventorySpec(recordedSearch).interiorMaterial?.value,"Leather");
 assert.equal(shouldUseStrictVehicleSearch("Looking for an affordable SUV that is good on gas"),false);
 assert.equal(shouldUseStrictVehicleSearch("SUV with AWD and leather seats"),true);
+assert.equal(requestedSuvSize(recordedSearch),"MIDSIZE");
+assert.equal(requestedSuvSize("full-size SUV under $30k"),"FULL_SIZE");
+assert.equal(requestedSuvSize("a small fuel-efficient crossover"),null);
+const sizeExamples: Vehicle[] = [
+  {id:"VIN-KICKS",year:2026,make:"Nissan",model:"Kicks",trim:"SR",type:"Sport Utility",price:22998,mileage:2800,drivetrain:"FWD",image:"",accent:""},
+  {id:"VIN-ENCORE",year:2026,make:"Buick",model:"Encore GX",trim:"Preferred",type:"Sport Utility",price:21398,mileage:3200,drivetrain:"FWD",image:"",accent:""},
+  {id:"VIN-ROGUE",year:2023,make:"Nissan",model:"Rogue",trim:"SL",type:"Sport Utility",price:24610,mileage:8000,drivetrain:"AWD",image:"",accent:""},
+  {id:"VIN-MURANO",year:2023,make:"Nissan",model:"Murano",trim:"SV",type:"Sport Utility",price:25080,mileage:10000,drivetrain:"FWD",image:"",accent:""},
+  {id:"VIN-UNKNOWN",year:2023,make:"Unknown",model:"Mystery",trim:"X",type:"SUV",price:20000,mileage:1000,drivetrain:"AWD",image:"",accent:""},
+];
+const classified = filterSuvSizeModelCandidates(sizeExamples,"MIDSIZE");
+assert.deepEqual(classified.candidates.map(v=>v.model),["Murano"],"Kicks, Encore GX and compact Rogue are not confirmed midsize candidates");
+assert.equal(classified.smallerExcluded,3);
+assert.equal(classified.unknownExcluded,1);
+assert.equal(modelFamilySuvSize({make:"Nissan",model:"Murano"}),"MIDSIZE");
+assert.equal(modelFamilySuvSize({make:"Nissan",model:"Kicks"}),"SMALLER");
+
 
 // Customer's actual research phrasing must reach the independent EPA scout.
 assert.deepEqual(parseTorqueExplicitMpgResearch("MPG for 2025 Toyota RAV4"),{
