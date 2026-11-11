@@ -137,13 +137,16 @@ function evaluateVehicle(
     ...(vehicle.features ?? []),
   ].filter((value): value is string => Boolean(value)).join(" ").toLowerCase();
 
-  compareSearchable(result, spec.interiorMaterial, searchable, "interior material");
+  // A trim or model name is NOT evidence of fitted seat material. Only
+  // features explicitly reported against this dealer VIN may satisfy
+  // an equipment MUST_HAVE. Descriptive marketing text is not a spec.
+  compareListedEquipment(result, spec.interiorMaterial, vehicle.features ?? [], "interior material");
   compareSearchable(result, spec.cabStyle, searchable, "cab style", true);
   compareSearchable(result, spec.bedLength, searchable, "bed length", true);
   compareSearchable(result, spec.seatingLayout, searchable, "seating layout", true);
 
   for (const requirement of spec.packages) compareSearchable(result, requirement, searchable, "package", true);
-  for (const requirement of spec.features) compareSearchable(result, requirement, searchable, "feature", true);
+  for (const requirement of spec.features) compareListedEquipment(result, requirement, vehicle.features ?? [], "feature");
   for (const exclusion of spec.exclusions) compareExclusion(result, exclusion.priority, exclusion.value, searchable);
 
   return result;
@@ -216,6 +219,39 @@ function compareSearchable(
   });
   if (matches) result.reasons.push(label + ": " + raw);
   else priorityMiss(result, requirement.priority, "no source evidence for " + label + ": " + raw);
+}
+
+/**
+ * VIN-associated dealer feature labels can establish that a feature is LISTED,
+ * not physically certified. Never infer equipment from a trim name or model.
+ * Distinguish genuine leather from leatherette/synthetic/vegan seating.
+ */
+function compareListedEquipment(
+  result: Omit<SalesSpecVehicleEvaluation, "vehicle" | "fit">,
+  requirement: { value: unknown; priority: TorqueRequirementPriority } | undefined,
+  listedFeatures: string[],
+  label: string,
+) {
+  if (!requirement) return;
+  const requested = normalize(String(requirement.value));
+  const listed = listedFeatures.filter((item): item is string => typeof item === "string");
+  const matches = listed.some(item => {
+    const name = normalize(item);
+    if (requested === "leather" || requested === "leatherseating") {
+      // Synthetic leather and explicitly partial materials must not be
+      // presented as proof of genuine leather seats.
+      return /\bleather\b/i.test(item) &&
+        !/leatherette|synthetic|vegan|artificial|faux|leather[- ]?appointed|leather[- ]?trimmed|leather[- ]?wrapped/i.test(item) &&
+        /seat|upholstery|interior/i.test(item);
+    }
+    const alternatives = aliases(String(requirement.value));
+    return alternatives.some(term => {
+      const needle = normalize(term);
+      return needle.length > 0 && name.includes(needle);
+    });
+  });
+  if (matches) result.reasons.push("dealer-listed " + label + ": " + String(requirement.value));
+  else priorityMiss(result, requirement.priority, "no VIN-listed equipment evidence for " + label + ": " + String(requirement.value));
 }
 
 function compareExclusion(
