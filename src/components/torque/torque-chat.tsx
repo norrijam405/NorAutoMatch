@@ -62,6 +62,13 @@ type TorqueResponse = {
     unknowns: string[];
     disclosure: string;
   }>;
+  choiceGuide?: {
+    state: "DEALER_LISTING_COMPARISON";
+    sourceNote: string;
+    vehicles: Array<{ vin: string; label: string; listedPrice: number; reasons: string[]; gaps: string[] }>;
+    comparisons: string[];
+    nextQuestion: string;
+  } | null;
   customerRequirements?: string[];
   nextAction?: {
     protocol: "NORAUTO_TORQUE_NEXT_ACTION_V1";
@@ -428,6 +435,32 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                         <p className="text-[10px] leading-4 text-slate-400">{report.note}</p>
                       </div>
                     ))}
+                  </section>
+                )}
+
+                {turn.role === "torque" && turn.response?.choiceGuide && (
+                  <section className="mt-3 rounded-2xl border border-blue-300/20 bg-blue-300/[.035] p-3" aria-label="Why these vehicles differ">
+                    <p className="text-[11px] font-black uppercase tracking-[.13em] text-blue-200">Why these two vehicles differ</p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {turn.response.choiceGuide.vehicles.map(car => (
+                        <div key={car.vin} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                          <p className="text-xs font-black text-white">{car.label}</p>
+                          <p className="mt-1 text-[10px] text-slate-400">VIN {car.vin}</p>
+                          {car.reasons.length > 0 && <p className="mt-2 text-[11px] leading-5 text-emerald-200">Listed fit: {car.reasons.join(" · ")}</p>}
+                          {car.gaps.length > 0 && <p className="mt-2 text-[11px] leading-5 text-amber-200">Still check: {car.gaps.join(" · ")}</p>}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 space-y-1.5">
+                      {turn.response.choiceGuide.comparisons.map((line, i) => (
+                        <p key={i} className="text-xs leading-5 text-slate-200">• {line}</p>
+                      ))}
+                    </div>
+                    <p className="mt-3 text-[10px] leading-4 text-slate-400">{turn.response.choiceGuide.sourceNote}</p>
+                    <button type="button" disabled={busy} onClick={() => setInput(turn.response!.choiceGuide!.nextQuestion)}
+                      className="mt-3 w-full rounded-xl border border-blue-300/25 px-3 py-2.5 text-left text-[11px] font-bold text-blue-200 hover:border-blue-300/60 disabled:opacity-50">
+                      Ask Torque what matters next
+                    </button>
                   </section>
                 )}
 
