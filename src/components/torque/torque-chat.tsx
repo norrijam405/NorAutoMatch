@@ -97,12 +97,7 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
   const [catalogScope, setCatalogScope] = useState<"verified" | "sample">(allowVerifiedPreview ? "verified" : "sample");
   const [busy, setBusy] = useState(false);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (open || isWorkspace) {
-      const pane = messagesScrollRef.current;
-      if (pane) pane.scrollTop = pane.scrollHeight;
-    }
-  }, [turns, busy, open, isWorkspace]);
+
   const [battleContext, setBattleContext] = useState<{vins: string[]; priority: string} | null>(null);
   useEffect(() => {
     const handler = (event: Event) => {
@@ -127,6 +122,13 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
       text: "Ask me about a car, or compare two models directly—like Rogue versus Kicks. Tell me what matters to you, and I'll distinguish verified facts from anything I can't confirm.",
     },
   ]);
+
+  useEffect(() => {
+    if (open || isWorkspace) {
+      const pane = messagesScrollRef.current;
+      if (pane) pane.scrollTop = pane.scrollHeight;
+    }
+  }, [turns, busy, open, isWorkspace]);
 
   function openSourcing(turn: Turn, index: number) {
     const priorUserText = index > 0 && turns[index - 1]?.role === "user" ? turns[index - 1].text : "";
