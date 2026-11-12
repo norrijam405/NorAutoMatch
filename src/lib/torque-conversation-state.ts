@@ -30,7 +30,7 @@ export function combinedCustomerSpec(history: string[], latest: string): TorqueS
     // Equipment withdrawals are separate from features. The parser can read
     // "leather" in a negative sentence, so remove old material and suppress
     // same-turn reintroduction unless the customer then affirmatively asks.
-    const noLongerLeather = /\\b(?:no longer|don'?t|do not|not)\\s+(?:need|require|want|care about)\\s+(?:an?\\s+)?(?:genuine\\s+)?leather(?:\\s+seats?|\\s+interior|\\s+upholstery)?\\b/i.test(turn);
+    const noLongerLeather = /\b(?:no longer|don'?t|do not|not)\s+(?:need|require|want|care about)\s+(?:an?\s+)?(?:genuine\s+)?leather(?:\s+seats?|\s+interior|\s+upholstery)?\b/i.test(turn);
     if (noLongerLeather) withdrawn.push("interiorMaterial");
     if (/\b(?:no longer|don'?t|do not|not)\s+(?:need|require|want|care about)\s+(?:an?\s+)?(?:awd|4wd|4x4|four.wheel.drive|all.wheel.drive)\b/i.test(turn)) {
       withdrawn.push("drivetrain");
@@ -45,7 +45,7 @@ export function combinedCustomerSpec(history: string[], latest: string): TorqueS
     const next = parseTorqueSalesInventorySpec(turn);
     // "I don't need leather, but I still want leather seats" is a
     // deliberate affirmative correction; respect the last explicit clause.
-    if (noLongerLeather && /\\b(?:but|however|instead)\\s+(?:i\\s+)?(?:still\\s+)?(?:need|want|require|prefer)\\s+(?:genuine\\s+)?leather\\b/i.test(turn)) {
+    if (noLongerLeather && /\b(?:but|however|instead)\s+(?:i\s+)?(?:still\s+)?(?:need|want|require|prefer)\s+(?:genuine\s+)?leather\b/i.test(turn)) {
       withdrawn.splice(withdrawn.indexOf("interiorMaterial"), 1);
     }
     // Allow customers to retract specific equipment requests without silently
