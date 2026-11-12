@@ -373,9 +373,13 @@ export async function POST(request: Request) {
     vehicles = vehicles.map(v => byVin.get(v.id) ?? v);
   }
   const result = answerTorqueInventory({ message, vehicles, mode, dna, spec, requestedSuvSize: requestedSize });
-  if (sizeScreen) {
-    const sizeNote = `I only considered known ${requestedSize === "MIDSIZE" ? "midsize" : "full-size"} SUV model families: ${sizeScreen.smallerExcluded} different-size records and ${sizeScreen.unknownExcluded} unclassified records were not offered as matches. Model-family size is guidance, not verified dimensions on the exact VIN. `;
-    result.answer = sizeNote + result.answer;
+  // Keep the conservative model-family filtering, but not its audit counters
+  // in the customer dialogue. Counts and size limitations are evidence details,
+  // not a human opening sentence.
+  if (sizeScreen && result.matches.length === 0) {
+    result.answer = "I couldn't confirm a " +
+      (requestedSize === "MIDSIZE" ? "midsize" : "full-size") +
+      " SUV matching those details. We can check other options without changing your must-haves.";
   }
   if (recentMessages.length > 0) {
     const focusedAnswer = scopedTorqueFollowup(message, result.matches, vehicles, mode);
@@ -407,12 +411,13 @@ export async function POST(request: Request) {
     result.answer = `I heard your requirement for ${spec.seatingCapacity.value} seats. The current vehicle records do not carry enough verified seating-capacity evidence for me to certify a match. I won't recommend a vehicle as meeting that requirement without proof. A salesperson should verify the exact VIN and seating configuration.`;
   }
   if (result.matches.length === 0 && !spec.seatingCapacity) {
-    result.answer = (sizeScreen ? `No confirmed ${requestedSize === "MIDSIZE" ? "midsize" : "full-size"} SUV match from recognized model families. ` : "") +
-      explainTorqueNoMatch(spec, mode);
+    result.answer = (sizeScreen
+      ? "I couldn't confirm a " + (requestedSize === "MIDSIZE" ? "midsize" : "full-size") +
+        " SUV that meets everything yet. "
+      : "") + explainTorqueNoMatch(spec, mode);
   }
-  if (result.exactCount === 0 && result.nearCount === 0 && customerRequirements.length > 0) {
-    result.answer += " Your stated requirements I kept: " + customerRequirements.join(", ") + ".";
-  }
+  // The retained constraints appear in the optional Shopping brief UI.
+  // Don't repeat the whole search back as a robotic appendix.
 
   return noStore({
     protocol: "NORAUTO_TORQUE_SEARCH_V1",
