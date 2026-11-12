@@ -162,10 +162,10 @@ export function answerTorqueInventory(input: {
   // A match is not a promise of current availability or financing.
   const leading = matches[0];
   const matchExplanation = leading
-    ? ` My first listed option is ${leading.label}: ${leading.reasons.length
-        ? leading.reasons.slice(0, 2).join("; ")
-        : "it meets the checked requirements, but the available record does not establish additional differentiators"}.${leading.compromises.length
-        ? " Unverified or preferred tradeoffs: " + leading.compromises.slice(0, 2).join("; ") + "."
+    ? ` I'd start with the ${leading.label}.${leading.reasons.length
+        ? " " + leading.reasons.slice(0, 2).join("; ") + "."
+        : ""}${leading.compromises.length
+        ? " Still to check: " + leading.compromises.slice(0, 2).join("; ") + "."
         : ""}`
     : "";
 
@@ -178,53 +178,28 @@ export function answerTorqueInventory(input: {
 
   let answer = "";
   if (exact.length > 0) {
-    answer =
-      "Yeah — I found " +
-      exact.length +
-      " " +
-      (exact.length === 1 ? "vehicle" : "vehicles") +
-      " in " +
-      sourcePhrase +
-      " that " +
-      (exact.length === 1 ? "matches" : "match") +
-      " what you asked for without me quietly changing your requirements.";
+    answer = `I found ${exact.length} ${exact.length === 1 ? "option" : "options"} that match your listed requirements.`;
   } else if (strong.length > 0) {
-    answer =
-      "I found " +
-      strong.length +
-      " strong " +
-      (strong.length === 1 ? "match" : "matches") +
-      " in " +
-      sourcePhrase +
-      ". Your must-haves are covered; I’m calling out the preferred items that differ instead of pretending they’re exact.";
+    answer = `I found ${strong.length} promising ${strong.length === 1 ? "option" : "options"}. Your must-haves are covered in the records, but some preferences differ.`;
   } else if (near.length > 0) {
-    answer =
-      "I don't have an exact or strong match in " +
-      sourcePhrase +
-      ". I found " +
-      near.length +
-      " close " +
-      (near.length === 1 ? "option" : "options") +
-      ", but I'm calling out the must-have compromises instead of pretending they're exact.";
+    answer = `I found ${near.length} ${near.length === 1 ? "possibility" : "possibilities"}, but none checks every box yet. I'll show you what's missing.`;
   } else if (closest.length > 0) {
     answer = input.mode === "representative-demo"
-      ? "I cannot verify the full specification in these SAMPLE vehicles, which are not dealer listings. Here are the closest SUV examples within your budget; leather and fuel efficiency remain unverified where the sample has no data. These are NOT confirmed Orr Nissan West units."
-      : "I didn't establish a complete match in the checked dealer catalog, but here are source-listed vehicles within your price ceiling with explicit equipment or MPG evidence gaps. These are NEAR matches, not proof that leather or fuel economy meets your request. A salesperson should check the exact VIN.";
+      ? "The SAMPLE cars don't prove a full match. Here are a few examples; they're not confirmed dealership vehicles."
+      : "I haven't confirmed a complete match. These are real dealer-listed possibilities, but the equipment or fuel-economy details still need checking.";
   } else {
     answer = input.mode === "representative-demo"
-      ? "No suitable comparison was established in the SAMPLE catalog, which is not live dealer inventory. That does not mean Orr Nissan West has none; a salesperson must check actual stock."
-      : "I couldn't establish a suitable vehicle in " + sourcePhrase +
-        ". That only describes this checked catalog and does not prove the dealership has no such vehicle. Ask a salesperson to verify the specific stock or VIN.";
+      ? "Nothing in the SAMPLE data confirms that fit. Those examples aren't the dealership's inventory."
+      : "I couldn't confirm a match in the inventory I checked. That doesn't mean the dealership has none; we can have a salesperson check.";
   }
 
   if (leading) answer += matchExplanation;
   if (sizeRequested) {
-    answer += " Your " + sizeLabel + " SUV requirement is retained. Recognized model families can narrow the shortlist, but the dealer listing alone does not certify the exact VIN's dimensions or equipment.";
+    answer += " I'm keeping your " + sizeLabel + " SUV requirement. Size is based on the model family, not verified measurements for this VIN.";
   }
 
-  if (input.dna && input.dna.signalCount > 0) {
-    answer += " Your MatchDNA currently says: " + input.dna.label.replace(/^Learning:\s*/i, "") + ".";
-  }
+  // Keep MatchDNA in structured metadata; don't narrate internal profiling
+  // to a shopper who asked a straightforward vehicle question.
 
   const handoffRequired = exact.length === 0 && strong.length === 0;
   const handoffSummary = handoffRequired
@@ -232,7 +207,7 @@ export function answerTorqueInventory(input: {
     : undefined;
 
   if (handoffRequired && input.mode !== "representative-demo") {
-    answer += " I only verified the Orr Nissan West inventory here. The broader Orr Auto Group may have more vehicles, so this should go to a human to check the wider network.";
+    answer += " I checked Orr Nissan West only. A salesperson can check other Orr locations if you'd like.";
   }
 
   return {
