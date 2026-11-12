@@ -112,6 +112,7 @@ export function customerSpecSummary(spec: TorqueSalesInventorySpec): string[] {
     format(spec.drivetrain),
     format(spec.exteriorColor, " exterior"),
     format(spec.interiorColor, " interior"),
+    format(spec.interiorMaterial, " seats"),
     ...spec.features.slice(0, 6).map(feature => format(feature)),
   ];
   return items.filter((item): item is string => Boolean(item)).slice(0, 16);
