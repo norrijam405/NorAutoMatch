@@ -448,8 +448,8 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                 )}
 
                 {turn.role === "torque" && turn.response?.choiceGuide && (
-                  <section className="mt-3 rounded-2xl border border-white/10 bg-[#172534] p-4" aria-label="Why these vehicles differ">
-                    <p className="text-[11px] font-black uppercase tracking-[.13em] text-blue-200">How these options compare</p>
+                  <details className="mt-3 rounded-xl border border-white/10 bg-[#172534] p-3" aria-label="How these vehicles compare">
+                    <summary className="cursor-pointer text-xs font-bold text-blue-200">Compare these two vehicles · prices, mileage & tradeoffs</summary>
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       {turn.response.choiceGuide.vehicles.map(car => (
                         <div key={car.vin} className="rounded-xl border border-white/10 bg-black/20 p-3">
@@ -470,7 +470,7 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                       className="mt-3 w-full rounded-xl border border-blue-300/25 px-3 py-2.5 text-left text-[11px] font-bold text-blue-200 hover:border-blue-300/60 disabled:opacity-50">
                       Ask Torque what matters next
                     </button>
-                  </section>
+                  </details>
                 )}
 
                 {turn.role === "torque" && turn.response?.matches && turn.response.matches.length > 0 && (
