@@ -48,6 +48,24 @@ assert(!contrasting.features.some(x => /heated seats/i.test(x.value)));
 assert(contrasting.features.some(x => /sunroof/i.test(x.value)));
 const replaced = combinedCustomerSpec(["I need an AWD Rogue"], "I want FWD instead");
 assert.equal(replaced.drivetrain?.value, "FWD");
+// R21: customer can remove a previously explicit material without the
+// same negative sentence silently re-adding it as a must-have.
+const priorLeather = ["I want a midsize SUV under $30,000 with leather seats"];
+const withdrawLeather = combinedCustomerSpec(priorLeather, "I don't need leather seats anymore");
+assert.equal(withdrawLeather.interiorMaterial, undefined);
+assert.equal(withdrawLeather.maxPrice?.value, 30000);
+assert.equal(withdrawLeather.bodyType?.value, "SUV");
+assert(!customerSpecSummary(withdrawLeather).some(v=>/leather/i.test(v)));
+const startFresh = combinedCustomerSpec(priorLeather, "New search: compact SUV under $24k");
+assert.equal(startFresh.interiorMaterial, undefined);
+assert.equal(startFresh.maxPrice?.value,24000);
+const reaffirmLeather = combinedCustomerSpec(priorLeather, "I don't need leather, but I still want leather seats");
+assert.equal(reaffirmLeather.interiorMaterial?.value,"Leather");
+const keepOther = combinedCustomerSpec(["AWD SUV with leather and heated seats"],"I do not want leather");
+assert.equal(keepOther.interiorMaterial,undefined);
+assert.equal(keepOther.drivetrain?.value,"AWD");
+assert(keepOther.features.some(x=>x.value==="heated seats"));
+
 const secondVin = "1N4AL3AP0GC654321";
 assert.deepEqual(chooseTorqueBattlePair("verified-live", [{id: car.id}, {id: secondVin}]), [car.id, secondVin]);
 assert.deepEqual(chooseTorqueBattlePair("verified-cache", [{id: car.id.toLowerCase()}, {id: secondVin}]), [car.id, secondVin]);
