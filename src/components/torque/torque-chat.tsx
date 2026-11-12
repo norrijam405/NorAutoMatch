@@ -119,7 +119,7 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
   const [turns, setTurns] = useState<Turn[]>([
     {
       role: "torque",
-      text: "Ask me about a car, or compare two models directly—like Rogue versus Kicks. Tell me what matters to you, and I'll distinguish verified facts from anything I can't confirm.",
+      text: "Hey, I'm Torque. What kind of ride are you looking for? Tell me your budget and what matters most, and we'll narrow it down.",
     },
   ]);
 
@@ -224,7 +224,7 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
               <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-amber-300 text-black"><Bot size={20} /></span>
               <div className="min-w-0">
                 <p className="text-sm font-black text-white">Torque</p>
-                <p className="truncate text-[10px] font-bold uppercase tracking-[.14em] text-emerald-300">Inventory truth + MatchDNA</p>
+                <p className="truncate text-[11px] text-slate-400">Your car-shopping sidekick</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -243,7 +243,7 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
           </header>
 
           <details className="shrink-0 border-b border-white/10 bg-white/[.025] px-4 py-2">
-            <summary className="cursor-pointer text-[11px] font-black uppercase tracking-[.12em] text-amber-200">Example questions · tap to expand</summary>
+            <summary className="cursor-pointer text-[11px] font-black uppercase tracking-[.12em] text-amber-200">Need a place to start? Try a question</summary>
             <div className="mt-2 flex gap-2 overflow-x-auto pb-1" aria-label="Suggested Torque questions">
               {[
                 "Find a family SUV under $30,000",
@@ -320,30 +320,22 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
               </div>
             </details>
           )}
-          <div ref={messagesScrollRef} role="log" aria-label="Torque conversation" aria-live="polite" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4 sm:py-5">
+          <div ref={messagesScrollRef} role="log" aria-label="Torque conversation" aria-live="polite" className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain bg-[#0a1119] px-3 py-5 sm:px-6 sm:py-6">
             {turns.map((turn, index) => (
-              <div key={index} className={turn.role === "user" ? "ml-8" : "mr-4"}>
+              <div key={index} className={turn.role === "user" ? "ml-10 sm:ml-20" : "mr-3 sm:mr-10"}>
                 <div className={turn.role === "user"
-                  ? "rounded-2xl rounded-br-md bg-white/[.07] px-4 py-3 text-sm leading-6 text-slate-100"
-                  : "rounded-2xl rounded-bl-md border border-amber-300/10 bg-amber-300/[.04] px-4 py-3 text-sm leading-6 text-slate-200"}>
+                  ? "whitespace-pre-wrap rounded-2xl rounded-br-md bg-[#263645] px-4 py-3 text-[15px] leading-7 text-white"
+                  : "whitespace-pre-wrap rounded-2xl rounded-bl-md border border-white/[.06] bg-[#131e29] px-4 py-3 text-[15px] leading-7 text-slate-100"}>
                   {turn.text}
                 </div>
 
                 {turn.role === "torque" && turn.response?.mode && (
-                  <div role="status" className={turn.response.mode === "representative-demo"
-                    ? "mt-2 rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-[11px] leading-5 text-amber-100"
-                    : "mt-2 rounded-xl border border-emerald-300/20 bg-emerald-300/5 px-3 py-2 text-[11px] leading-5 text-emerald-100"}>
+                  <p className="mt-2 px-1 text-[11px] leading-5 text-slate-400">
                     {turn.response.mode === "representative-demo"
-                      ? "SAMPLE INVENTORY ONLY — These vehicles are demonstrations, not confirmed Orr Nissan West stock. Torque cannot confirm availability or absence."
+                      ? "Sample vehicles only — not confirmed dealer stock."
                       : turn.response.mode === "verified-cache"
-                        ? "VERIFIED CACHED CATALOG — Previously source-verified records, not a live availability promise. Confirm the VIN with the store."
-                        : "VERIFIED SOURCE CATALOG — Source-checked dealer records, but sale availability may have changed. Confirm the VIN with the store."}
-                  </div>
-                )}
-
-                {turn.role === "torque" && turn.response?.customerRequirements && turn.response.customerRequirements.length > 0 && (
-                  <p className="mt-2 text-[11px] leading-5 text-slate-400">
-                    Remembering from this chat: {turn.response.customerRequirements.join(" · ")}
+                        ? "Previously checked dealer listings · reconfirm pricing and availability."
+                        : "Dealer listings · confirm final pricing and availability."}
                   </p>
                 )}
 
@@ -351,6 +343,10 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                   <TorqueBattleEvidence battle={turn.response.battle} busy={busy} onQuestion={setInput} />
                 )}
 
+                {turn.role === "torque" && turn.response?.nextAction && (
+                  <details className="mt-3 rounded-xl border border-white/10 bg-white/[.015] p-3">
+                    <summary className="cursor-pointer text-xs font-semibold text-slate-300">More options · next steps</summary>
+                    <div className="mt-3">
                 {isWorkspace && turn.role === "torque" && turn.response?.nextAction && (
                   <button type="button" disabled={busy} onClick={() => {
                     const brief = buildPortableTorqueBrief({
@@ -393,15 +389,13 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                   </div>
                 )}
 
-                {turn.role === "torque" && turn.response?.matchDna && turn.response.matchDna.signalCount > 0 && (
-                  <div className="mt-2 rounded-xl border border-red-400/15 bg-red-400/[.04] px-3 py-2 text-[11px] text-red-100/75">
-                    MatchDNA · {turn.response.matchDna.label}
-                  </div>
+                    </div>
+                  </details>
                 )}
 
                 {turn.role === "torque" && turn.response?.scoutCoverage && (
                   <details className="mt-3 rounded-xl border border-white/10 bg-white/[.025] p-3">
-                    <summary className="cursor-pointer text-[11px] font-black text-blue-200">What did the Knowledge Scouts actually check?</summary>
+                    <summary className="cursor-pointer text-[11px] font-black text-blue-200">Source checks and research notes</summary>
                     <div className="mt-2 space-y-1 text-[11px] leading-5 text-slate-300">
                       <p>Catalog: {turn.response.scoutCoverage.catalogScope} · {turn.response.scoutCoverage.eligibleVehicles} eligible records</p>
                       <p>Catalog VIN records with city and highway MPG: {turn.response.scoutCoverage.vehiclesWithDealerMpg}</p>
@@ -417,7 +411,7 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                 {turn.role === "torque" && turn.response?.dealerScoutUpdates?.changes &&
                   turn.response.dealerScoutUpdates.changes.length > 0 && (
                   <section className="mt-3 rounded-xl border border-amber-300/25 bg-amber-300/[.04] p-3" aria-label="Dealer inventory updates">
-                    <p className="text-[11px] font-bold uppercase text-amber-200">Dealer Watch Scout · observed listing changes</p>
+                    <p className="text-[11px] font-bold uppercase text-amber-200">Listing changes observed</p>
                     {turn.response.dealerScoutUpdates.changes.map((event,i) => (
                       <p key={event.vin + event.kind + i} className="mt-1 text-xs text-slate-200">
                         {event.vin} · {event.kind.replaceAll("_"," ").toLowerCase()}: {event.before} → {event.after}
@@ -430,7 +424,7 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                 {turn.role === "torque" && turn.response?.researchEvidence &&
                   turn.response.researchEvidence.length > 0 && (
                   <section className="mt-3 rounded-xl border border-blue-400/25 bg-blue-400/[.05] p-3" aria-label="Independent MPG research">
-                    <p className="text-[11px] font-black uppercase tracking-[.12em] text-blue-200">Vehicle Knowledge Scout · EPA fuel economy</p>
+                    <p className="text-[11px] font-black uppercase tracking-[.12em] text-blue-200">Independent fuel-economy research</p>
                     {turn.response.researchEvidence.map((report) => (
                       <div key={report.year + report.make + report.model} className="mt-2 space-y-2">
                         <p className="text-xs font-bold text-slate-100">{report.year} {report.make} {report.model}</p>
@@ -454,8 +448,8 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                 )}
 
                 {turn.role === "torque" && turn.response?.choiceGuide && (
-                  <section className="mt-3 rounded-2xl border border-blue-300/20 bg-blue-300/[.035] p-3" aria-label="Why these vehicles differ">
-                    <p className="text-[11px] font-black uppercase tracking-[.13em] text-blue-200">Why these two vehicles differ</p>
+                  <section className="mt-3 rounded-2xl border border-white/10 bg-[#172534] p-4" aria-label="Why these vehicles differ">
+                    <p className="text-[11px] font-black uppercase tracking-[.13em] text-blue-200">How these options compare</p>
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       {turn.response.choiceGuide.vehicles.map(car => (
                         <div key={car.vin} className="rounded-xl border border-white/10 bg-black/20 p-3">
@@ -548,8 +542,8 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                   chooseTorqueBattlePair(turn.response.mode, turn.response.matches) && (
                   <button type="button" disabled={busy}
                     onClick={() => compareRecommendedVehicles(turn.response!)}
-                    className="mt-3 flex min-h-12 w-full items-center justify-center rounded-xl border border-red-400/30 bg-red-500/[.10] px-4 text-sm font-black text-red-100 hover:border-red-400/60 disabled:opacity-40">
-                    Compare these two VINs in Garage Battle
+                    className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/[.04] px-4 text-xs font-bold text-slate-200 hover:border-amber-300/40 disabled:opacity-40">
+                    Compare these two cars side by side
                   </button>
                 )}
 
@@ -604,7 +598,7 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                 }}
                 rows={2}
                 maxLength={1200}
-                placeholder="Compare Rogue vs Kicks for a family, or describe what you need…"
+                placeholder="Ask a follow-up, change your budget, or tell me more…"
                 className="min-h-[56px] max-h-36 min-w-0 flex-1 resize-y bg-transparent px-2 py-2 text-base text-white outline-none placeholder:text-slate-400"
               />
               <button type="submit" disabled={busy || !input.trim()} className="grid size-11 shrink-0 place-items-center rounded-xl bg-amber-300 text-black disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send to Torque">
