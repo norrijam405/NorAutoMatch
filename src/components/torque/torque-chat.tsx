@@ -96,9 +96,12 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
   const [dealershipId, setDealershipId] = useState("orr-nissan-west");
   const [catalogScope, setCatalogScope] = useState<"verified" | "sample">(allowVerifiedPreview ? "verified" : "sample");
   const [busy, setBusy] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (open || isWorkspace) messagesEndRef.current?.scrollIntoView({ block: "end", behavior: "instant" });
+    if (open || isWorkspace) {
+      const pane = messagesScrollRef.current;
+      if (pane) pane.scrollTop = pane.scrollHeight;
+    }
   }, [turns, busy, open, isWorkspace]);
   const [battleContext, setBattleContext] = useState<{vins: string[]; priority: string} | null>(null);
   useEffect(() => {
@@ -315,7 +318,7 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
               </div>
             </details>
           )}
-          <div role="log" aria-label="Torque conversation" aria-live="polite" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4 sm:py-5">
+          <div ref={messagesScrollRef} role="log" aria-label="Torque conversation" aria-live="polite" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4 sm:py-5">
             {turns.map((turn, index) => (
               <div key={index} className={turn.role === "user" ? "ml-8" : "mr-4"}>
                 <div className={turn.role === "user"
@@ -568,7 +571,6 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                 <Loader2 size={14} className="animate-spin" /> Torque is checking the inventory…
               </div>
             )}
-            <div ref={messagesEndRef} aria-hidden="true" />
           </div>
 
           {battleContext && <div role="status" className="flex items-center justify-between gap-2 border-t border-amber-300/20 bg-amber-300/[.06] px-4 py-2 text-xs text-amber-100"><span>Garage Battle mode: Torque keeps your two selected VINs for follow-up questions. Change topics by choosing Exit comparison.</span><button type="button" onClick={() => { setBattleContext(null); setInput(""); }} className="shrink-0 rounded-lg border border-amber-300/40 px-3 py-2 font-bold">Exit comparison</button></div>}
