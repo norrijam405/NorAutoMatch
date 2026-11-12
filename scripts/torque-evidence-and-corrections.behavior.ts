@@ -51,6 +51,7 @@ assert.equal(replaced.drivetrain?.value, "FWD");
 // R21: customer can remove a previously explicit material without the
 // same negative sentence silently re-adding it as a must-have.
 const priorLeather = ["I want a midsize SUV under $30,000 with leather seats"];
+assert(customerSpecSummary(combinedCustomerSpec([],priorLeather[0])).some(v=>/Leather seats/i.test(v)));
 const withdrawLeather = combinedCustomerSpec(priorLeather, "I don't need leather seats anymore");
 assert.equal(withdrawLeather.interiorMaterial, undefined);
 assert.equal(withdrawLeather.maxPrice?.value, 30000);
