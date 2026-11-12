@@ -169,13 +169,6 @@ export function answerTorqueInventory(input: {
         : ""}`
     : "";
 
-  const sourcePhrase =
-    input.mode === "representative-demo"
-      ? "representative inventory"
-      : input.mode === "verified-cache"
-        ? "the latest verified cached inventory"
-        : "the current verified inventory";
-
   let answer = "";
   if (exact.length > 0) {
     answer = `I found ${exact.length} ${exact.length === 1 ? "option" : "options"} that match your listed requirements.`;
