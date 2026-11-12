@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bot, ChevronDown, ExternalLink, Loader2, Send, Sparkles, X } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { LeadModal } from "@/components/matcher/lead-modal";
 import { chooseTorqueBattlePair } from "@/lib/torque-battle-candidates";
 import { buildPortableTorqueBrief } from "@/lib/torque-shopping-brief";
@@ -96,6 +96,10 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
   const [dealershipId, setDealershipId] = useState("orr-nissan-west");
   const [catalogScope, setCatalogScope] = useState<"verified" | "sample">(allowVerifiedPreview ? "verified" : "sample");
   const [busy, setBusy] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (open || isWorkspace) messagesEndRef.current?.scrollIntoView({ block: "end", behavior: "instant" });
+  }, [turns, busy, open, isWorkspace]);
   const [battleContext, setBattleContext] = useState<{vins: string[]; priority: string} | null>(null);
   useEffect(() => {
     const handler = (event: Event) => {
@@ -208,9 +212,9 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
 
       {(open || isWorkspace) && (
         <section className={isWorkspace
-          ? "relative flex h-[min(78vh,850px)] min-h-[540px] w-full flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#0a1119] shadow-2xl shadow-black/60"
-          : "fixed inset-x-3 bottom-3 z-[80] flex max-h-[82vh] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#0a1119] shadow-2xl shadow-black/60 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[430px]"}>
-          <header className="flex items-center justify-between gap-4 border-b border-white/10 bg-[#0e1721] px-4 py-4">
+          ? "relative flex h-[min(88dvh,980px)] min-h-[540px] w-full flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#0a1119] shadow-2xl shadow-black/60"
+          : "fixed inset-x-2 bottom-2 z-[80] flex h-[min(92dvh,800px)] min-h-0 flex-col overflow-hidden rounded-[22px] border border-white/10 bg-[#0a1119] shadow-2xl shadow-black/60 sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[min(540px,calc(100vw-40px))]"}>
+          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-[#0e1721] px-3 py-2.5 sm:px-4">
             <div className="flex min-w-0 items-center gap-3">
               <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-amber-300 text-black"><Bot size={20} /></span>
               <div className="min-w-0">
@@ -233,8 +237,8 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
             </div>
           </header>
 
-          <div className="border-b border-white/10 bg-white/[.025] px-4 py-3">
-            <p className="text-[10px] font-black uppercase tracking-[.16em] text-amber-200">What can Torque help with?</p>
+          <details className="shrink-0 border-b border-white/10 bg-white/[.025] px-4 py-2">
+            <summary className="cursor-pointer text-[11px] font-black uppercase tracking-[.12em] text-amber-200">Example questions · tap to expand</summary>
             <div className="mt-2 flex gap-2 overflow-x-auto pb-1" aria-label="Suggested Torque questions">
               {[
                 "Find a family SUV under $30,000",
@@ -249,7 +253,7 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                 </button>
               ))}
             </div>
-          </div>
+          </details>
           {!isWorkspace && allowVerifiedPreview && (
             <div role="status" className="flex items-center justify-between gap-3 border-b border-emerald-300/15 bg-emerald-300/[.045] px-4 py-2">
               <span className="text-[10px] font-bold leading-4 text-emerald-200">
@@ -261,7 +265,9 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
             </div>
           )}
           {isWorkspace && allowVerifiedPreview && (
-            <section className="border-b border-white/10 bg-[#111b27] px-4 py-3">
+            <details className="shrink-0 border-b border-white/10 bg-[#111b27] px-4 py-2">
+              <summary className="cursor-pointer text-[11px] font-black text-amber-200">Inventory source: {catalogScope === "verified" ? "Orr public listings" : "Sample"} · change</summary>
+              <div className="pt-2">
               <label htmlFor="torque-inventory-source" className="block text-[10px] font-black uppercase tracking-[.16em] text-amber-200">
                 Choose which catalog to search
               </label>
@@ -282,10 +288,13 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                   ? "Reads a source-checked public dealer catalog. No stock hold or availability promise; if the source fails, results stop instead of falling back to fake listings."
                   : "Only six sample records; these cannot establish dealership stock or VINs."}
               </p>
-            </section>
+              </div>
+            </details>
           )}
           {isWorkspace && currentRequirements.length > 0 && (
-            <section className="border-b border-emerald-300/15 bg-emerald-300/[.035] px-4 py-3" aria-label="Your current shopping brief">
+            <details className="shrink-0 border-b border-emerald-300/15 bg-emerald-300/[.035] px-4 py-2" aria-label="Your current shopping brief">
+              <summary className="cursor-pointer text-[11px] font-black text-emerald-200">Shopping brief · {currentRequirements.length} requirements · tap to review</summary>
+              <div className="pt-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-[10px] font-black uppercase tracking-[.16em] text-emerald-200">
                   Your current shopping brief
@@ -303,9 +312,10 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
               <p className="mt-2 text-[10px] text-slate-500">
                 From the latest interpreted search, not a saved customer profile. Confirm missing preferences in chat.
               </p>
-            </section>
+              </div>
+            </details>
           )}
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5">
+          <div role="log" aria-label="Torque conversation" aria-live="polite" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4 sm:py-5">
             {turns.map((turn, index) => (
               <div key={index} className={turn.role === "user" ? "ml-8" : "mr-4"}>
                 <div className={turn.role === "user"
@@ -558,11 +568,14 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                 <Loader2 size={14} className="animate-spin" /> Torque is checking the inventory…
               </div>
             )}
+            <div ref={messagesEndRef} aria-hidden="true" />
           </div>
 
           {battleContext && <div role="status" className="flex items-center justify-between gap-2 border-t border-amber-300/20 bg-amber-300/[.06] px-4 py-2 text-xs text-amber-100"><span>Garage Battle mode: Torque keeps your two selected VINs for follow-up questions. Change topics by choosing Exit comparison.</span><button type="button" onClick={() => { setBattleContext(null); setInput(""); }} className="shrink-0 rounded-lg border border-amber-300/40 px-3 py-2 font-bold">Exit comparison</button></div>}
-          <form onSubmit={submit} className="border-t border-white/10 bg-[#0e1721] p-3">
-            <label htmlFor="torque-dealership-scope" className="mb-2 block text-[10px] font-black uppercase tracking-wider text-slate-400">
+          <form onSubmit={submit} className="shrink-0 border-t border-white/10 bg-[#0e1721] p-3 pb-[max(12px,env(safe-area-inset-bottom))]">
+            <details className="mb-2">
+            <summary className="cursor-pointer text-[10px] font-black uppercase tracking-wider text-slate-400">Store: {dealershipId === "orr-nissan-west" ? "Orr Nissan West" : "Irving Hyundai pending"} · change</summary>
+            <label htmlFor="torque-dealership-scope" className="sr-only">
               Dealership inventory scope
             </label>
             <select
@@ -574,6 +587,7 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
               <option value="orr-nissan-west">Orr Nissan West — Oklahoma City, OK</option>
               <option value="irving-hyundai-pending">Irving Hyundai — pending dealership confirmation (no live inventory)</option>
             </select>
+            </details>
             <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-black/25 p-2 focus-within:border-amber-300/30">
               <textarea
                 value={input}
@@ -587,13 +601,13 @@ export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifie
                 rows={2}
                 maxLength={1200}
                 placeholder="Compare Rogue vs Kicks for a family, or describe what you need…"
-                className="min-h-[48px] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-white outline-none placeholder:text-slate-600"
+                className="min-h-[56px] max-h-36 min-w-0 flex-1 resize-y bg-transparent px-2 py-2 text-base text-white outline-none placeholder:text-slate-400"
               />
               <button type="submit" disabled={busy || !input.trim()} className="grid size-11 shrink-0 place-items-center rounded-xl bg-amber-300 text-black disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send to Torque">
                 {busy ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
               </button>
             </div>
-            <p className="mt-2 px-1 text-[9px] leading-4 text-slate-600">Torque won’t invent availability, financing, transfer timing, or equipment that the verified source doesn’t support.</p>
+            <p className="mt-1 px-1 text-[10px] leading-4 text-slate-400">Enter to send · Shift+Enter for a new line. Vehicle facts require verification.</p>
           </form>
         </section>
       )}
