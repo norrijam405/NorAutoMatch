@@ -43,6 +43,40 @@ function noStore(body: Record<string, unknown>, status = 200) {
   });
 }
 
+
+/** Strict, read-only dealer-link handoff; never fetch a host from customer input. */
+function explicitOrrListing(message: string): { url: string; vin: string; title: string } | null {
+  const candidate = message.match(/https?:\/\/[^\s<>"']+/i)?.[0]?.replace(/[),.!?]+$/, "");
+  if (!candidate) return null;
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== "https:" || parsed.hostname !== "orrnissanwest.com" ||
+        parsed.username || parsed.password || parsed.port || parsed.search || parsed.hash) return null;
+    const path = parsed.pathname.match(/^\/inventory\/(New|Used|Certified)-(20\d{2})-([A-Za-z0-9-]+)-([A-HJ-NPR-Z0-9]{17})\/?$/i);
+    if (!path) return null;
+    return { url: parsed.origin + parsed.pathname, vin: path[4].toUpperCase(), title: path[3].replace(/-/g, " ") };
+  } catch { return null; }
+}
+
+async function checkExplicitOrrListing(url: string, vin: string):
+  Promise<"PAGE_VERIFIED" | "PAGE_NOT_VERIFIED"> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3500);
+  try {
+    const response = await fetch(url, {
+      redirect: "error", cache: "no-store", signal: controller.signal,
+      headers: { Accept: "text/html", "User-Agent": "NorAutoMatch-Torque-Scout/1.0 (read-only dealer link check)" },
+    });
+    if (!response.ok || !/^text\/html/i.test(response.headers.get("content-type") ?? "") ||
+        Number(response.headers.get("content-length") ?? 0) > 800000) return "PAGE_NOT_VERIFIED";
+    const html = await response.text();
+    if (html.length > 800000) return "PAGE_NOT_VERIFIED";
+    const title = html.match(/<title[^>]*>([^<]{1,250})<\/title>/i)?.[1] ?? "";
+    return title && html.toUpperCase().includes(vin) ? "PAGE_VERIFIED" : "PAGE_NOT_VERIFIED";
+  } catch { return "PAGE_NOT_VERIFIED"; }
+  finally { clearTimeout(timer); }
+}
+
 export async function POST(request: Request) {
   const bodyRead = await readJsonBodyWithByteLimit(request, MAX_TORQUE_REQUEST_BYTES);
   if (!bodyRead.ok) {
@@ -252,6 +286,45 @@ export async function POST(request: Request) {
       ? bodyRead.value.recentMessages : []
   );
   const spec = combinedCustomerSpec(recentMessages, message);
+  // A customer-supplied official VIN link takes priority over a stale catalog
+  // search. Keep all existing conversation requirements; never call it in-stock
+  // or an exact fit just because the dealer page mentions the VIN.
+  const linkedListing = previewVerified && mode !== "representative-demo"
+    ? explicitOrrListing(message) : null;
+  if (linkedListing) {
+    const exactCatalog = vehicles.find(v => v.id.toUpperCase() === linkedListing.vin);
+    const pageStatus = await checkExplicitOrrListing(linkedListing.url, linkedListing.vin);
+    const requirements = customerSpecSummary(spec);
+    const verifiedName = exactCatalog
+      ? `${exactCatalog.year} ${exactCatalog.make} ${exactCatalog.model} ${exactCatalog.trim}`
+      : linkedListing.title;
+    const price = exactCatalog && Number.isFinite(exactCatalog.price) && exactCatalog.price > 0
+      ? ` The catalog lists it at ${exactCatalog.price.toLocaleString("en-US")}.` : "";
+    const budgetConflict = exactCatalog && spec.maxPrice && exactCatalog.price > spec.maxPrice.value;
+    const conditionConflict = exactCatalog && spec.condition?.value &&
+      exactCatalog.condition?.toLowerCase() !== spec.condition.value.toLowerCase();
+    const conflicts = [
+      budgetConflict ? "the catalog price is above your stated limit" : null,
+      conditionConflict ? "its listed new/used status conflicts with your request" : null,
+    ].filter(Boolean);
+    const assessment = conflicts.length
+      ? ` It isn't an exact fit: ${conflicts.join("; ")}.`
+      : " I still need to confirm every requirement, including size, colors, and final price.";
+    const answer = pageStatus === "PAGE_VERIFIED"
+      ? `Good catch. I found the official dealer page for VIN ${linkedListing.vin} (${verifiedName}).${price}${assessment} The page is evidence of a listing, not proof it's available right now. Want to review the specific tradeoffs or have the dealership confirm it?`
+      : exactCatalog
+        ? `Good catch bringing the exact link. VIN ${linkedListing.vin} appears in the checked dealer catalog as ${verifiedName}.${price} I couldn't independently confirm that linked page right now.${assessment} Let's check that VIN with the dealership rather than restart your search.`
+        : `Thanks for sending the exact Rogue listing. I couldn't verify the dealer page for VIN ${linkedListing.vin} right now, and it isn't in the checked catalog. That does not mean the vehicle doesn't exist. Let's have the dealership check that VIN without restarting your search.`;
+    return noStore({
+      protocol: "NORAUTO_TORQUE_EXPLICIT_DEALER_LINK_V1",
+      truthState: pageStatus === "PAGE_VERIFIED" ? "OFFICIAL_VIN_PAGE_VERIFIED_NOT_STOCK" :
+        exactCatalog ? "CATALOG_VIN_LINK_UNVERIFIED" : "EXPLICIT_VIN_UNVERIFIED",
+      mode, dealershipId: dealership.id, dealershipLabel: dealership.label,
+      answer, matches: [], needsMoreDetail: false,
+      linkedListing: { vin: linkedListing.vin, url: linkedListing.url, pageStatus, catalogMatched: !!exactCatalog },
+      customerRequirements: requirements, salesSpec: spec,
+    });
+  }
   // The customer can refine size later without losing a prior explicit size
   // or accidentally carrying it into a new/compact-SUV search.
   const requestedSize = conversationalRequestedSuvSize(recentMessages, message);
