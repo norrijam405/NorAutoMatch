@@ -52,7 +52,7 @@ function explicitOrrListing(message: string): { url: string; vin: string; title:
     const parsed = new URL(candidate);
     if (parsed.protocol !== "https:" || parsed.hostname !== "orrnissanwest.com" ||
         parsed.username || parsed.password || parsed.port || parsed.search || parsed.hash) return null;
-    const path = parsed.pathname.match(/^\/inventory\/(New|Used|Certified)-(20\d{2})-([A-Za-z0-9-]+)-([A-HJ-NPR-Z0-9]{17})\/?$/i);
+    const path = parsed.pathname.match(/^\/inventory\/(New|Used|Certified)-(20\d{2})-([A-Za-z0-9_-]+)-([A-HJ-NPR-Z0-9]{17})\/?$/i);
     if (!path) return null;
     return { url: parsed.origin + parsed.pathname, vin: path[4].toUpperCase(), title: path[3].replace(/-/g, " ") };
   } catch { return null; }
