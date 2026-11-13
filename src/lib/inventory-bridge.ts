@@ -52,6 +52,8 @@ export function liveRecordToVehicle(record: LiveInventoryRecord): Vehicle | unde
     fuelType: record.fuelType,
     cityMpg: record.cityMpg,
     highwayMpg: record.highwayMpg,
+    description: record.description,
+    mpgEvidenceBasis: record.mpgEvidenceBasis,
     inTransit: record.inTransit,
     sourceStockStatus: record.sourceStockStatus,
   };

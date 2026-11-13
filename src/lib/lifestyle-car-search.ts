@@ -1,4 +1,5 @@
 import type { Vehicle } from "./inventory";
+import { parseTorqueSalesInventorySpec } from "./torque-sales-inventory-spec";
 
 export type LifestyleIntent = {
   teen: boolean;
@@ -30,6 +31,26 @@ export function interpretLifestyleSearch(query: string): LifestyleIntent | null 
   if (!(teen || thirdRow || economy || affordable || maxPrice !== null)) return null;
   if (!(sedan || suv || thirdRow)) return null;
   return { teen, small, sedan, suv, thirdRow, economy, affordable, maxPrice, acceptsSedanOrSuv };
+}
+
+/**
+ * Broad lifestyle browsing is only appropriate when the shopper has NOT
+ * supplied strict requirements that its advisory scorer cannot evaluate.
+ * Specific equipment, mileage, drivetrain, size segment, etc. must run
+ * through the strict sales-spec path (or be reported as unverified).
+ */
+export function shouldUseStrictVehicleSearch(query: string): boolean {
+  const spec = parseTorqueSalesInventorySpec(query);
+  return Boolean(
+    spec.vin || spec.stockNumber || spec.make || spec.model || spec.modelYear ||
+    spec.trim || spec.maxMileage || spec.interiorMaterial || spec.interiorColor ||
+    spec.exteriorColor || spec.drivetrain || spec.fuelType ||
+    spec.seatingCapacity || spec.cabStyle || spec.bedLength ||
+    spec.engine || spec.transmission || spec.features.length ||
+    spec.packages.length || spec.exclusions.length ||
+    spec.towingMinimumLbs || spec.payloadMinimumLbs ||
+    /\b(?:mid[- ]?size(?:d)?|full[- ]?size(?:d)?|subcompact|leather(?:ette)?|under\s+\d+\s*miles?)\b/i.test(query)
+  );
 }
 
 function verifiedThirdRow(vehicle: Vehicle) {

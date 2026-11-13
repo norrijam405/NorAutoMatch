@@ -1,0 +1,53 @@
+name: NorAutoMatch Torque Integrated Candidate CI
+
+on:
+  push:
+    branches:
+      - "feature/torque-trained-runtime-bridge-r0-2026-11-06"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: torque-integrated-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  torque-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Compile synthetic Torque integration checks
+        run: npx tsc -p tsconfig.torque-trained-runtime-bridge.json
+
+      - name: Check trained-runtime fail-closed behavior
+        run: node .tmp-torque-trained-runtime-bridge/scripts/torque-trained-runtime-bridge.behavior.js
+
+      - name: Check VIN evidence and customer correction behavior
+        run: node .tmp-torque-trained-runtime-bridge/scripts/torque-evidence-and-corrections.behavior.js
+
+      - name: Check dealer description and independent EPA knowledge scout
+        run: node .tmp-torque-trained-runtime-bridge/scripts/torque-knowledge-scout.behavior.js
+
+      - name: Typecheck customer application
+        run: npm run typecheck
+
+      - name: Build customer application
+        run: npm run build
+
+      - name: Remove temporary synthetic test output
+        if: always()
+        run: rm -rf .tmp-torque-trained-runtime-bridge

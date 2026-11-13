@@ -1,6 +1,7 @@
 import type { Vehicle } from "./inventory";
 import type { TorqueRequirementPriority, TorqueSalesInventorySpec } from "./torque-sales-inventory-spec";
 import type { VehicleHuntCandidate } from "./vehicle-hunt";
+import { isSuvCandidate, suvCategoryEvidence } from "./torque-suv-model-knowledge";
 
 export type SalesSpecVehicleEvaluation = {
   vehicle: Vehicle;
@@ -92,7 +93,7 @@ function evaluateVehicle(
   compareText(result, spec.condition, vehicle.condition ?? "", "condition");
   if (spec.bodyTypeAlternatives) {
     const type = vehicle.type.toLowerCase();
-    if (/suv|crossover|minivan|mini-van|van/.test(type)) {
+    if (/suv|crossover|cross-over|sport\s*utility|minivan|mini-van|van/.test(type)) {
       result.reasons.push("customer accepts SUV or minivan");
     } else {
       priorityMiss(result, spec.bodyTypeAlternatives.priority, "neither SUV nor minivan");
@@ -103,8 +104,8 @@ function evaluateVehicle(
     const match = spec.bodyType.value === "TRUCK" ? /truck|pickup/.test(type)
       : spec.bodyType.value === "SEDAN" ? /sedan/.test(type)
       : spec.bodyType.value === "MINIVAN" ? /minivan|mini-van|van/.test(type)
-      : /suv|crossover/.test(type);
-    if (match) result.reasons.push("body style: " + spec.bodyType.value.toLowerCase());
+      : isSuvCandidate(vehicle);
+    if (match) result.reasons.push(spec.bodyType.value === "SUV" ? suvCategoryEvidence(vehicle) : "body style: " + spec.bodyType.value.toLowerCase());
     else priorityMiss(result, spec.bodyType.priority, "body style mismatch");
   }
   compareMax(result, spec.maxPrice, vehicle.price, "price");
@@ -136,13 +137,16 @@ function evaluateVehicle(
     ...(vehicle.features ?? []),
   ].filter((value): value is string => Boolean(value)).join(" ").toLowerCase();
 
-  compareSearchable(result, spec.interiorMaterial, searchable, "interior material");
+  // A trim or model name is NOT evidence of fitted seat material. Only
+  // features explicitly reported against this dealer VIN may satisfy
+  // an equipment MUST_HAVE. Descriptive marketing text is not a spec.
+  compareListedEquipment(result, spec.interiorMaterial, vehicle.features ?? [], "interior material");
   compareSearchable(result, spec.cabStyle, searchable, "cab style", true);
   compareSearchable(result, spec.bedLength, searchable, "bed length", true);
   compareSearchable(result, spec.seatingLayout, searchable, "seating layout", true);
 
   for (const requirement of spec.packages) compareSearchable(result, requirement, searchable, "package", true);
-  for (const requirement of spec.features) compareSearchable(result, requirement, searchable, "feature", true);
+  for (const requirement of spec.features) compareListedEquipment(result, requirement, vehicle.features ?? [], "feature");
   for (const exclusion of spec.exclusions) compareExclusion(result, exclusion.priority, exclusion.value, searchable);
 
   return result;
@@ -217,6 +221,39 @@ function compareSearchable(
   else priorityMiss(result, requirement.priority, "no source evidence for " + label + ": " + raw);
 }
 
+/**
+ * VIN-associated dealer feature labels can establish that a feature is LISTED,
+ * not physically certified. Never infer equipment from a trim name or model.
+ * Distinguish genuine leather from leatherette/synthetic/vegan seating.
+ */
+function compareListedEquipment(
+  result: Omit<SalesSpecVehicleEvaluation, "vehicle" | "fit">,
+  requirement: { value: unknown; priority: TorqueRequirementPriority } | undefined,
+  listedFeatures: string[],
+  label: string,
+) {
+  if (!requirement) return;
+  const requested = normalize(String(requirement.value));
+  const listed = listedFeatures.filter((item): item is string => typeof item === "string");
+  const matches = listed.some(item => {
+    const name = normalize(item);
+    if (requested === "leather" || requested === "leatherseating") {
+      // Synthetic leather and explicitly partial materials must not be
+      // presented as proof of genuine leather seats.
+      return /\bleather\b/i.test(item) &&
+        !/leatherette|synthetic|vegan|artificial|faux|leather[- ]?appointed|leather[- ]?trimmed|leather[- ]?wrapped/i.test(item) &&
+        /seat|upholstery|interior/i.test(item);
+    }
+    const alternatives = aliases(String(requirement.value));
+    return alternatives.some(term => {
+      const needle = normalize(term);
+      return needle.length > 0 && name.includes(needle);
+    });
+  });
+  if (matches) result.reasons.push("dealer-listed " + label + ": " + String(requirement.value));
+  else priorityMiss(result, requirement.priority, "no VIN-listed equipment evidence for " + label + ": " + String(requirement.value));
+}
+
 function compareExclusion(
   result: Omit<SalesSpecVehicleEvaluation, "vehicle" | "fit">,
   priority: TorqueRequirementPriority,
@@ -258,14 +295,14 @@ function identityRequirementsMatch(spec: TorqueSalesInventorySpec, vehicle: Vehi
   if (spec.model?.priority === "MUST_HAVE" && normalize(String(spec.model.value)) !== normalize(vehicle.model)) return false;
   // Hard identity and capacity constraints cannot be loosened into random near-fit cars.
   if (spec.bodyTypeAlternatives?.priority === "MUST_HAVE") {
-    if (!/suv|crossover|minivan|mini-van|van/.test(vehicle.type.toLowerCase())) return false;
+    if (!/suv|crossover|cross-over|sport\s*utility|minivan|mini-van|van/.test(vehicle.type.toLowerCase())) return false;
   }
   if (spec.bodyType?.priority === "MUST_HAVE") {
     const type = vehicle.type.toLowerCase();
     const matches = spec.bodyType.value === "TRUCK" ? /truck|pickup/.test(type)
       : spec.bodyType.value === "SEDAN" ? /sedan/.test(type)
       : spec.bodyType.value === "MINIVAN" ? /minivan|mini-van|van/.test(type)
-      : /suv|crossover/.test(type);
+      : isSuvCandidate(vehicle);
     if (!matches) return false;
   }
   if (spec.fuelType?.priority === "MUST_HAVE") {

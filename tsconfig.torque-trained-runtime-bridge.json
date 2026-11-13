@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "outDir": ".tmp-torque-trained-runtime-bridge"
+  },
+  "include": [
+    "scripts/torque-trained-runtime-bridge.behavior.ts",
+    "src/lib/torque-trained-runtime-bridge.ts",
+    "src/lib/conversation-response-preparation.ts",
+    "src/lib/conversation-gateway.ts",
+    "src/lib/conversation-response-sla.ts",
+    "scripts/torque-evidence-and-corrections.behavior.ts",
+    "scripts/torque-knowledge-scout.behavior.ts"
+  ]
+}

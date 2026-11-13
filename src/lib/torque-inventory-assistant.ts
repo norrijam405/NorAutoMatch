@@ -72,26 +72,60 @@ export function answerTorqueInventory(input: {
   mode: TorqueInventoryMode;
   dna?: MatchDnaSummary;
   spec?: TorqueSalesInventorySpec;
+  requestedSuvSize?: "MIDSIZE" | "FULL_SIZE" | null;
 }): TorqueInventoryAnswer {
   const request = interpret(input.message, input.vehicles);
-  const evaluated = input.spec
-    ? rankVehiclesForSalesSpec({ requirements: input.spec, vehicles: input.vehicles, limit: 2_000, strictMustHaves: true }).map((entry) => ({
-        id: entry.vehicle.id,
-        label: [entry.vehicle.year, entry.vehicle.make, entry.vehicle.model, entry.vehicle.trim].filter(Boolean).join(" "),
-        price: entry.vehicle.price,
-        mileage: entry.vehicle.mileage,
-        mileageVerified: entry.vehicle.mileageVerified,
-        type: entry.vehicle.type,
-        drivetrain: entry.vehicle.drivetrain,
-        fit: entry.fit === "EXACT"
-          ? "exact" as const
-          : entry.fit === "STRONG"
-            ? "strong" as const
-            : "near" as const,
-        reasons: entry.reasons,
-        compromises: entry.compromises,
-      }))
-    : input.vehicles.map((vehicle) => evaluateVehicle(vehicle, request));
+  const toMatch = (entry: ReturnType<typeof rankVehiclesForSalesSpec>[number]): TorqueVehicleMatch => ({
+    id: entry.vehicle.id,
+    label: [entry.vehicle.year, entry.vehicle.make, entry.vehicle.model, entry.vehicle.trim].filter(Boolean).join(" "),
+    price: entry.vehicle.price,
+    mileage: entry.vehicle.mileage,
+    mileageVerified: entry.vehicle.mileageVerified,
+    type: entry.vehicle.type,
+    drivetrain: entry.vehicle.drivetrain,
+    fit: entry.fit === "EXACT" ? "exact" : entry.fit === "STRONG" ? "strong" : "near",
+    reasons: entry.reasons,
+    compromises: entry.compromises,
+  });
+  const sizeRequested = input.requestedSuvSize !== undefined
+    ? input.requestedSuvSize !== null
+    : Boolean(input.spec?.freeformNotes.some(note => note.startsWith("Midsize SUV requested")));
+  const sizeLabel = input.requestedSuvSize === "FULL_SIZE" ? "full-size" : "midsize";
+  const evaluated = (input.spec
+    ? rankVehiclesForSalesSpec({ requirements: input.spec, vehicles: input.vehicles, limit: 2_000, strictMustHaves: true }).map(toMatch)
+    : input.vehicles.map((vehicle) => evaluateVehicle(vehicle, request)))
+    .map((match) => sizeRequested
+      ? { ...match, fit: "near" as const,
+          compromises: [...match.compromises, "requested SUV size is model-family guidance; exact-VIN dimensions are not verified"] }
+      : match);
+  // An empty strict result should not become a dead end. Separately show the
+  // closest *clearly labeled* vehicles, preserving price, body style, exact VIN,
+  // and other identity constraints; never classify these as fulfilling hard specs.
+  const alternativeCandidates: TorqueVehicleMatch[] =
+    input.spec && evaluated.length === 0
+      ? rankVehiclesForSalesSpec({
+          requirements: input.spec, vehicles: input.vehicles, limit: 50, strictMustHaves: false,
+        }).filter((entry) =>
+          (!input.spec?.maxPrice || entry.vehicle.price <= input.spec.maxPrice.value) &&
+          entry.hardMisses > 0
+        ).slice(0, 3).map((entry) => ({ ...toMatch(entry), fit: "near" }))
+      : [];
+  const wantsEfficiency = Boolean(input.spec?.freeformNotes.some(note => note.startsWith("Fuel efficiency preference")) ||
+    /\b(?:good on gas|gas mileage|fuel econom|better mpg|best mpg|fuel efficient)\b/i.test(input.message));
+  const withEfficiencyEvidence = (match: TorqueVehicleMatch): TorqueVehicleMatch => {
+    if (!wantsEfficiency) return match;
+    const vehicle = input.vehicles.find(item => item.id === match.id);
+    const highway = vehicle?.highwayMpg;
+    const city = vehicle?.cityMpg;
+    const mpgText = Number.isFinite(highway) && highway! > 0 && Number.isFinite(city) && city! > 0
+      ? `Source-reported fuel economy: ${city} city / ${highway} highway MPG`
+      : null;
+    return {
+      ...match,
+      reasons: mpgText ? [...match.reasons, mpgText] : match.reasons,
+      compromises: mpgText ? match.compromises : [...match.compromises, "fuel economy not established by this vehicle record"],
+    };
+  };
   // MatchDNA only breaks ties among vehicles in the same fit class and with
   // the same number of compromises. It must never override a MUST_HAVE
   // requirement, VIN identity, or inventory-source eligibility.
@@ -112,71 +146,53 @@ export function answerTorqueInventory(input: {
   const exact = evaluated.filter((item) => item.fit === "exact").sort(compareMatch);
   const strong = evaluated.filter((item) => item.fit === "strong").sort(compareMatch);
   const near = evaluated.filter((item) => item.fit === "near").sort(compareMatch).slice(0, 5);
-  const matches = exact.length > 0
+  const closest = alternativeCandidates.filter(candidate =>
+    !exact.some(x => x.id === candidate.id) &&
+    !strong.some(x => x.id === candidate.id) &&
+    !near.some(x => x.id === candidate.id)
+  );
+  const matches = (exact.length > 0
     ? exact.slice(0, 5)
     : strong.length > 0
       ? strong.slice(0, 5)
-      : near;
+      : near.length > 0
+        ? near
+        : closest).map(withEfficiencyEvidence);
   // State the specific evidence behind the FIRST eligible recommendation.
   // A match is not a promise of current availability or financing.
   const leading = matches[0];
   const matchExplanation = leading
-    ? ` My first listed option is ${leading.label}: ${leading.reasons.length
-        ? leading.reasons.slice(0, 2).join("; ")
-        : "it meets the checked requirements, but the available record does not establish additional differentiators"}.${leading.compromises.length
-        ? " Unverified or preferred tradeoffs: " + leading.compromises.slice(0, 2).join("; ") + "."
+    ? ` I'd start with the ${leading.label}.${leading.reasons.length
+        ? " " + leading.reasons.slice(0, 2).join("; ") + "."
+        : ""}${leading.compromises.length
+        ? " Still to check: " + leading.compromises.slice(0, 2).join("; ") + "."
         : ""}`
     : "";
 
-  const sourcePhrase =
-    input.mode === "representative-demo"
-      ? "representative inventory"
-      : input.mode === "verified-cache"
-        ? "the latest verified cached inventory"
-        : "the current verified inventory";
-
   let answer = "";
   if (exact.length > 0) {
-    answer =
-      "Yeah — I found " +
-      exact.length +
-      " " +
-      (exact.length === 1 ? "vehicle" : "vehicles") +
-      " in " +
-      sourcePhrase +
-      " that " +
-      (exact.length === 1 ? "matches" : "match") +
-      " what you asked for without me quietly changing your requirements.";
+    answer = `I found ${exact.length} ${exact.length === 1 ? "option" : "options"} that match your listed requirements.`;
   } else if (strong.length > 0) {
-    answer =
-      "I found " +
-      strong.length +
-      " strong " +
-      (strong.length === 1 ? "match" : "matches") +
-      " in " +
-      sourcePhrase +
-      ". Your must-haves are covered; I’m calling out the preferred items that differ instead of pretending they’re exact.";
+    answer = `I found ${strong.length} promising ${strong.length === 1 ? "option" : "options"}. Your must-haves are covered in the records, but some preferences differ.`;
   } else if (near.length > 0) {
-    answer =
-      "I don't have an exact or strong match in " +
-      sourcePhrase +
-      ". I found " +
-      near.length +
-      " close " +
-      (near.length === 1 ? "option" : "options") +
-      ", but I'm calling out the must-have compromises instead of pretending they're exact.";
+    answer = `I found ${near.length} ${near.length === 1 ? "possibility" : "possibilities"}, but none checks every box yet. I'll show you what's missing.`;
+  } else if (closest.length > 0) {
+    answer = input.mode === "representative-demo"
+      ? "The SAMPLE cars don't prove a full match. Here are a few examples; they're not confirmed dealership vehicles."
+      : "I haven't confirmed a complete match. These are real dealer-listed possibilities, but the equipment or fuel-economy details still need checking.";
   } else {
     answer = input.mode === "representative-demo"
-      ? "I couldn't find that specification in the sample vehicles. This is a demonstration catalog, NOT Orr Nissan West's live inventory, so I cannot tell you whether the dealership has it. A salesperson must check the real stock or confirm the VIN."
-      : "I couldn't find that specification in " + sourcePhrase +
-        ". That only describes this checked catalog and does not prove the dealership has no such vehicle. Ask a salesperson to verify the specific stock or VIN.";
+      ? "Nothing in the SAMPLE data confirms that fit. Those examples aren't the dealership's inventory."
+      : "I couldn't confirm a match in the inventory I checked. That doesn't mean the dealership has none; we can have a salesperson check.";
   }
 
   if (leading) answer += matchExplanation;
-
-  if (input.dna && input.dna.signalCount > 0) {
-    answer += " Your MatchDNA currently says: " + input.dna.label.replace(/^Learning:\s*/i, "") + ".";
+  if (sizeRequested) {
+    answer += " I'm keeping your " + sizeLabel + " SUV requirement. Size is based on the model family, not verified measurements for this VIN.";
   }
+
+  // Keep MatchDNA in structured metadata; don't narrate internal profiling
+  // to a shopper who asked a straightforward vehicle question.
 
   const handoffRequired = exact.length === 0 && strong.length === 0;
   const handoffSummary = handoffRequired
@@ -184,14 +200,14 @@ export function answerTorqueInventory(input: {
     : undefined;
 
   if (handoffRequired && input.mode !== "representative-demo") {
-    answer += " I only verified the Orr Nissan West inventory here. The broader Orr Auto Group may have more vehicles, so this should go to a human to check the wider network.";
+    answer += " I checked Orr Nissan West only. A salesperson can check other Orr locations if you'd like.";
   }
 
   return {
     answer,
     mode: input.mode,
     exactCount: exact.length,
-    nearCount: strong.length + near.length,
+    nearCount: strong.length + near.length + closest.length,
     matches,
     handoff: handoffRequired
       ? {

@@ -1,11 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { VehicleMediaSearch } from "@/components/manager/vehicle-media-search";
+import { ShopJourneyNav } from "@/components/site/shop-journey-nav";
 import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
+import { LIVE_INVENTORY_ACTIVATION_VALUE } from "@/lib/inventory-runtime";
+import { canUseTorquePreviewVerifiedCatalog } from "@/lib/torque-standalone-demo";
 import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
 import { parseTorqueSalesInventorySpec } from "@/lib/torque-sales-inventory-spec";
 import { buildSaveTheSaleResult } from "@/lib/save-the-sale";
-import { interpretLifestyleSearch, lifestyleCandidates } from "@/lib/lifestyle-car-search";
+import { interpretLifestyleSearch, lifestyleCandidates, shouldUseStrictVehicleSearch } from "@/lib/lifestyle-car-search";
+import { requestedSuvSize, filterSuvSizeModelCandidates } from "@/lib/torque-suv-size-screen";
 import type { Vehicle } from "@/lib/inventory";
 
 export const dynamic = "force-dynamic";
@@ -21,16 +25,24 @@ export default async function FindMyCarPage({
 }) {
   const params = await searchParams;
   const request = typeof params.request === "string" ? params.request.trim().slice(0, 1200) : "";
-  const runtime = resolveInventoryRuntime({
-    mode: process.env.NORAUTO_INVENTORY_MODE,
-    liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
-  });
+  // Preview-only opt-in to Orr's public read-only catalog, matching the Torque
+  // workspace. Do not change production runtime configuration or claim source
+  // availability when the upstream public catalog fails.
+  const publicPreview = canUseTorquePreviewVerifiedCatalog();
+  const inventoryConfig = publicPreview
+    ? { mode: "live-enabled", liveActivation: LIVE_INVENTORY_ACTIVATION_VALUE }
+    : { mode: process.env.NORAUTO_INVENTORY_MODE, liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION };
+  const runtime = resolveInventoryRuntime(inventoryConfig);
   let result: ReturnType<typeof buildSaveTheSaleResult> | null = null;
   let source: string | undefined;
   let fetchedAt: string | undefined;
   let reason: string | undefined;
   let lifestyleResults: Array<{ vehicle: Vehicle; compact: boolean; mpg: number | null; score: number }> | null = null;
   const lifestyleIntent = interpretLifestyleSearch(request);
+  const strictIntent = shouldUseStrictVehicleSearch(request);
+  const requestedSize = requestedSuvSize(request);
+  const sizeUnverified = requestedSize !== null;
+  let sizeScreen: { smallerExcluded:number; unknownExcluded:number; candidates:Vehicle[] } | null = null;
 
   if (request.length >= 4) {
     if (runtime.effectiveMode !== "live-enabled") {
@@ -38,16 +50,18 @@ export default async function FindMyCarPage({
     } else {
       try {
         const catalog = await loadOrrResilientCustomerCatalog({
-          mode: process.env.NORAUTO_INVENTORY_MODE,
-          liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION,
+          mode: inventoryConfig.mode,
+          liveActivation: inventoryConfig.liveActivation,
         });
         if (!catalog.customerVisibleLiveInventory || catalog.source === "demo") throw new Error("NOT_VERIFIED");
-        if (lifestyleIntent) {
+        if (lifestyleIntent && !strictIntent) {
           lifestyleResults = lifestyleCandidates(catalog.vehicles, lifestyleIntent);
         } else {
+          // Model-family screen is advisory, not VIN dimensional evidence.
+          sizeScreen = requestedSize ? filterSuvSizeModelCandidates(catalog.vehicles, requestedSize) : null;
           result = buildSaveTheSaleResult({
             requirements: parseTorqueSalesInventorySpec(request),
-            vehicles: catalog.vehicles,
+            vehicles: sizeScreen ? sizeScreen.candidates : catalog.vehicles,
           });
         }
         source = catalog.source === "provider-cache" ? "verified inventory cache" : "verified dealer feed";
@@ -60,7 +74,8 @@ export default async function FindMyCarPage({
 
   return <main className="min-h-screen bg-[#070b10] py-10 text-white"><div className="shell max-w-5xl">
     <Link href="/" className="text-sm font-bold text-amber-300">← NorAutoMatch Home</Link>
-    <p className="mt-8 text-xs font-black uppercase tracking-widest text-emerald-300">No account required</p>
+    <div className="mt-8"><ShopJourneyNav current="find" /></div>
+    <p className="mt-8 text-xs font-black uppercase tracking-widest text-emerald-300">START HERE · NO ACCOUNT REQUIRED</p>
     <h1 className="mt-3 text-5xl font-black tracking-tight">FIND YOUR CAR</h1>
     <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">
       Describe the car you want, then explore real inventory when our dealer feed is verified. Search freely without joining or signing in.
@@ -85,20 +100,29 @@ export default async function FindMyCarPage({
           <p className="mt-2 text-lg font-black text-amber-300">${vehicle.price.toLocaleString("en-US")}</p>
           <p className="mt-1 text-xs text-slate-400">VIN {vehicle.id}{mpg !== null ? ` · Approx. ${mpg} combined MPG from source city/highway figures` : " · MPG not verified"}</p>
           <Link href={`/vehicles/${vehicle.id}`} className="mt-4 inline-flex rounded-full bg-amber-300 px-5 py-2.5 text-sm font-black text-black">Check photos and vehicle details →</Link>
+          <Link href={/^[A-HJ-NPR-Z0-9]{17}$/i.test(vehicle.id) ? `/ask-torque?vin=${encodeURIComponent(vehicle.id)}` : "/ask-torque"}
+            className="ml-2 mt-3 inline-flex rounded-full border border-amber-300/45 px-4 py-2.5 text-sm font-bold text-amber-200">
+            Ask Torque to verify this vehicle →
+          </Link>
         </article>)}
       </div>
     </section>}
     {result && <section className="mt-8">
       <div className="rounded-2xl border border-white/15 bg-white/5 p-5">
-        <h2 className="text-2xl font-black">{result.localOptions.length ? "Matching local vehicles" : "No confirmed local match yet"}</h2>
-        <p className="mt-2 text-sm text-slate-300">{result.eligibleVehicleCount} vehicles checked · {result.exactCount} exact matches · {result.strongCount} close matches</p>
+        <h2 className="text-2xl font-black">{sizeUnverified ? "Requested-size SUV model candidates" : result.localOptions.length ? "Matching local vehicles" : "No confirmed local match yet"}</h2>
+        <p className="mt-2 text-sm text-slate-300">{result.eligibleVehicleCount} vehicles checked · {sizeUnverified ? "SUV size classification not source-confirmed" : `${result.exactCount} exact matches · ${result.strongCount} close matches`}</p>
         <p className="mt-2 text-xs text-slate-400">Source: {source} · Checked: {fetchedAt ?? "time unavailable"}. Availability and final price require dealer confirmation.</p>
+        {sizeUnverified && <p className="mt-3 text-sm text-amber-200">
+          Only recognized {requestedSize === "MIDSIZE" ? "midsize" : "full-size"} SUV model families appear in this shortlist. This is a model-family screening guide, NOT confirmed VIN-specific dimensions.
+          {sizeScreen && ` ${sizeScreen.smallerExcluded} different-size models and ${sizeScreen.unknownExcluded} unclassified records were excluded rather than shown as matches.`}
+          {" "}A salesperson should confirm the vehicle's dimensions and specific equipment.
+        </p>}
         {!result.localOptions.length && <p className="mt-3 text-sm text-amber-200">We don't have a verified match for that request. Try changing a preference or contact the dealership for a wider search.</p>}
       </div>
       <div className="mt-5 grid gap-4">
         {result.localOptions.map(({vehicle,fit,verifiedReasons,preferenceCompromises}) => <article key={vehicle.id} className="rounded-2xl border border-white/10 bg-white/[.035] p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div><p className="text-xs font-black uppercase text-emerald-300">{fit === "EXACT" ? "Meets stated requirements" : "Close fit"}</p>
+            <div><p className="text-xs font-black uppercase text-emerald-300">{sizeUnverified ? "Size class requires confirmation" : fit === "EXACT" ? "Meets stated requirements" : "Close fit"}</p>
               <h3 className="mt-2 text-xl font-black">{vehicle.year} {vehicle.make} {vehicle.model} {vehicle.trim}</h3>
               <p className="mt-1 text-xs text-slate-400">VIN {vehicle.id} · Stock {vehicle.stockNumber ?? "not supplied"}</p>
             </div>
@@ -107,6 +131,10 @@ export default async function FindMyCarPage({
           <p className="mt-3 text-sm text-slate-300">{verifiedReasons.join(" · ") || "Details require confirmation"}</p>
           {preferenceCompromises.length > 0 && <p className="mt-2 text-sm text-amber-200">Differences: {preferenceCompromises.join(" · ")}</p>}
           <Link href={`/vehicles/${vehicle.id}`} className="mt-4 inline-flex rounded-full bg-amber-300 px-5 py-2.5 text-sm font-black text-black">View vehicle photos and details →</Link>
+          <Link href={/^[A-HJ-NPR-Z0-9]{17}$/i.test(vehicle.id) ? `/ask-torque?vin=${encodeURIComponent(vehicle.id)}` : "/ask-torque"}
+            className="ml-2 mt-3 inline-flex rounded-full border border-amber-300/45 px-4 py-2.5 text-sm font-bold text-amber-200">
+            Ask Torque about VIN →
+          </Link>
           <p className="mt-3 text-xs text-slate-500">A Garage save does not reserve or hold the vehicle. Cars can sell before confirmation.</p>
         </article>)}
       </div>

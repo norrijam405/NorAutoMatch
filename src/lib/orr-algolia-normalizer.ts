@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { LiveInventoryRecord } from "./live-inventory";
 import type { OrrAlgoliaDiscovery, OrrAlgoliaHit } from "./orr-public-algolia";
+import { readPublicVehicleDescription, resolveListingMpg } from "./torque-dealer-description-scout";
 
 const SOURCE_NAME = "orrnissanwest_public_algolia";
 const PARSER_VERSION = "orr-algolia-v7";
@@ -151,6 +152,8 @@ export function normalizeOrrAlgoliaHit(
   const inTransit = hit.in_transit === true || sourceStockStatus?.toLowerCase() === "in_transit";
   const photos = normalizePhotos(hit);
   const features = collectFeatureStrings(hit);
+  const description = readPublicVehicleDescription(hit);
+  const mpgEvidence = resolveListingMpg(hit);
   const record: LiveInventoryRecord = {
     source: SOURCE_NAME,
     sourceUrl: "https://orrnissanwest.com/inventory",
@@ -173,8 +176,10 @@ export function normalizeOrrAlgoliaHit(
     transmission: stringValue(hit.transmission),
     engine: stringValue(hit.engine),
     fuelType: stringValue(hit.standardized_fuel_type) ?? stringValue(hit.fuel_type),
-    cityMpg: numberValue(hit.city_mpg),
-    highwayMpg: numberValue(hit.highway_mpg),
+    cityMpg: mpgEvidence?.city,
+    highwayMpg: mpgEvidence?.highway,
+    description,
+    mpgEvidenceBasis: mpgEvidence?.basis,
     bodyType: stringValue(hit.category) ?? stringValue(hit.body_subtype),
     photos: photos.length > 0 ? photos : undefined,
     features: features.length > 0 ? features : undefined,
