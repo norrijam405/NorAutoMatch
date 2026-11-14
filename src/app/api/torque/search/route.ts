@@ -174,6 +174,35 @@ export async function POST(request: Request) {
   let detailsAddedMpg = 0;
   let detailsAddedEquipment = 0;
 
+  // Explicit customer evidence is independent of the aggregate dealer feed.
+  // Run this first so a catalog timeout cannot discard a customer-supplied VIN.
+  // This path is preview-only, read-only, and cannot certify current stock.
+  const customerLink = previewVerified ? explicitOrrListing(message) : null;
+  if (customerLink) {
+    const recentMessages = readRecentCustomerMessages(
+      typeof bodyRead.value === "object" && bodyRead.value !== null && "recentMessages" in bodyRead.value
+        ? bodyRead.value.recentMessages : [],
+    );
+    const spec = combinedCustomerSpec(recentMessages, message);
+    const pageStatus = await checkExplicitOrrListing(customerLink.url, customerLink.vin);
+    const checked = pageStatus === "PAGE_VERIFIED";
+    return noStore({
+      protocol: "NORAUTO_TORQUE_EXPLICIT_DEALER_LINK_V1",
+      truthState: checked ? "OFFICIAL_VIN_PAGE_VERIFIED_NOT_STOCK" : "EXPLICIT_VIN_UNVERIFIED",
+      mode: "model-research",
+      dealershipId: dealership.id,
+      dealershipLabel: dealership.label,
+      answer: checked
+        ? `Good catch bringing the exact listing. I found an Orr Nissan West page referencing VIN ${customerLink.vin}. I haven't confirmed the current price, colors, size classification, or whether it's still available. We can check those against your requirements before deciding if it's a fit.`
+        : `Thanks for the direct link. I recognize the VIN ${customerLink.vin}, but couldn't verify its official vehicle page right now. That doesn't mean the vehicle isn't there. We can keep this exact VIN for a dealership check instead of restarting your search.`,
+      matches: [],
+      needsMoreDetail: false,
+      linkedListing: { vin: customerLink.vin, url: customerLink.url, pageStatus, catalogMatched: false },
+      customerRequirements: customerSpecSummary(spec),
+      salesSpec: spec,
+    });
+  }
+
   if (runtimeDecision.effectiveMode === "live-enabled") {
     try {
       const catalog = await loadOrrResilientCustomerCatalog({
