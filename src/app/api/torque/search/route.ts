@@ -1,3 +1,4 @@
+import { explicitOrrListing, checkExplicitOrrListing } from "@/lib/torque-official-listing-link";
 import { NextResponse } from "next/server";
 import { inventory } from "@/lib/inventory";
 import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
@@ -43,39 +44,6 @@ function noStore(body: Record<string, unknown>, status = 200) {
   });
 }
 
-
-/** Strict, read-only dealer-link handoff; never fetch a host from customer input. */
-function explicitOrrListing(message: string): { url: string; vin: string; title: string } | null {
-  const candidate = message.match(/https?:\/\/[^\s<>"']+/i)?.[0]?.replace(/[),.!?]+$/, "");
-  if (!candidate) return null;
-  try {
-    const parsed = new URL(candidate);
-    if (parsed.protocol !== "https:" || parsed.hostname !== "orrnissanwest.com" ||
-        parsed.username || parsed.password || parsed.port || parsed.search || parsed.hash) return null;
-    const path = parsed.pathname.match(/^\/inventory\/(New|Used|Certified)-(20\d{2})-([A-Za-z0-9_-]+)-([A-HJ-NPR-Z0-9]{17})\/?$/i);
-    if (!path) return null;
-    return { url: parsed.origin + parsed.pathname, vin: path[4].toUpperCase(), title: path[3].replace(/-/g, " ") };
-  } catch { return null; }
-}
-
-async function checkExplicitOrrListing(url: string, vin: string):
-  Promise<"PAGE_VERIFIED" | "PAGE_NOT_VERIFIED"> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 3500);
-  try {
-    const response = await fetch(url, {
-      redirect: "error", cache: "no-store", signal: controller.signal,
-      headers: { Accept: "text/html", "User-Agent": "NorAutoMatch-Torque-Scout/1.0 (read-only dealer link check)" },
-    });
-    if (!response.ok || !/^text\/html/i.test(response.headers.get("content-type") ?? "") ||
-        Number(response.headers.get("content-length") ?? 0) > 800000) return "PAGE_NOT_VERIFIED";
-    const html = await response.text();
-    if (html.length > 800000) return "PAGE_NOT_VERIFIED";
-    const title = html.match(/<title[^>]*>([^<]{1,250})<\/title>/i)?.[1] ?? "";
-    return title && html.toUpperCase().includes(vin) ? "PAGE_VERIFIED" : "PAGE_NOT_VERIFIED";
-  } catch { return "PAGE_NOT_VERIFIED"; }
-  finally { clearTimeout(timer); }
-}
 
 export async function POST(request: Request) {
   const bodyRead = await readJsonBodyWithByteLimit(request, MAX_TORQUE_REQUEST_BYTES);
