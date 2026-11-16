@@ -42,6 +42,9 @@ jobs:
       - name: Check dealer description and independent EPA knowledge scout
         run: node .tmp-torque-trained-runtime-bridge/scripts/torque-knowledge-scout.behavior.js
 
+      - name: Check official VIN link / dealer feed outage regression
+        run: node .tmp-torque-trained-runtime-bridge/scripts/torque-explicit-link-outage.behavior.js
+
       - name: Typecheck customer application
         run: npm run typecheck
 
