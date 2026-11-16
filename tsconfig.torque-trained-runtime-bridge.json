@@ -16,6 +16,8 @@
     "src/lib/conversation-gateway.ts",
     "src/lib/conversation-response-sla.ts",
     "scripts/torque-evidence-and-corrections.behavior.ts",
-    "scripts/torque-knowledge-scout.behavior.ts"
+    "scripts/torque-knowledge-scout.behavior.ts",
+    "scripts/torque-explicit-link-outage.behavior.ts",
+    "src/lib/torque-official-listing-link.ts"
   ]
 }
