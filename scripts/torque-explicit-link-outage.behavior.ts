@@ -29,6 +29,7 @@ for (const untrusted of [
 ]) assert.equal(explicitOrrListing(untrusted), null, "reject untrusted URL");
 
 const originalFetch = globalThis.fetch;
+async function run() {
 let calls = 0;
 try {
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -65,3 +66,5 @@ try {
   globalThis.fetch = originalFetch;
 }
 process.stdout.write("Torque R27 official VIN link/outage synthetic canaries PASS\n");
+}
+run().catch(error => { console.error(error); process.exitCode = 1; });
