@@ -10,6 +10,7 @@ const catalog = route.indexOf("await loadOrrResilientCustomerCatalog(");
 assert(priority >= 0 && catalog > priority, "exact VIN must precede dealer catalog fetch");
 assert(route.indexOf("if (customerLink)", priority) < catalog, "link branch must finish before catalog fetch");
 assert(route.includes("customerRequirements: customerSpecSummary(spec)"), "retain shopping brief on link path");
+assert(!route.includes("const linkedListing ="), "no duplicate post-catalog official URL response path");
 
 const vin = "5N1BT3BAXTC868156"; // Customer-provided VIN-format fixture; not proof of live stock.
 const link = "https://orrnissanwest.com/inventory/New-2026-Nissan-Rogue-Dark_Armor-" + vin;
