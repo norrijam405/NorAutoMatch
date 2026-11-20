@@ -1,14 +1,18 @@
-import { NextResponse } from "next/server";
-import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
-import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
-
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
-export async function GET() {
+const MWMM_PREVIEW_ORIGIN = "https://mwmm-design-preview-r0.igniaquaai.workers.dev";
+function corsHeaders(request: Request) {
+  const origin = request.headers.get("origin");
+  const allowed = new Set([MWMM_PREVIEW_ORIGIN, ...(process.env.MWMM_ALLOWED_ORIGINS ?? "").split(",").map((value) => value.trim()).filter(Boolean)]);
+  const headers = new Headers({ "Vary": "Origin", "Access-Control-Allow-Methods": "GET, OPTIONS", "Access-Control-Allow-Headers": "Content-Type" });
+  if (origin && allowed.has(origin)) headers.set("Access-Control-Allow-Origin", origin);
+  return headers;
+}
+export async function OPTIONS(request: Request) {
+  return new Response(null, { status: 204, headers: corsHeaders(request) });
+}
+export async function GET(request: Request) {
   const runtimeDecision = resolveInventoryRuntime({ mode: process.env.NORAUTO_INVENTORY_MODE, liveActivation: process.env.NORAUTO_LIVE_INVENTORY_ACTIVATION });
   if (runtimeDecision.effectiveMode !== "live-enabled") {
-    return NextResponse.json({ error: "VERIFIED_INVENTORY_NOT_ENABLED", message: "Verified dealer inventory is not currently enabled." }, { status: 503, headers: { "Cache-Control": "no-store", "X-NorAuto-Inventory-Source": "unavailable" } });
+    return NextResponse.json({ error: "VERIFIED_INVENTORY_NOT_ENABLED", message: "Verified dealer inventory is not currently enabled." }, { status: 503, headers: { ...Object.fromEntries(corsHeaders(request)), "Cache-Control": "no-store", "X-NorAuto-Inventory-Source": "unavailable" } });
   }
   try {
     const catalog = await loadOrrResilientCustomerCatalog({
