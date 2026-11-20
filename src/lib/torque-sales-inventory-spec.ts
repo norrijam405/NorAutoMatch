@@ -143,15 +143,27 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
   const year = text.match(/\b(20\d{2})\b/);
   if (year) spec.modelYear = must(Number(year[1]));
 
-  const maxPrice = text.match(/(?:under|below|max(?:imum)?|up to|less than|no more than|not more than)\s*\$?\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?)\s*(k|thousand)?/i);
-  if (maxPrice) {
-    const raw = Number(maxPrice[1].replace(/,/g, ""));
-    if (Number.isFinite(raw) && raw > 0) {
-      spec.maxPrice = must(maxPrice[2] || raw < 1000 ? Math.round(raw * 1000) : Math.round(raw));
-    }
+  // Price and mileage numbers can occur in the SAME sentence. Never read
+  // "less than 40,000 miles" as "$40,000". Prefer an explicitly priced
+  // ceiling, otherwise accept only numbers with no mileage unit.
+  const priceCeilings = [...text.matchAll(
+    /(?:under|below|max(?:imum)?|up to|less than|no more than|not more than)\s*(\$?\s*(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?)\s*(k|thousand)?/gi,
+  )].map(match => {
+    const after = text.slice((match.index ?? 0) + match[0].length);
+    if (/^\s*(?:miles?|mi\b|kilomet(?:er|re)s?|km\b)/i.test(after)) return null;
+    const priceRaw = match[1].trim();
+    const value = Number(priceRaw.replace(/[$,\s]/g, ""));
+    if (!Number.isFinite(value) || value <= 0) return null;
+    const scaled = match[2] || value < 1000 ? Math.round(value * 1000) : Math.round(value);
+    return { value: scaled, explicitCurrency: priceRaw.includes("$") };
+  }).filter((entry): entry is { value: number; explicitCurrency: boolean } => entry !== null);
+  if (priceCeilings.length) {
+    // If a customer supplied multiple ceilings, honor the lowest rather than
+    // silently weakening their budget; explicit $ is preferred for ambiguity.
+    spec.maxPrice = must(Math.min(...priceCeilings.map(item => item.value)));
   }
 
-  const maxMileage = text.match(/(?:under|below|max(?:imum)?|less than)\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?)\s*(k|thousand)?\s*(?:miles?|mi)\b/i);
+  const maxMileage = text.match(/(?:under|below|max(?:imum)?|less than|fewer than|no more than|not more than)\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?)\s*(k|thousand)?\s*(?:miles?|mi)\b/i);
   if (maxMileage) {
     const raw = Number(maxMileage[1].replace(/,/g, ""));
     if (Number.isFinite(raw) && raw >= 0) {
@@ -205,18 +217,25 @@ export function parseTorqueSalesInventorySpec(message: string): TorqueSalesInven
   if (/\b(?:good\s+on\s+gas|gas mileage|fuel econom|better mpg|best mpg|fuel efficient)\b/i.test(text)) {
     spec.freeformNotes.push("Fuel efficiency preference stated; compare reported MPG only, do not invent figures.");
   }
+  if (/\b(?:mid[- ]?size|midsized|medium[- ]?size)\b/i.test(text) &&
+      /\b(?:suv|crossover)\b/i.test(text)) {
+    spec.freeformNotes.push("Midsize SUV requested; body-segment classification is unverified by this catalog.");
+  }
   if (/\bnew\b/i.test(text)) spec.condition = must("NEW");
   else if (/\bcpo|certified\b/i.test(text)) spec.condition = must("CPO");
   else if (/\b(?:used|pre[- ]?owned|preowned)\b/i.test(text)) spec.condition = must("USED");
 
-  if (/\bleather\b/i.test(text)) spec.interiorMaterial = preferred("Leather");
+  // Leather is represented by ONE equipment requirement, not both a
+  // preferred material and a second hard feature. A customer explicitly
+  // asking for leather needs evidence, not an inferred trim-level promise.
+  if (/\bleather\b/i.test(text)) spec.interiorMaterial = must("Leather");
 
   // Seat capacity is a hard requirement; do not infer it from model names.
   const seating = text.match(/\b(?:seat(?:s|ing)?\s*(?:for|of)?|family\s+of|fit(?:s|ting)?\s+(?:a\s+)?(?:family\s+of)?|room\s+for)\s*(\d{1,2})\b/i);
   if (seating) spec.seatingCapacity = must(Number(seating[1]));
 
   for (const [pattern, feature] of FEATURE_PATTERNS) {
-    if (pattern.test(text)) spec.features.push(must(feature));
+    if (pattern.test(text) && feature !== "leather seating") spec.features.push(must(feature));
   }
 
   const tow = text.match(/(?:tow|towing).*?(\d{4,5})\s*(?:lb|lbs|pounds)/i);

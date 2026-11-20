@@ -27,6 +27,11 @@ export function combinedCustomerSpec(history: string[], latest: string): TorqueS
     // A customer withdrawing a requirement must never have it re-added merely
     // because the same word also appears in the withdrawal sentence.
     const withdrawn: Array<(typeof scalarFields)[number]> = [];
+    // Equipment withdrawals are separate from features. The parser can read
+    // "leather" in a negative sentence, so remove old material and suppress
+    // same-turn reintroduction unless the customer then affirmatively asks.
+    const noLongerLeather = /\b(?:no longer|don'?t|do not|not)\s+(?:need|require|want|care about)\s+(?:an?\s+)?(?:genuine\s+)?leather(?:\s+seats?|\s+interior|\s+upholstery)?\b/i.test(turn);
+    if (noLongerLeather) withdrawn.push("interiorMaterial");
     if (/\b(?:no longer|don'?t|do not|not)\s+(?:need|require|want|care about)\s+(?:an?\s+)?(?:awd|4wd|4x4|four.wheel.drive|all.wheel.drive)\b/i.test(turn)) {
       withdrawn.push("drivetrain");
     }
@@ -38,6 +43,34 @@ export function combinedCustomerSpec(history: string[], latest: string): TorqueS
     }
     for (const field of withdrawn) delete result[field];
     const next = parseTorqueSalesInventorySpec(turn);
+    // "I don't need leather, but I still want leather seats" is a
+    // deliberate affirmative correction; respect the last explicit clause.
+    if (noLongerLeather && /\b(?:but|however|instead)\s+(?:i\s+)?(?:still\s+)?(?:need|want|require|prefer)\s+(?:genuine\s+)?leather\b/i.test(turn)) {
+      withdrawn.splice(withdrawn.indexOf("interiorMaterial"), 1);
+    }
+    // Allow customers to retract specific equipment requests without silently
+    // reintroducing them from the same negative sentence.
+    const withdrawnFeatures = new Set<string>();
+    const withdrawalClauses = turn.matchAll(
+      /\b(?:no longer|don'?t|do not|not)\s+(?:need|require|want|care about)\s+([^.!?;]{1,120})/gi,
+    );
+    for (const [, clause] of withdrawalClauses) {
+      // Only the explicitly negated part is withdrawn. "but I need a
+      // sunroof" is an affirmative request and must remain eligible.
+      const negativePart = clause.split(/\b(?:but|however|instead)\b/i)[0];
+      if (/\b(?:sunroof|moonroof)\b/i.test(negativePart)) withdrawnFeatures.add("sunroof");
+      if (/\bheated seats?\b/i.test(negativePart)) withdrawnFeatures.add("heated seats");
+      if (/\b(?:third|3rd) row\b/i.test(negativePart)) withdrawnFeatures.add("third row");
+      if (/\bpanoramic (?:roof|moonroof)\b/i.test(negativePart)) withdrawnFeatures.add("panoramic roof");
+    }
+    if (withdrawnFeatures.size) {
+      result.features = result.features.filter(
+        item => !withdrawnFeatures.has(item.value.toLowerCase()),
+      );
+      next.features = next.features.filter(
+        item => !withdrawnFeatures.has(item.value.toLowerCase()),
+      );
+    }
     // The latest explicit style choice replaces, rather than stacks with,
     // an earlier single-style or flexible SUV/minivan choice.
     if (next.bodyTypeAlternatives) delete result.bodyType;
@@ -60,12 +93,27 @@ export function combinedCustomerSpec(history: string[], latest: string): TorqueS
 }
 
 export function customerSpecSummary(spec: TorqueSalesInventorySpec): string[] {
+  // Summarize only explicitly retained constraints. Behavioral MatchDNA is
+  // deliberately excluded; preferred items are labeled as flexible.
+  const format = (requirement: { value: string | number; priority: string } | undefined, suffix = "") =>
+    requirement
+      ? (requirement.priority === "PREFERRED" ? "Prefer " : "") + requirement.value + suffix
+      : null;
   const items = [
-    spec.make?.value, spec.model?.value, spec.bodyTypeAlternatives ? "SUV or minivan" : spec.bodyType?.value,
-    spec.fuelType?.value ? `${spec.fuelType.value} fuel` : null,
-    spec.seatingCapacity?.value ? `${spec.seatingCapacity.value} seats required` : null,
-    spec.maxPrice?.value ? `up to $${spec.maxPrice.value.toLocaleString("en-US")}` : null,
-    spec.drivetrain?.value,
+    format(spec.make), format(spec.model),
+    spec.bodyTypeAlternatives
+      ? "SUV or minivan"
+      : format(spec.bodyType),
+    format(spec.condition),
+    format(spec.fuelType, " fuel"),
+    spec.seatingCapacity ? format(spec.seatingCapacity, " seats required") : null,
+    spec.maxPrice ? "up to $" + spec.maxPrice.value.toLocaleString("en-US") : null,
+    spec.maxMileage ? "under " + spec.maxMileage.value.toLocaleString("en-US") + " miles" : null,
+    format(spec.drivetrain),
+    format(spec.exteriorColor, " exterior"),
+    format(spec.interiorColor, " interior"),
+    format(spec.interiorMaterial, " seats"),
+    ...spec.features.slice(0, 6).map(feature => format(feature)),
   ];
-  return items.filter((item): item is string => Boolean(item)).slice(0, 7);
+  return items.filter((item): item is string => Boolean(item)).slice(0, 16);
 }

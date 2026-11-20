@@ -23,6 +23,8 @@ export type Vehicle = {
   fuelType?: string;
   cityMpg?: number;
   highwayMpg?: number;
+  description?: string;
+  mpgEvidenceBasis?: "DEALER_STRUCTURED" | "DEALER_DESCRIPTION" | "DEALER_DETAIL";
   inTransit?: boolean;
   sourceStockStatus?: string;
 };

@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Bot, ChevronDown, ExternalLink, Loader2, Send, Sparkles, X } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { LeadModal } from "@/components/matcher/lead-modal";
+import { chooseTorqueBattlePair } from "@/lib/torque-battle-candidates";
+import { buildPortableTorqueBrief } from "@/lib/torque-shopping-brief";
 
 type Match = {
   id: string;
@@ -28,8 +31,52 @@ type TorqueResponse = {
   exactCount?: number;
   handoff?: { required?: boolean; reason?: string; summary?: string };
   matchDna?: { signalCount: number; label: string } | null;
-  battle?: { vins: string[]; priority: string; signals?: unknown[]; evidenceGaps?: string[] };
+  battle?: { vins: string[]; priority: string; signals?: unknown[]; evidenceGaps?: string[]; basis?: "named-catalog-examples" | "exact-vins" };
+  scoutCoverage?: {
+    catalogScope: string; eligibleVehicles: number; vehiclesWithDealerMpg: number;
+    detailPagesAttempted: number; detailPagesAddedMpg: number;
+    detailPagesAddedEquipment: number;
+    independentEpaState: string; note: string;
+  } | null;
+  dealerScoutUpdates?: {
+    observedAt: string; disclaimer: string;
+    changes: Array<{vin:string;kind:"PRICE_CHANGE"|"MILEAGE_CHANGE"|"STOCK_STATUS_CHANGE";before:string;after:string}>;
+  } | null;
+  researchEvidence?: Array<{
+    source: "EPA_FUELECONOMY_GOV";
+    status: "MODEL_VARIANTS" | "NOT_FOUND" | "UNAVAILABLE";
+    year: number; make: string; model: string; checkedAt: string; note: string;
+    variants: Array<{ label: string; cityMpg: number | null; highwayMpg: number | null;
+      combinedMpg: number | null; sourceUrl: string }>;
+  }>;
+  vehicleEvidence?: Array<{
+    scope: "REPRESENTATIVE_DEMO" | "DEALER_CATALOG" | "VERIFIED_CACHED_CATALOG";
+    vehicleRef: string;
+    identity: "VIN" | "DEMO_ID";
+    stockNumber: string | null;
+    listedPrice: number | null;
+    mileage: { value: number | null; state: "REPORTED" | "UNVERIFIED" };
+    equipment: Array<{ label: string; state: "LISTED_IN_RECORD" }>;
+    dealerDescription: string | null;
+    listedMpg: { city: number | null; highway: number | null; source: "DEALER_STRUCTURED" | "DEALER_DESCRIPTION" | "DEALER_DETAIL" | "UNAVAILABLE" };
+    unknowns: string[];
+    disclosure: string;
+  }>;
+  choiceGuide?: {
+    state: "DEALER_LISTING_COMPARISON";
+    sourceNote: string;
+    vehicles: Array<{ vin: string; label: string; listedPrice: number; reasons: string[]; gaps: string[] }>;
+    comparisons: string[];
+    nextQuestion: string;
+  } | null;
   customerRequirements?: string[];
+  nextAction?: {
+    protocol: "NORAUTO_TORQUE_NEXT_ACTION_V1";
+    state: "PROPOSAL_ONLY";
+    nextAction: "VERIFY_INVENTORY" | "HUMAN_SOURCE_NETWORK" | "VERIFY_MUST_HAVES" | "REVIEW_EXACT_OPTIONS";
+    context: string;
+    suggestedQuestions: string[];
+  };
 };
 
 type Turn = {
@@ -38,11 +85,19 @@ type Turn = {
   response?: TorqueResponse;
 };
 
-export function TorqueChat() {
-  const [open, setOpen] = useState(false);
-  const [input, setInput] = useState("");
+export function TorqueChat({ mode = "floating", initialPrompt = "", allowVerifiedPreview = false }: {
+  mode?: "floating" | "workspace"; initialPrompt?: string; allowVerifiedPreview?: boolean;
+}) {
+  const pathname = usePathname();
+  const isWorkspace = mode === "workspace";
+  const [open, setOpen] = useState(mode === "workspace");
+  // A URL deep link fills the composer but NEVER sends a customer message automatically.
+  const [input, setInput] = useState(initialPrompt.slice(0, 1200));
   const [dealershipId, setDealershipId] = useState("orr-nissan-west");
+  const [catalogScope, setCatalogScope] = useState<"verified" | "sample">(allowVerifiedPreview ? "verified" : "sample");
   const [busy, setBusy] = useState(false);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+
   const [battleContext, setBattleContext] = useState<{vins: string[]; priority: string} | null>(null);
   useEffect(() => {
     const handler = (event: Event) => {
@@ -64,9 +119,16 @@ export function TorqueChat() {
   const [turns, setTurns] = useState<Turn[]>([
     {
       role: "torque",
-      text: "Ask me about a car, or compare two models directly—like Rogue versus Kicks. Tell me what matters to you, and I'll distinguish verified facts from anything I can't confirm.",
+      text: "Hey, I'm Torque. What kind of ride are you looking for? Tell me your budget and what matters most, and we'll narrow it down.",
     },
   ]);
+
+  useEffect(() => {
+    if (open || isWorkspace) {
+      const pane = messagesScrollRef.current;
+      if (pane) pane.scrollTop = pane.scrollHeight;
+    }
+  }, [turns, busy, open, isWorkspace]);
 
   function openSourcing(turn: Turn, index: number) {
     const priorUserText = index > 0 && turns[index - 1]?.role === "user" ? turns[index - 1].text : "";
@@ -83,6 +145,14 @@ export function TorqueChat() {
     setSourcingOpen(true);
   }
 
+  function compareRecommendedVehicles(response: TorqueResponse) {
+    const pair = chooseTorqueBattlePair(response.mode, response.matches);
+    if (!pair || busy) return;
+    setBattleContext({ vins: pair, priority: "all" });
+    setInput("Compare these exact two vehicles for price, fuel economy, space and traction.");
+    setOpen(true);
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     const message = input.trim();
@@ -97,7 +167,7 @@ export function TorqueChat() {
       const response = await fetch("/api/torque/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, dealershipId, ...(battleContext ? { battle: battleContext } : { recentMessages }) }),
+        body: JSON.stringify({ message, dealershipId, ...(allowVerifiedPreview ? { catalogScope } : {}), ...(battleContext ? { battle: battleContext } : { recentMessages }) }),
       });
       const body = (await response.json().catch(() => ({}))) as TorqueResponse;
       if (body.battle?.vins?.length === 2 && typeof body.battle.priority === "string") {
@@ -121,9 +191,18 @@ export function TorqueChat() {
     }
   }
 
+  // Reflect only the last search response from this local session. No inferred
+  // personal profile, persistence or unverified customer requirement claims.
+  const latestSearchTurn = [...turns].reverse().find(
+    (turn) => turn.role === "torque" && Array.isArray(turn.response?.customerRequirements),
+  );
+  const currentRequirements = latestSearchTurn?.response?.customerRequirements ?? [];
+
+  if (!isWorkspace && pathname === "/ask-torque") return null;
+
   return (
     <>
-      {!open && (
+      {!open && !isWorkspace && (
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -136,14 +215,16 @@ export function TorqueChat() {
         </button>
       )}
 
-      {open && (
-        <section className="fixed inset-x-3 bottom-3 z-[80] flex max-h-[82vh] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#0a1119] shadow-2xl shadow-black/60 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[430px]">
-          <header className="flex items-center justify-between gap-4 border-b border-white/10 bg-[#0e1721] px-4 py-4">
+      {(open || isWorkspace) && (
+        <section className={isWorkspace
+          ? "relative flex h-[min(88dvh,980px)] min-h-[540px] w-full flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#0a1119] shadow-2xl shadow-black/60"
+          : "fixed inset-x-2 bottom-2 z-[80] flex h-[min(92dvh,800px)] min-h-0 flex-col overflow-hidden rounded-[22px] border border-white/10 bg-[#0a1119] shadow-2xl shadow-black/60 sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[min(540px,calc(100vw-40px))]"}>
+          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-[#0e1721] px-3 py-2.5 sm:px-4">
             <div className="flex min-w-0 items-center gap-3">
               <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-amber-300 text-black"><Bot size={20} /></span>
               <div className="min-w-0">
                 <p className="text-sm font-black text-white">Torque</p>
-                <p className="truncate text-[10px] font-bold uppercase tracking-[.14em] text-emerald-300">Inventory truth + MatchDNA</p>
+                <p className="truncate text-[11px] text-slate-400">Your car-shopping sidekick</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -153,41 +234,243 @@ export function TorqueChat() {
               }} disabled={busy} className="rounded-lg border border-white/15 px-2 py-2 text-[11px] font-bold text-slate-300 disabled:opacity-40">
                 New search
               </button>
-              <button type="button" onClick={() => setOpen(false)} className="grid size-9 place-items-center rounded-full border border-white/10 text-slate-400 hover:text-white" aria-label="Close Torque"><X size={18} /></button>
+              {isWorkspace ? (
+                <Link href="/" className="inline-flex min-h-9 items-center rounded-lg border border-white/10 px-3 text-xs font-bold text-slate-300 hover:text-white">Home</Link>
+              ) : (
+                <button type="button" onClick={() => setOpen(false)} className="grid size-9 place-items-center rounded-full border border-white/10 text-slate-400 hover:text-white" aria-label="Close Torque"><X size={18} /></button>
+              )}
             </div>
           </header>
 
-          <div className="flex-1 space-y-4 overflow-y-auto px-4 py-5">
+          <details className="shrink-0 border-b border-white/10 bg-white/[.025] px-4 py-2">
+            <summary className="cursor-pointer text-[11px] font-black uppercase tracking-[.12em] text-amber-200">Need a place to start? Try a question</summary>
+            <div className="mt-2 flex gap-2 overflow-x-auto pb-1" aria-label="Suggested Torque questions">
+              {[
+                "Find a family SUV under $30,000",
+                "I need a used AWD Rogue",
+                "Compare Rogue versus Kicks",
+                "MPG for 2025 Toyota RAV4",
+                "Compare 2025 Nissan Rogue vs 2025 Toyota RAV4 MPG",
+              ].map((prompt) => (
+                <button key={prompt} type="button" disabled={busy} onClick={() => setInput(prompt)}
+                  className="shrink-0 rounded-full border border-white/15 bg-white/[.045] px-3 py-2 text-[11px] font-bold text-slate-200 transition hover:border-amber-300/50 disabled:opacity-40">
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </details>
+          {!isWorkspace && allowVerifiedPreview && (
+            <div role="status" className="flex items-center justify-between gap-3 border-b border-emerald-300/15 bg-emerald-300/[.045] px-4 py-2">
+              <span className="text-[10px] font-bold leading-4 text-emerald-200">
+                {catalogScope === "verified" ? "Orr public inventory · read-only" : "Fictional sample inventory"}
+              </span>
+              <Link href="/ask-torque" onClick={() => setOpen(false)} className="shrink-0 text-[10px] font-black text-amber-200 hover:text-white">
+                Full Torque workspace →
+              </Link>
+            </div>
+          )}
+          {isWorkspace && allowVerifiedPreview && (
+            <details className="shrink-0 border-b border-white/10 bg-[#111b27] px-4 py-2">
+              <summary className="cursor-pointer text-[11px] font-black text-amber-200">Inventory source: {catalogScope === "verified" ? "Orr public listings" : "Sample"} · change</summary>
+              <div className="pt-2">
+              <label htmlFor="torque-inventory-source" className="block text-[10px] font-black uppercase tracking-[.16em] text-amber-200">
+                Choose which catalog to search
+              </label>
+              <select id="torque-inventory-source" value={catalogScope} disabled={busy}
+                onChange={(event) => {
+                  const next = event.target.value === "verified" ? "verified" : "sample";
+                  setCatalogScope(next); setBattleContext(null);
+                  setTurns([{ role: "torque", text: next === "verified"
+                    ? "I will check the public Orr Nissan West dealer catalog, read-only. Listings may change, and missing equipment or fuel economy stays unverified."
+                    : "This is fictional demonstration inventory, not actual dealership stock." }]);
+                }}
+                className="mt-2 w-full rounded-lg border border-white/15 bg-[#0a1119] px-3 py-2 text-sm font-semibold text-white">
+                <option value="verified">Orr Nissan West public inventory (read-only)</option>
+                <option value="sample">Fictional sample inventory (demo)</option>
+              </select>
+              <p className="mt-2 text-[10px] leading-4 text-slate-400">
+                {catalogScope === "verified"
+                  ? "Reads a source-checked public dealer catalog. No stock hold or availability promise; if the source fails, results stop instead of falling back to fake listings."
+                  : "Only six sample records; these cannot establish dealership stock or VINs."}
+              </p>
+              </div>
+            </details>
+          )}
+          {isWorkspace && currentRequirements.length > 0 && (
+            <details className="shrink-0 border-b border-emerald-300/15 bg-emerald-300/[.035] px-4 py-2" aria-label="Your current shopping brief">
+              <summary className="cursor-pointer text-[11px] font-black text-emerald-200">Shopping brief · {currentRequirements.length} requirements · tap to review</summary>
+              <div className="pt-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[10px] font-black uppercase tracking-[.16em] text-emerald-200">
+                  Your current shopping brief
+                </p>
+                <button type="button" disabled={busy} onClick={() => setInput("I want to change my requirements: ")}
+                  className="rounded-lg border border-emerald-300/20 px-3 py-1.5 text-[11px] font-bold text-emerald-100 disabled:opacity-40">
+                  Change requirements
+                </button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {currentRequirements.map((item, index) => (
+                  <span key={`${index}-${item}`} className="rounded-full border border-emerald-300/15 bg-black/20 px-2.5 py-1 text-[11px] text-emerald-100">{item}</span>
+                ))}
+              </div>
+              <p className="mt-2 text-[10px] text-slate-500">
+                From the latest interpreted search, not a saved customer profile. Confirm missing preferences in chat.
+              </p>
+              </div>
+            </details>
+          )}
+          <div ref={messagesScrollRef} role="log" aria-label="Torque conversation" aria-live="polite" className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain bg-[#0a1119] px-3 py-5 sm:px-6 sm:py-6">
             {turns.map((turn, index) => (
-              <div key={index} className={turn.role === "user" ? "ml-8" : "mr-4"}>
+              <div key={index} className={turn.role === "user" ? "ml-10 sm:ml-20" : "mr-3 sm:mr-10"}>
                 <div className={turn.role === "user"
-                  ? "rounded-2xl rounded-br-md bg-white/[.07] px-4 py-3 text-sm leading-6 text-slate-100"
-                  : "rounded-2xl rounded-bl-md border border-amber-300/10 bg-amber-300/[.04] px-4 py-3 text-sm leading-6 text-slate-200"}>
+                  ? "whitespace-pre-wrap rounded-2xl rounded-br-md bg-[#263645] px-4 py-3 text-[15px] leading-7 text-white"
+                  : "whitespace-pre-wrap rounded-2xl rounded-bl-md border border-white/[.06] bg-[#131e29] px-4 py-3 text-[15px] leading-7 text-slate-100"}>
                   {turn.text}
                 </div>
 
                 {turn.role === "torque" && turn.response?.mode && (
-                  <div role="status" className={turn.response.mode === "representative-demo"
-                    ? "mt-2 rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-[11px] leading-5 text-amber-100"
-                    : "mt-2 rounded-xl border border-emerald-300/20 bg-emerald-300/5 px-3 py-2 text-[11px] leading-5 text-emerald-100"}>
+                  <p className="mt-2 px-1 text-[11px] leading-5 text-slate-400">
                     {turn.response.mode === "representative-demo"
-                      ? "SAMPLE INVENTORY ONLY — These vehicles are demonstrations, not confirmed Orr Nissan West stock. Torque cannot confirm availability or absence."
+                      ? "Sample vehicles only — not confirmed dealer stock."
                       : turn.response.mode === "verified-cache"
-                        ? "VERIFIED CACHED CATALOG — Previously source-verified records, not a live availability promise. Confirm the VIN with the store."
-                        : "VERIFIED SOURCE CATALOG — Source-checked dealer records, but sale availability may have changed. Confirm the VIN with the store."}
-                  </div>
-                )}
-
-                {turn.role === "torque" && turn.response?.customerRequirements && turn.response.customerRequirements.length > 0 && (
-                  <p className="mt-2 text-[11px] leading-5 text-slate-400">
-                    Remembering from this chat: {turn.response.customerRequirements.join(" · ")}
+                        ? "Previously checked dealer listings · reconfirm pricing and availability."
+                        : "Dealer listings · confirm final pricing and availability."}
                   </p>
                 )}
 
-                {turn.role === "torque" && turn.response?.matchDna && turn.response.matchDna.signalCount > 0 && (
-                  <div className="mt-2 rounded-xl border border-red-400/15 bg-red-400/[.04] px-3 py-2 text-[11px] text-red-100/75">
-                    MatchDNA · {turn.response.matchDna.label}
+                {turn.role === "torque" && turn.response?.battle && turn.response.battle.vins.length === 2 && (
+                  <TorqueBattleEvidence battle={turn.response.battle} busy={busy} onQuestion={setInput} />
+                )}
+
+                {turn.role === "torque" && turn.response?.nextAction && (
+                  <details className="mt-3 rounded-xl border border-white/10 bg-white/[.015] p-3">
+                    <summary className="cursor-pointer text-xs font-semibold text-slate-300">More options · next steps</summary>
+                    <div className="mt-3">
+                {isWorkspace && turn.role === "torque" && turn.response?.nextAction && (
+                  <button type="button" disabled={busy} onClick={() => {
+                    const brief = buildPortableTorqueBrief({
+                      requirements: turn.response?.customerRequirements ?? [],
+                      matches: turn.response?.matches ?? [],
+                      mode: turn.response?.mode,
+                    });
+                    // Explicit customer action only; a brief is NOT a submitted lead.
+                    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+                      void navigator.clipboard.writeText(brief).then(
+                        () => setTurns(previous => [...previous, {role: "torque",text: "Shopping brief copied. You can choose whether to share it with a salesperson; nothing was submitted automatically."}]),
+                        () => setTurns(previous => [...previous, {role: "torque",text: "Copy was blocked by your browser. No information was submitted."}]),
+                      );
+                    }
+                  }}
+                  className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-emerald-300/25 bg-emerald-300/[.045] px-4 text-xs font-black text-emerald-200 hover:border-emerald-300/60 disabled:opacity-40">
+                    Copy my shopping brief for a salesperson (manual)
+                  </button>
+                )}
+
+                {turn.role === "torque" && turn.response?.nextAction && (
+                  <div className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-300/[.045] p-3">
+                    <p className="text-[10px] font-black uppercase tracking-[.16em] text-amber-300">Torque's recommended next step</p>
+                    <p className="mt-1 text-sm font-bold text-white">
+                      {{
+                        VERIFY_INVENTORY: "Verify the dealership listing",
+                        HUMAN_SOURCE_NETWORK: "Ask a salesperson to search the network",
+                        VERIFY_MUST_HAVES: "Confirm equipment on the exact VIN",
+                        REVIEW_EXACT_OPTIONS: "Review your best matching vehicles",
+                      }[turn.response.nextAction.nextAction]}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-slate-400">{turn.response.nextAction.context}</p>
+                    {turn.response.nextAction.suggestedQuestions.slice(0, 2).map((question) => (
+                      <button key={question} type="button" disabled={busy} onClick={() => setInput(question)}
+                        className="mt-2 block w-full rounded-xl border border-white/10 bg-white/[.045] px-3 py-2 text-left text-[11px] font-semibold leading-5 text-amber-100 hover:border-amber-300/40 disabled:opacity-40">
+                        Ask: {question}
+                      </button>
+                    ))}
+                    <p className="mt-2 text-[10px] text-slate-500">Suggestion only — no appointment, reservation, or sourcing request has been submitted.</p>
                   </div>
+                )}
+
+                    </div>
+                  </details>
+                )}
+
+                {turn.role === "torque" && turn.response?.scoutCoverage && (
+                  <details className="mt-3 rounded-xl border border-white/10 bg-white/[.025] p-3">
+                    <summary className="cursor-pointer text-[11px] font-black text-blue-200">Source checks and research notes</summary>
+                    <div className="mt-2 space-y-1 text-[11px] leading-5 text-slate-300">
+                      <p>Catalog: {turn.response.scoutCoverage.catalogScope} · {turn.response.scoutCoverage.eligibleVehicles} eligible records</p>
+                      <p>Catalog VIN records with city and highway MPG: {turn.response.scoutCoverage.vehiclesWithDealerMpg}</p>
+                      <p>Public VIN pages inspected: {turn.response.scoutCoverage.detailPagesAttempted}</p>
+                      <p>VIN pages that added MPG: {turn.response.scoutCoverage.detailPagesAddedMpg}</p>
+                      <p>VIN pages that added equipment: {turn.response.scoutCoverage.detailPagesAddedEquipment}</p>
+                      <p>EPA research: {turn.response.scoutCoverage.independentEpaState.replaceAll("_", " ").toLowerCase()}</p>
+                      <p className="text-slate-500">{turn.response.scoutCoverage.note}</p>
+                    </div>
+                  </details>
+                )}
+
+                {turn.role === "torque" && turn.response?.dealerScoutUpdates?.changes &&
+                  turn.response.dealerScoutUpdates.changes.length > 0 && (
+                  <section className="mt-3 rounded-xl border border-amber-300/25 bg-amber-300/[.04] p-3" aria-label="Dealer inventory updates">
+                    <p className="text-[11px] font-bold uppercase text-amber-200">Listing changes observed</p>
+                    {turn.response.dealerScoutUpdates.changes.map((event,i) => (
+                      <p key={event.vin + event.kind + i} className="mt-1 text-xs text-slate-200">
+                        {event.vin} · {event.kind.replaceAll("_"," ").toLowerCase()}: {event.before} → {event.after}
+                      </p>
+                    ))}
+                    <p className="mt-2 text-[10px] leading-4 text-slate-400">{turn.response.dealerScoutUpdates.disclaimer}</p>
+                  </section>
+                )}
+
+                {turn.role === "torque" && turn.response?.researchEvidence &&
+                  turn.response.researchEvidence.length > 0 && (
+                  <section className="mt-3 rounded-xl border border-blue-400/25 bg-blue-400/[.05] p-3" aria-label="Independent MPG research">
+                    <p className="text-[11px] font-black uppercase tracking-[.12em] text-blue-200">Independent fuel-economy research</p>
+                    {turn.response.researchEvidence.map((report) => (
+                      <div key={report.year + report.make + report.model} className="mt-2 space-y-2">
+                        <p className="text-xs font-bold text-slate-100">{report.year} {report.make} {report.model}</p>
+                        {report.variants.map((variant) => (
+                          <div key={variant.sourceUrl} className="rounded-lg bg-black/20 p-2 text-xs text-slate-300">
+                            <p className="font-semibold text-white">{variant.label}</p>
+                            <p className="mt-1">
+                              {variant.cityMpg === null ? "City unknown" : variant.cityMpg + " city MPG"} ·{" "}
+                              {variant.highwayMpg === null ? "Highway unknown" : variant.highwayMpg + " highway MPG"} ·{" "}
+                              {variant.combinedMpg === null ? "Combined unknown" : variant.combinedMpg + " combined MPG"}
+                            </p>
+                            <a href={variant.sourceUrl} target="_blank" rel="noopener noreferrer"
+                              className="mt-1 inline-flex text-blue-200 underline hover:text-white">View official EPA source</a>
+                          </div>
+                        ))}
+                        {report.status !== "MODEL_VARIANTS" && <p className="text-xs text-amber-200">Research source unavailable or model not found. No MPG estimated.</p>}
+                        <p className="text-[10px] leading-4 text-slate-400">{report.note}</p>
+                      </div>
+                    ))}
+                  </section>
+                )}
+
+                {turn.role === "torque" && turn.response?.choiceGuide && (
+                  <details className="mt-3 rounded-xl border border-white/10 bg-[#172534] p-3" aria-label="How these vehicles compare">
+                    <summary className="cursor-pointer text-xs font-bold text-blue-200">Compare these two vehicles · prices, mileage & tradeoffs</summary>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {turn.response.choiceGuide.vehicles.map(car => (
+                        <div key={car.vin} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                          <p className="text-xs font-black text-white">{car.label}</p>
+                          <p className="mt-1 text-[10px] text-slate-400">VIN {car.vin}</p>
+                          {car.reasons.length > 0 && <p className="mt-2 text-[11px] leading-5 text-emerald-200">Listed fit: {car.reasons.join(" · ")}</p>}
+                          {car.gaps.length > 0 && <p className="mt-2 text-[11px] leading-5 text-amber-200">Still check: {car.gaps.join(" · ")}</p>}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 space-y-1.5">
+                      {turn.response.choiceGuide.comparisons.map((line, i) => (
+                        <p key={i} className="text-xs leading-5 text-slate-200">• {line}</p>
+                      ))}
+                    </div>
+                    <p className="mt-3 text-[10px] leading-4 text-slate-400">{turn.response.choiceGuide.sourceNote}</p>
+                    <button type="button" disabled={busy} onClick={() => setInput(turn.response!.choiceGuide!.nextQuestion)}
+                      className="mt-3 w-full rounded-xl border border-blue-300/25 px-3 py-2.5 text-left text-[11px] font-bold text-blue-200 hover:border-blue-300/60 disabled:opacity-50">
+                      Ask Torque what matters next
+                    </button>
+                  </details>
                 )}
 
                 {turn.role === "torque" && turn.response?.matches && turn.response.matches.length > 0 && (
@@ -214,6 +497,38 @@ export function TorqueChat() {
                           <p className="mt-1 text-[11px] text-slate-500">{match.mileageVerified === false ? "Mileage not verified" : `${match.mileage.toLocaleString()} mi`} · {match.drivetrain} · {match.type}</p>
                           {match.reasons.length > 0 && <p className="mt-2 text-[11px] leading-5 text-emerald-200/70">✓ {match.reasons.slice(0, 3).join(" · ")}</p>}
                           {match.compromises.length > 0 && <p className="mt-1 text-[11px] leading-5 text-amber-100/65">Tradeoff: {match.compromises.slice(0, 2).join(" · ")}</p>}
+                          {turn.response?.vehicleEvidence?.find((entry) => entry.vehicleRef === match.id) && (
+                            <details className="mt-3 rounded-xl border border-white/10 bg-white/[.025] p-3">
+                              <summary className="cursor-pointer text-[11px] font-black text-amber-200">Why this vehicle? · View listing evidence</summary>
+                              {(() => {
+                                const evidence = turn.response?.vehicleEvidence?.find((entry) => entry.vehicleRef === match.id);
+                                if (!evidence) return null;
+                                return <div className="mt-3 space-y-2 text-[11px] leading-5 text-slate-300">
+                                  <p className="text-slate-400">{evidence.disclosure}</p>
+                                  <p>{evidence.identity === "VIN" ? "VIN" : "Sample ID"}: {evidence.vehicleRef}{evidence.stockNumber ? ` · Stock ${evidence.stockNumber}` : ""}</p>
+                                  <p>Price: {evidence.listedPrice === null ? "Not verified" : `Listed ${evidence.listedPrice.toLocaleString("en-US")}`}</p>
+                                  <p>Mileage: {evidence.mileage.state === "UNVERIFIED" || evidence.mileage.value === null ? "Not verified" : `${evidence.mileage.value.toLocaleString("en-US")} miles reported`}</p>
+                                  {evidence.equipment.length > 0 && <p>Listed equipment: {evidence.equipment.slice(0, 6).map((entry) => entry.label).join(" · ")}</p>}
+                                  {evidence.listedMpg.source !== "UNAVAILABLE" && (
+                                    <p>Dealer MPG ({evidence.listedMpg.source === "DEALER_DESCRIPTION" ? "catalog description" : evidence.listedMpg.source === "DEALER_DETAIL" ? "VIN-checked dealer page" : "structured listing"}):{" "}
+                                      {evidence.listedMpg.city === null ? "city unknown" : evidence.listedMpg.city + " city"} ·{" "}
+                                      {evidence.listedMpg.highway === null ? "highway unknown" : evidence.listedMpg.highway + " highway"}
+                                    </p>
+                                  )}
+                                  {evidence.dealerDescription && (
+                                    <p className="rounded-lg border border-white/10 bg-white/[.02] p-2">
+                                      <span className="font-bold">Dealer's published description (not independently confirmed): </span>
+                                      {evidence.dealerDescription}
+                                    </p>
+                                  )}
+                                  <div className="rounded-lg border border-amber-300/15 bg-amber-300/[.04] p-2 text-amber-100/80">
+                                    <p className="font-bold">Still needs confirmation</p>
+                                    {evidence.unknowns.slice(0, 4).map((item) => <p key={item}>• {item}</p>)}
+                                  </div>
+                                </div>;
+                              })()}
+                            </details>
+                          )}
                           <Link href={vehicleHref} className="mt-3 inline-flex items-center gap-1 text-[11px] font-black text-amber-300 hover:text-amber-200">
                             View inventory <ExternalLink size={12} />
                           </Link>
@@ -221,6 +536,15 @@ export function TorqueChat() {
                       );
                     })}
                   </div>
+                )}
+
+                {turn.role === "torque" && turn.response &&
+                  chooseTorqueBattlePair(turn.response.mode, turn.response.matches) && (
+                  <button type="button" disabled={busy}
+                    onClick={() => compareRecommendedVehicles(turn.response!)}
+                    className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/[.04] px-4 text-xs font-bold text-slate-200 hover:border-amber-300/40 disabled:opacity-40">
+                    Compare these two cars side by side
+                  </button>
                 )}
 
                 {turn.role === "torque" && turn.response?.handoff?.required && (
@@ -246,8 +570,10 @@ export function TorqueChat() {
           </div>
 
           {battleContext && <div role="status" className="flex items-center justify-between gap-2 border-t border-amber-300/20 bg-amber-300/[.06] px-4 py-2 text-xs text-amber-100"><span>Garage Battle mode: Torque keeps your two selected VINs for follow-up questions. Change topics by choosing Exit comparison.</span><button type="button" onClick={() => { setBattleContext(null); setInput(""); }} className="shrink-0 rounded-lg border border-amber-300/40 px-3 py-2 font-bold">Exit comparison</button></div>}
-          <form onSubmit={submit} className="border-t border-white/10 bg-[#0e1721] p-3">
-            <label htmlFor="torque-dealership-scope" className="mb-2 block text-[10px] font-black uppercase tracking-wider text-slate-400">
+          <form onSubmit={submit} className="shrink-0 border-t border-white/10 bg-[#0e1721] p-3 pb-[max(12px,env(safe-area-inset-bottom))]">
+            <details className="mb-2">
+            <summary className="cursor-pointer text-[10px] font-black uppercase tracking-wider text-slate-400">Store: {dealershipId === "orr-nissan-west" ? "Orr Nissan West" : "Irving Hyundai pending"} · change</summary>
+            <label htmlFor="torque-dealership-scope" className="sr-only">
               Dealership inventory scope
             </label>
             <select
@@ -259,6 +585,7 @@ export function TorqueChat() {
               <option value="orr-nissan-west">Orr Nissan West — Oklahoma City, OK</option>
               <option value="irving-hyundai-pending">Irving Hyundai — pending dealership confirmation (no live inventory)</option>
             </select>
+            </details>
             <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-black/25 p-2 focus-within:border-amber-300/30">
               <textarea
                 value={input}
@@ -271,14 +598,14 @@ export function TorqueChat() {
                 }}
                 rows={2}
                 maxLength={1200}
-                placeholder="Compare Rogue vs Kicks for a family, or describe what you need…"
-                className="min-h-[48px] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-white outline-none placeholder:text-slate-600"
+                placeholder="Ask a follow-up, change your budget, or tell me more…"
+                className="min-h-[56px] max-h-36 min-w-0 flex-1 resize-y bg-transparent px-2 py-2 text-base text-white outline-none placeholder:text-slate-400"
               />
               <button type="submit" disabled={busy || !input.trim()} className="grid size-11 shrink-0 place-items-center rounded-xl bg-amber-300 text-black disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send to Torque">
                 {busy ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
               </button>
             </div>
-            <p className="mt-2 px-1 text-[9px] leading-4 text-slate-600">Torque won’t invent availability, financing, transfer timing, or equipment that the verified source doesn’t support.</p>
+            <p className="mt-1 px-1 text-[10px] leading-4 text-slate-400">Enter to send · Shift+Enter for a new line. Vehicle facts require verification.</p>
           </form>
         </section>
       )}
@@ -296,4 +623,54 @@ export function TorqueChat() {
       />
     </>
   );
+}
+
+function TorqueBattleEvidence({
+  battle, busy, onQuestion,
+}: {
+  battle: NonNullable<TorqueResponse["battle"]>;
+  busy: boolean;
+  onQuestion: (question: string) => void;
+}) {
+  return <section className="mt-3 rounded-2xl border border-red-400/25 bg-red-400/[.045] p-3" aria-label="Garage Battle evidence">
+    <p className="text-[10px] font-black uppercase tracking-[.18em] text-red-300">Garage Battle · exact vehicle context</p>
+    <p className="mt-2 text-xs leading-5 text-slate-300">
+      {battle.basis === "named-catalog-examples"
+        ? "These are two catalog examples selected for the named models, not every year or trim."
+        : "These two exact VINs stay in the comparison until you exit."}
+    </p>
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      {battle.vins.map((vin, index) =>
+        /^[A-HJ-NPR-Z0-9]{17}$/i.test(vin) ? (
+          <Link key={vin} href={`/vehicles/${encodeURIComponent(vin)}`}
+            className="min-w-0 rounded-xl border border-white/10 bg-black/20 p-3 text-[11px] font-bold text-amber-200 hover:border-amber-300/40">
+            <span className="block text-[9px] uppercase text-slate-400">Vehicle {index + 1}</span>
+            <span className="mt-1 block break-all">{vin}</span>
+            <span className="mt-1 block text-[10px] text-slate-400">View listing</span>
+          </Link>
+        ) : <span key={index} className="text-xs text-amber-200">Vehicle identity not verified</span>
+      )}
+    </div>
+    <p className="mt-3 text-[11px] text-slate-400">
+      Current comparison focus: <span className="font-bold text-slate-200">{battle.priority}</span>
+    </p>
+    {battle.evidenceGaps && battle.evidenceGaps.length > 0 && (
+      <details className="mt-3 rounded-xl border border-amber-300/15 bg-amber-300/[.035] p-3">
+        <summary className="cursor-pointer text-[11px] font-bold text-amber-200">Evidence gaps ({battle.evidenceGaps.length})</summary>
+        {battle.evidenceGaps.slice(0, 6).map((gap, index) => (
+          <p key={index} className="mt-2 text-[11px] leading-5 text-amber-100/80">• {gap}</p>
+        ))}
+      </details>
+    )}
+    <p className="mt-3 text-[10px] font-black uppercase tracking-[.12em] text-slate-400">Compare another factor</p>
+    <div className="mt-2 flex flex-wrap gap-2">
+      {["Compare price", "Compare fuel economy", "Compare interior space", "Compare traction"].map(question => (
+        <button key={question} type="button" disabled={busy} onClick={() => onQuestion(question)}
+          className="rounded-full border border-white/15 bg-white/[.04] px-3 py-2 text-[11px] font-bold text-slate-200 hover:border-amber-300/40 disabled:opacity-40">
+          {question}
+        </button>
+      ))}
+    </div>
+    <p className="mt-2 text-[10px] leading-4 text-slate-500">Dealer records may change. Comparison does not guarantee stock, a quote, or a reservation.</p>
+  </section>;
 }

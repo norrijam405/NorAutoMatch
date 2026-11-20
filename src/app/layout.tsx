@@ -5,6 +5,7 @@ import { Header } from "@/components/site/header";
 import { Footer } from "@/components/site/footer";
 import { TorqueChat } from "@/components/torque/torque-chat";
 import { createClient } from "@/lib/supabase/server";
+import { isTorqueStandaloneDemo, canUseTorquePreviewVerifiedCatalog } from "@/lib/torque-standalone-demo";
 
 export const metadata: Metadata = {
   metadataBase: new URL(brand.baseUrl),
@@ -26,9 +27,14 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-  const isAuthenticated = typeof data?.claims?.sub === "string" && data.claims.sub.length > 0;
+  // Only the explicit, no-database demo preview may skip the auth client.
+  // Normal application deployments continue to require configured Supabase.
+  let isAuthenticated = false;
+  if (!isTorqueStandaloneDemo()) {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getClaims();
+    isAuthenticated = typeof data?.claims?.sub === "string" && data.claims.sub.length > 0;
+  }
 
   const schema = {
     "@context": "https://schema.org",
@@ -55,7 +61,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <Header isAuthenticated={isAuthenticated} />
         <main>{children}</main>
         <Footer />
-        <TorqueChat />
+        <TorqueChat allowVerifiedPreview={canUseTorquePreviewVerifiedCatalog()} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       </body>
     </html>

@@ -1,0 +1,223 @@
+import assert from "node:assert/strict";
+import { parseListingMpg, resolveListingMpg, readPublicVehicleDescription } from "../src/lib/torque-dealer-description-scout";
+import { scoutEpaModel } from "../src/lib/torque-epa-knowledge-scout";
+import { parseExplicitEpaComparison } from "../src/lib/torque-cross-brand-query";
+import { observeTorqueDealerCatalog } from "../src/lib/torque-dealer-change-scout";
+import { scoutOrrPublicVinDetails } from "../src/lib/torque-orr-vin-detail-scout";
+import { parseTorqueExplicitMpgResearch, customerAskedAboutMpg } from "../src/lib/torque-mpg-intent";
+import { mwmmVehicleResearchUrl } from "../src/lib/mwmm-handoff";
+import { buildPortableTorqueBrief } from "../src/lib/torque-shopping-brief";
+import { isSuvCandidate } from "../src/lib/torque-suv-model-knowledge";
+import { rankVehiclesForSalesSpec } from "../src/lib/vehicle-hunt-inventory-matcher";
+import { parseTorqueSalesInventorySpec } from "../src/lib/torque-sales-inventory-spec";
+import { interpretLifestyleSearch, shouldUseStrictVehicleSearch } from "../src/lib/lifestyle-car-search";
+import { requestedSuvSize, modelFamilySuvSize, filterSuvSizeModelCandidates, conversationalRequestedSuvSize } from "../src/lib/torque-suv-size-screen";
+import { answerTorqueInventory } from "../src/lib/torque-inventory-assistant";
+import type { Vehicle } from "../src/lib/inventory";
+
+assert.deepEqual(parseListingMpg("EPA estimated 28 city / 35 highway MPG"), {
+  city: 28, highway: 35, basis: "DEALER_DESCRIPTION",
+});
+assert.equal(parseListingMpg("28 horsepower and 35,000 miles"), null);
+assert.equal(parseListingMpg("28 city 35 highway"), null);
+assert.deepEqual(parseListingMpg("City MPG: 28, Highway MPG: 35"),{
+  city:28,highway:35,basis:"DEALER_DESCRIPTION",
+});
+assert.deepEqual(parseListingMpg("City/Highway MPG: 28/35 MPG"),{
+  city:28,highway:35,basis:"DEALER_DESCRIPTION",
+});
+assert.deepEqual(resolveListingMpg({mpg_city:"28",mpg_highway:"35"}), {
+  city:28,highway:35,combined:undefined,basis:"DEALER_STRUCTURED",
+});
+assert.equal(readPublicVehicleDescription({vehicle_description: "<p>Dealer says <b>28 city / 35 highway MPG</b></p>"}),
+  "Dealer says 28 city / 35 highway MPG");
+assert.deepEqual(resolveListingMpg({
+  description: "28 city / 35 highway MPG", city_mpg: 29,
+}), {city:29, highway:35, combined:undefined, basis:"DEALER_STRUCTURED"});
+assert.equal(resolveListingMpg({ description:"Moonroof, comfortable seats" }), null);
+
+assert.deepEqual(parseExplicitEpaComparison("Compare 2025 Nissan Rogue vs 2025 Toyota RAV4 MPG"), [
+  {year:2025,make:"Nissan",model:"Rogue"},
+  {year:2025,make:"Toyota",model:"RAV4"},
+]);
+assert.equal(parseExplicitEpaComparison("Does this VIN have good MPG?").length,0);
+// Original sales roadmap: retain a checkable shortlist for a human without
+// silently creating a CRM record or leaking a fictional sample as real stock.
+const verifiedBrief = buildPortableTorqueBrief({
+  mode:"verified-live",
+  requirements:["SUV","up to $32,000","under 40,000 miles"],
+  matches:[{id:"JN8BT3BA7SW011511",label:"2025 Nissan Rogue",price:30500,fit:"near",
+    compromises:["Leather equipment needs VIN check"]}],
+});
+assert.match(verifiedBrief,/VIN JN8BT3BA7SW011511/);
+assert.match(verifiedBrief,/\$30,500/);
+assert.match(verifiedBrief,/Nothing was submitted|No hold, quote, appointment/);
+const demoBrief = buildPortableTorqueBrief({
+  mode:"representative-demo",requirements:["SUV"],
+  matches:[{id:"JN8BT3BA7SW011511",label:"Sample Rogue",price:30500,fit:"near",compromises:[]}],
+});
+assert.doesNotMatch(demoBrief,/VIN JN8BT3BA7SW011511/);
+assert.match(demoBrief,/No verified VIN shortlisted/);
+
+// Content creator -> sales research handoff accepts only 17-char VINs.
+// It must not forward marketing strings, free-text, or customer information.
+assert.equal(mwmmVehicleResearchUrl("JN8BT3BA7SW011511"),"/ask-torque?vin=JN8BT3BA7SW011511");
+assert.equal(mwmmVehicleResearchUrl("jn8bt3ba7sw011511"),"/ask-torque?vin=JN8BT3BA7SW011511");
+for (const value of [
+  "not-a-vin", "john@example.com", "JN8BT3BA7SW011511&email=private@example.com",
+  "JN8BT3BA7SW011511?utm_source=some-brand", "1234567890abcdefi", null,
+]) {
+  assert.equal(mwmmVehicleResearchUrl(value),"/ask-torque","invalid or personal data passed through");
+}
+// The customer video: lifestyle fuel preference must NEVER hijack leather and mileage hard rules.
+const recordedSearch = "Search for a midsize SUV, good on gas, under $28,000, with leather seats and fewer than 35,000 miles.";
+assert(interpretLifestyleSearch(recordedSearch)?.economy, "regression first reaches lifestyle detector");
+assert(shouldUseStrictVehicleSearch(recordedSearch), "specific constraints must use the strict match engine");
+assert.equal(parseTorqueSalesInventorySpec(recordedSearch).maxPrice?.value,28000);
+assert.equal(parseTorqueSalesInventorySpec(recordedSearch).maxMileage?.value,35000);
+assert.equal(parseTorqueSalesInventorySpec(recordedSearch).interiorMaterial?.value,"Leather");
+assert.equal(shouldUseStrictVehicleSearch("Looking for an affordable SUV that is good on gas"),false);
+assert.equal(shouldUseStrictVehicleSearch("SUV with AWD and leather seats"),true);
+assert.equal(requestedSuvSize(recordedSearch),"MIDSIZE");
+assert.equal(requestedSuvSize("full-size SUV under $30k"),"FULL_SIZE");
+assert.equal(requestedSuvSize("a small fuel-efficient crossover"),null);
+const sizeExamples: Vehicle[] = [
+  {id:"VIN-KICKS",year:2026,make:"Nissan",model:"Kicks",trim:"SR",type:"Sport Utility",price:22998,mileage:2800,drivetrain:"FWD",image:"",accent:""},
+  {id:"VIN-ENCORE",year:2026,make:"Buick",model:"Encore GX",trim:"Preferred",type:"Sport Utility",price:21398,mileage:3200,drivetrain:"FWD",image:"",accent:""},
+  {id:"VIN-ROGUE",year:2023,make:"Nissan",model:"Rogue",trim:"SL",type:"Sport Utility",price:24610,mileage:8000,drivetrain:"AWD",image:"",accent:""},
+  {id:"VIN-MURANO",year:2023,make:"Nissan",model:"Murano",trim:"SV",type:"Sport Utility",price:25080,mileage:10000,drivetrain:"FWD",image:"",accent:""},
+  {id:"VIN-UNKNOWN",year:2023,make:"Unknown",model:"Mystery",trim:"X",type:"SUV",price:20000,mileage:1000,drivetrain:"AWD",image:"",accent:""},
+];
+const classified = filterSuvSizeModelCandidates(sizeExamples,"MIDSIZE");
+assert.deepEqual(classified.candidates.map(v=>v.model),["Murano"],"Kicks, Encore GX and compact Rogue are not confirmed midsize candidates");
+assert.equal(classified.smallerExcluded,3);
+assert.equal(classified.unknownExcluded,1);
+assert.equal(modelFamilySuvSize({make:"Nissan",model:"Murano"}),"MIDSIZE");
+assert.equal(modelFamilySuvSize({make:"Nissan",model:"Kicks"}),"SMALLER");
+assert.equal(conversationalRequestedSuvSize([],"Find a midsize SUV under $28k"),"MIDSIZE");
+assert.equal(conversationalRequestedSuvSize(["I need a midsize SUV"],"also under 30k"),"MIDSIZE");
+assert.equal(conversationalRequestedSuvSize(["I need a midsize SUV"],"Actually I need a compact SUV"),null);
+assert.equal(conversationalRequestedSuvSize(["I need a midsize SUV"],"new search, full-size SUV"),"FULL_SIZE");
+assert.equal(conversationalRequestedSuvSize(["I need a midsize SUV"],"I no longer need a midsize SUV"),null);
+const sizeFilteredAnswer = answerTorqueInventory({
+  message: "Find me a midsize SUV",
+  vehicles: classified.candidates,
+  mode:"verified-live",
+  requestedSuvSize:"MIDSIZE",
+  spec:parseTorqueSalesInventorySpec("midsize SUV"),
+});
+assert(sizeFilteredAnswer.matches.every(match=>!["Kicks","Encore GX","Rogue"].some(model=>match.label.includes(model))));
+assert(sizeFilteredAnswer.matches.every(match=>match.fit==="near"),"model size must not count as VIN-verified exact fit");
+
+
+
+// Customer's actual research phrasing must reach the independent EPA scout.
+assert.deepEqual(parseTorqueExplicitMpgResearch("MPG for 2025 Toyota RAV4"),{
+  year:2025,make:"Toyota",model:"RAV4",
+});
+assert.deepEqual(parseTorqueExplicitMpgResearch("fuel economy on 2025 Nissan Rogue"),{
+  year:2025,make:"Nissan",model:"Rogue",
+});
+assert.deepEqual(parseTorqueExplicitMpgResearch("gas mileage for 2025 Honda CR-V"),{
+  year:2025,make:"Honda",model:"CR-V",
+});
+assert.equal(parseTorqueExplicitMpgResearch("What is the MPG on this VIN?"),null);
+for (const prompt of ["What's the MPG?", "good on gas","fuel economy","gas mileage","miles per gallon"]) {
+  assert(customerAskedAboutMpg(prompt), "missing MPG intent for "+prompt);
+}
+assert.equal(customerAskedAboutMpg("Leather seats under $32,000"),false);
+
+// Read-only update scout compares complete snapshots, not user requests.
+const listing: Vehicle = {
+  id:"1N4AL3AP0GC123456",year:2025,make:"Nissan",model:"Rogue",trim:"SV",
+  type:"Sport Utility",price:30500,mileage:12000,mileageVerified:true,
+  drivetrain:"FWD",image:"",accent:"",sourceStockStatus:"Active",
+};
+const baseline = observeTorqueDealerCatalog([listing], "2026-11-09T00:00:00Z");
+assert.equal(baseline.state,"BASELINE");
+const later = observeTorqueDealerCatalog([{...listing,price:29500,sourceStockStatus:"Pending"}],
+  "2026-11-09T00:05:00Z");
+assert.equal(later.state,"CHANGES");
+assert(later.changes.some(x=>x.kind==="PRICE_CHANGE" && x.before==="30500" && x.after==="29500"));
+assert(later.changes.some(x=>x.kind==="STOCK_STATUS_CHANGE"));
+assert.equal(observeTorqueDealerCatalog([], "2026-11-09T00:10:00Z").changes.length,0);
+assert.equal(observeTorqueDealerCatalog([{...listing,price:29500,sourceStockStatus:"Pending"}],"2026-11-09T00:15:00Z").state,"UNCHANGED");
+const stationWagonRogue: Vehicle = {...listing, type:"Station Wagon", condition:"Used"};
+assert.equal(isSuvCandidate(stationWagonRogue),true,"Rogue can be categorized Station Wagon in the public dealer feed");
+assert.equal(isSuvCandidate({...stationWagonRogue,make:"Volvo",model:"V60"}),false);
+const suvFromStationWagon = rankVehiclesForSalesSpec({
+  requirements:parseTorqueSalesInventorySpec("I need a Nissan Rogue SUV under $32,000"),
+  vehicles:[stationWagonRogue],strictMustHaves:true,
+});
+assert.equal(suvFromStationWagon.length,1,"SUV family should pass hard SUV identity gate even when dealer says Station Wagon");
+assert(suvFromStationWagon[0].reasons.some(x=>/known SUV model family/i.test(x)));
+
+
+
+// Synthetic mocked official responses; no real network or VIN assertions.
+const originalFetch = globalThis.fetch;
+const requested: string[] = [];
+let partialEpaFailure = false;
+globalThis.fetch = (async (input: RequestInfo | URL) => {
+  const url = String(input);
+  requested.push(url);
+  assert(url.startsWith("https://www.fueleconomy.gov/ws/rest/"), "fixed official source host");
+  if (url.includes("/menu/options?")) return new Response(JSON.stringify({menuItem:[
+    {text:"2WD 4 cyl, 2.5 L, Automatic", value:"12345"},
+    {text:"4WD 4 cyl, 2.5 L, Automatic", value:"12346"},
+  ]}), {status:200,headers:{"Content-Type":"application/json"}});
+  if (url.endsWith("/12345")) return new Response(JSON.stringify({city08:29,highway08:35,comb08:32}),{status:200});
+  if (url.endsWith("/12346")) { if(partialEpaFailure) throw new Error("EPA variation unavailable"); return new Response(JSON.stringify({city08:27,highway08:33,comb08:30}),{status:200}); }
+  throw new Error("unexpected official URL " + url);
+}) as typeof fetch;
+async function run() {
+  try {
+    const report = await scoutEpaModel({year:2026,make:"Toyota",model:"RAV4"});
+    assert.equal(report.source, "EPA_FUELECONOMY_GOV");
+    assert.equal(report.status, "MODEL_VARIANTS");
+    assert.equal(report.variants.length, 2);
+    assert.deepEqual(report.variants.map(x=>x.highwayMpg),[35,33]);
+    assert(report.variants.every(x=>x.sourceUrl.startsWith("https://www.fueleconomy.gov/feg/noframes/")));
+    assert.match(report.note,/NOT automatically to a dealer VIN/);
+    const priorCount = requested.length;
+    const again = await scoutEpaModel({year:2026,make:"Toyota",model:"RAV4"});
+    assert.equal(again.variants.length,2);
+    assert.equal(requested.length,priorCount,"cache prevents repeated EPA requests");
+    partialEpaFailure = true;
+    const partial = await scoutEpaModel({year:2025,make:"Honda",model:"CR-V"});
+    assert.equal(partial.status,"MODEL_VARIANTS","one missing EPA option must not erase a verified option");
+    assert.equal(partial.variants.length,1);
+    assert.match(partial.note,/could not be retrieved/);
+    partialEpaFailure = false;
+    const countBeforeInvalid = requested.length;
+    const invalid = await scoutEpaModel({year:2026,make:"https://evil.test",model:"RAV4"});
+    assert.equal(invalid.status,"NOT_FOUND");
+    assert.equal(requested.length,countBeforeInvalid,"bad make cannot fetch arbitrary URLs");
+    // Realistic but synthetic Orr vehicle page. Same VIN and matching title
+    // are mandatory before MPG or equipment become VIN-scoped evidence.
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url=String(input);
+      assert(url.startsWith("https://orrnissanwest.com/inventory/Used-2025-Nissan-Rogue-SV-"));
+      return new Response("<html><head><title>2025 Nissan Rogue SV at Orr Nissan West</title></head><body>" +
+        "VIN: JN8BT3BA7SW011511 Vehicle Specification City MPG 30 Highway MPG 37 " +
+        "Features Leather Seats Apple CarPlay Hours Monday 9am</body></html>", {
+        status:200,headers:{"Content-Type":"text/html"},
+      });
+    }) as typeof fetch;
+    const detailed = await scoutOrrPublicVinDetails({
+      ...stationWagonRogue,id:"JN8BT3BA7SW011511",price:23455,
+    });
+    assert.equal(detailed.cityMpg,30);
+    assert.equal(detailed.highwayMpg,37);
+    assert.equal(detailed.mpgEvidenceBasis,"DEALER_DETAIL");
+    assert(detailed.features?.includes("Leather Seats"));
+    const missingIdentity = await scoutOrrPublicVinDetails({
+      ...stationWagonRogue,id:"JN8BT3BA7SW022222",price:23455,
+    });
+    assert.equal(missingIdentity.cityMpg,undefined,"mismatched page VIN must not enrich a listing");
+    process.stdout.write("Torque dealer descriptions and multi-brand EPA knowledge scout PASS\n");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+run().catch(error=>{globalThis.fetch=originalFetch;console.error(error);process.exitCode=1;});
