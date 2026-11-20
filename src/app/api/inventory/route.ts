@@ -28,6 +28,7 @@ export async function GET(request: Request) {
     return NextResponse.json(catalog, {
       status: 200,
       headers: {
+        ...Object.fromEntries(corsHeaders(request)),
         "Cache-Control": cacheControl,
         "X-NorAuto-Inventory-Mode": catalog.effectiveMode,
         "X-NorAuto-Inventory-Source": catalog.source,
@@ -43,6 +44,7 @@ export async function GET(request: Request) {
       {
         status: 503,
         headers: {
+          ...Object.fromEntries(corsHeaders(request)),
           "Cache-Control": "no-store",
           "X-NorAuto-Inventory-Mode": "live-enabled",
           "X-NorAuto-Inventory-Source": "unavailable",
