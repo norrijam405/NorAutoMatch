@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { createHouseHandshakeHandler } from "../src/lib/house-app-handshake-r0.ts";
 
 const SECRET = "synthetic-norautomatch-house-secret-32-bytes";
@@ -41,7 +44,11 @@ function signedRequest(
   });
 }
 
-function expectedResponseSignature(secret: string, response: Record<string, unknown>): string {
+function expectedResponseSignature(
+  secret: string,
+  response: Record<string, unknown>,
+  replayProtection: "PROCESS_LOCAL" | "DURABLE" = "PROCESS_LOCAL"
+): string {
   const canonicalCapabilities = JSON.stringify(response.capabilities);
   const digest = crypto.createHash("sha256").update(canonicalCapabilities, "utf8").digest("hex");
   const message = [
@@ -53,7 +60,7 @@ function expectedResponseSignature(secret: string, response: Record<string, unkn
     String(response.nonce),
     "READ_ONLY_HEARTBEAT",
     "false",
-    "PROCESS_LOCAL",
+    replayProtection,
     digest
   ].join("\n");
   return hmac(secret, message);
@@ -98,6 +105,58 @@ test("replayed nonce is denied within one process and accepted after a process r
   assert.equal((await restartedProcess(signedRequest())).status, 200);
 });
 
+test("file-backed replay rejects a nonce after handler recreation and stores only its hash", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "norautomatch-house-replay-"));
+  const nonce = "cd".repeat(16);
+  try {
+    const options = {
+      env: {
+        IGNIAQUA_NORAUTOMATCH_CONTROL_PANEL_SECRET: SECRET,
+        IGNIAQUA_NORAUTOMATCH_HOUSE_REPLAY_DIR: root
+      },
+      now: () => NOW
+    };
+    const firstProcess = createHouseHandshakeHandler(options);
+    const accepted = await firstProcess(signedRequest(SECRET, nonce));
+    assert.equal(accepted.status, 200);
+    const acceptedBody = await accepted.json() as Record<string, unknown>;
+    assert.equal(acceptedBody.replay_protection, "DURABLE");
+    assert.equal(acceptedBody.signature, expectedResponseSignature(SECRET, acceptedBody, "DURABLE"));
+
+    const files = fs.readdirSync(root);
+    assert.equal(files.length, 1);
+    assert.match(files[0], /^nonce-[a-f0-9]{64}\.json$/);
+    assert.equal(fs.readFileSync(path.join(root, files[0]), "utf8").includes(nonce), false);
+
+    const restartedProcess = createHouseHandshakeHandler(options);
+    const replay = await restartedProcess(signedRequest(SECRET, nonce));
+    assert.equal(replay.status, 409);
+    assert.equal((await replay.json()).error, "HOUSE_HANDSHAKE_REPLAY_DENIED");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("configured replay store failure fails closed rather than downgrading", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "norautomatch-house-replay-fail-"));
+  const blocked = path.join(root, "not-a-directory");
+  fs.writeFileSync(blocked, "not a directory");
+  try {
+    const handler = createHouseHandshakeHandler({
+      env: {
+        IGNIAQUA_NORAUTOMATCH_CONTROL_PANEL_SECRET: SECRET,
+        IGNIAQUA_NORAUTOMATCH_HOUSE_REPLAY_DIR: blocked
+      },
+      now: () => NOW
+    });
+    const response = await handler(signedRequest(SECRET, "de".repeat(16)));
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).error, "HOUSE_HANDSHAKE_REPLAY_STORE_UNAVAILABLE");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("invalid signature, audience, timestamp, method, and content type fail closed", async () => {
   const handler = createHouseHandshakeHandler({
     env: { IGNIAQUA_NORAUTOMATCH_CONTROL_PANEL_SECRET: SECRET },
@@ -113,7 +172,7 @@ test("invalid signature, audience, timestamp, method, and content type fail clos
     body: JSON.stringify(tamperedBody)
   }))).status, 401);
 
-  assert.equal((await handler(signedRequest(SECRET, "cd".repeat(16), Math.floor(NOW / 1000), {
+  assert.equal((await handler(signedRequest(SECRET, "ef".repeat(16), Math.floor(NOW / 1000), {
     recipient: "another-app"
   }))).status, 403);
   assert.equal((await handler(signedRequest(SECRET, "ef".repeat(16), Math.floor(NOW / 1000) - 300))).status, 401);

@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 
 const HOUSE_SCHEMA = "igniaqua.house.app-handshake.v1";
 const APP_ID = "norautomatch";
@@ -7,8 +9,13 @@ const MAX_CLOCK_SKEW_SECONDS = 90;
 const MAX_BODY_BYTES = 16_384;
 const REPLAY_TTL_MS = 180_000;
 const MAX_REPLAY_ENTRIES = 10_000;
+const PRUNE_INTERVAL_MS = 30_000;
+const REPLAY_FILE_PATTERN = /^nonce-([a-f0-9]{64})\.json$/;
+const REPLAY_STORE_SCHEMA = "norautomatch.house-handshake-nonce.v1";
 
 type Environment = NodeJS.ProcessEnv;
+type ReplayProtection = "PROCESS_LOCAL" | "DURABLE";
+type ReplayDecision = "STORED" | "REPLAY" | "FULL";
 type HandlerOptions = {
   env?: Environment;
   now?: () => number;
@@ -33,7 +40,7 @@ type HouseResponse = {
   nonce: string;
   scope: "READ_ONLY_HEARTBEAT";
   writes_authorized: false;
-  replay_protection: "PROCESS_LOCAL";
+  replay_protection: ReplayProtection;
   capabilities: [];
   signature: string;
 };
@@ -134,27 +141,136 @@ function configuredSecret(env: Environment): string | null {
   return secret;
 }
 
+function createFileReplayStore(root: string) {
+  if (!root.trim()) throw new Error("HOUSE_HANDSHAKE_REPLAY_DIR_REQUIRED");
+  const directory = path.resolve(root);
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  let activeCount = 0;
+  let lastPruneAt = 0;
+
+  function prune(nowMs: number, force = false): void {
+    if (!force && nowMs - lastPruneAt < PRUNE_INTERVAL_MS) return;
+    let count = 0;
+    for (const name of fs.readdirSync(directory)) {
+      const match = name.match(REPLAY_FILE_PATTERN);
+      if (!match) continue;
+      const file = path.join(directory, name);
+      let record: Record<string, unknown> | null = null;
+      try {
+        const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
+        if (isRecord(parsed)) record = parsed;
+      } catch {
+        // Corrupt replay files remain counted as active and fail closed.
+      }
+      if (record &&
+          record.schema === REPLAY_STORE_SCHEMA &&
+          record.nonce_sha256 === match[1] &&
+          Number.isSafeInteger(record.expires_at_ms) &&
+          Number(record.expires_at_ms) <= nowMs) {
+        try {
+          fs.unlinkSync(file);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
+        continue;
+      }
+      count++;
+    }
+    activeCount = count;
+    lastPruneAt = nowMs;
+  }
+
+  function consume(nonce: string, nowMs: number): boolean {
+    prune(nowMs);
+    const hash = crypto.createHash("sha256").update(nonce, "utf8").digest("hex");
+    const file = path.join(directory, "nonce-" + hash + ".json");
+    let existing: Record<string, unknown> | null = null;
+    try {
+      const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (isRecord(parsed)) existing = parsed;
+    } catch {
+      // If the file exists but cannot be parsed, it is a replay denial.
+    }
+    if (existing) {
+      if (existing.schema === REPLAY_STORE_SCHEMA &&
+          existing.nonce_sha256 === hash &&
+          Number.isSafeInteger(existing.expires_at_ms) &&
+          Number(existing.expires_at_ms) <= nowMs) {
+        try {
+          fs.unlinkSync(file);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
+        activeCount = Math.max(0, activeCount - 1);
+      } else {
+        return false;
+      }
+    } else if (fs.existsSync(file)) {
+      return false;
+    }
+
+    if (activeCount >= MAX_REPLAY_ENTRIES) throw new Error("HOUSE_HANDSHAKE_REPLAY_STORE_FULL");
+    let fd: number;
+    try {
+      fd = fs.openSync(file, "wx", 0o600);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
+      throw error;
+    }
+    try {
+      const payload = JSON.stringify({
+        schema: REPLAY_STORE_SCHEMA,
+        nonce_sha256: hash,
+        expires_at_ms: nowMs + REPLAY_TTL_MS
+      }) + "\n";
+      fs.writeFileSync(fd, payload, "utf8");
+      fs.fsyncSync(fd);
+    } catch (error) {
+      try { fs.closeSync(fd); } catch {}
+      try { fs.unlinkSync(file); } catch {}
+      throw error;
+    }
+    fs.closeSync(fd);
+    activeCount++;
+    return true;
+  }
+
+  prune(Date.now(), true);
+  return { consume };
+}
+
 function rememberNonce(
   replay: Map<string, number>,
   nonce: string,
   nowMs: number
-): boolean {
+): ReplayDecision {
   for (const [existing, expiresAt] of replay.entries()) {
     if (expiresAt <= nowMs) replay.delete(existing);
   }
-  if (replay.has(nonce)) return false;
-  if (replay.size >= MAX_REPLAY_ENTRIES) {
-    const oldest = replay.keys().next().value;
-    if (oldest) replay.delete(oldest);
-  }
+  if (replay.has(nonce)) return "REPLAY";
+  // Do not evict an unexpired nonce: doing so would make an earlier challenge
+  // reusable while it is still within its accepted replay window.
+  if (replay.size >= MAX_REPLAY_ENTRIES) return "FULL";
   replay.set(nonce, nowMs + REPLAY_TTL_MS);
-  return true;
+  return "STORED";
 }
 
 export function createHouseHandshakeHandler(options: HandlerOptions = {}) {
   const env = options.env || process.env;
   const now = options.now || Date.now;
   const replay = new Map<string, number>();
+  const replayDir = String(env.IGNIAQUA_NORAUTOMATCH_HOUSE_REPLAY_DIR || "").trim();
+  let persistentReplayStore: ReturnType<typeof createFileReplayStore> | null = null;
+  let replayStoreInitializationAttempted = false;
+
+  function getPersistentReplayStore() {
+    if (!replayStoreInitializationAttempted) {
+      replayStoreInitializationAttempted = true;
+      persistentReplayStore = createFileReplayStore(replayDir);
+    }
+    if (!persistentReplayStore) throw new Error("HOUSE_HANDSHAKE_REPLAY_STORE_UNAVAILABLE");
+    return persistentReplayStore;
+  }
 
   return async function handleHouseHandshake(request: Request): Promise<Response> {
     if (request.method !== "POST") return json(405, { error: "METHOD_NOT_ALLOWED" });
@@ -211,8 +327,23 @@ export function createHouseHandshakeHandler(options: HandlerOptions = {}) {
       return json(401, { error: "REQUEST_SIGNATURE_INVALID" });
     }
 
-    if (!rememberNonce(replay, input.nonce, nowMs)) {
-      return json(409, { error: "HOUSE_HANDSHAKE_REPLAY_DENIED" });
+    let replayProtection: ReplayProtection = "PROCESS_LOCAL";
+    try {
+      if (replayDir) {
+        if (!getPersistentReplayStore().consume(input.nonce, nowMs)) {
+          return json(409, { error: "HOUSE_HANDSHAKE_REPLAY_DENIED" });
+        }
+        replayProtection = "DURABLE";
+      } else {
+        const decision = rememberNonce(replay, input.nonce, nowMs);
+        if (decision === "REPLAY") return json(409, { error: "HOUSE_HANDSHAKE_REPLAY_DENIED" });
+        if (decision === "FULL") return json(503, { error: "HOUSE_HANDSHAKE_REPLAY_STORE_FULL" });
+      }
+    } catch (error) {
+      const code = (error as Error)?.message === "HOUSE_HANDSHAKE_REPLAY_STORE_FULL"
+        ? "HOUSE_HANDSHAKE_REPLAY_STORE_FULL"
+        : "HOUSE_HANDSHAKE_REPLAY_STORE_UNAVAILABLE";
+      return json(503, { error: code });
     }
 
     const unsigned: Omit<HouseResponse, "signature"> = {
@@ -224,7 +355,7 @@ export function createHouseHandshakeHandler(options: HandlerOptions = {}) {
       nonce: input.nonce,
       scope: "READ_ONLY_HEARTBEAT",
       writes_authorized: false,
-      replay_protection: "PROCESS_LOCAL",
+      replay_protection: replayProtection,
       capabilities: []
     };
     const response: HouseResponse = {
