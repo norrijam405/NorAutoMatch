@@ -29,6 +29,8 @@ jobs:
 
       - name: Install locked dependencies
         run: npm ci
+      - name: House v1 read-only handshake authentication and replay tests
+        run: node --experimental-strip-types --test scripts/house-app-handshake-r0.test.ts
 
       - name: Dependency security gate
         run: npm audit --audit-level=high
