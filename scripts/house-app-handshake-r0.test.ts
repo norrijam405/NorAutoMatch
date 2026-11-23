@@ -7,7 +7,7 @@ import path from "node:path";
 import { createHouseHandshakeHandler } from "../src/lib/house-app-handshake-r0.ts";
 
 const SECRET = "synthetic-norautomatch-house-secret-32-bytes";
-const NOW = Date.parse("2026-11-23T04:00:00.000Z");
+const NOW = Date.now();
 const SCHEMA = "igniaqua.house.app-handshake.v1";
 
 function hmac(secret: string, message: string): string {
