@@ -1,3 +1,7 @@
+import { NextResponse } from "next/server";
+import { resolveInventoryRuntime } from "@/lib/inventory-runtime";
+import { loadOrrResilientCustomerCatalog } from "@/lib/orr-resilient-customer-catalog";
+
 const MWMM_PREVIEW_ORIGIN = "https://mwmm-design-preview-r0.igniaquaai.workers.dev";
 function corsHeaders(request: Request) {
   const origin = request.headers.get("origin");
